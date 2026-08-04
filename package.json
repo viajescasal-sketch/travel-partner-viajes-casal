@@ -1,0 +1,16 @@
+{
+  "name": "travel-partner-viajes-casal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Prototipo navegable Travel Partner Viajes Casal",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
