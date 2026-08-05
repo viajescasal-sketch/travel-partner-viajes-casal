@@ -208,7 +208,7 @@ async function start() {
   app.listen(PORT, () => console.log(`Travel Partner Viajes Casal disponible en http://localhost:${PORT}`));
 }
 
-if (require.main === module) {
+if (process.env.NODE_ENV !== 'test') {
   start().catch((error) => {
     console.error('No se pudo iniciar Travel Partner:', error.message);
     process.exit(1);
