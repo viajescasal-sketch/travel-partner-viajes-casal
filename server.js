@@ -89,10 +89,11 @@ async function createApp(options = {}) {
 
   if (isProduction) {
     sessionOptions.store = new MySQLSession({
+      ...databaseConfigFromEnv(process.env),
       createDatabaseTable: true,
       expiration: sessionOptions.cookie.maxAge,
       schema: { tableName: 'user_sessions' }
-    }, databaseConfigFromEnv(process.env));
+    });
   }
 
   app.use(session(sessionOptions));
