@@ -204,8 +204,23 @@ async function createApp(options = {}) {
 }
 
 async function start() {
-  const app = await createApp();
-  app.listen(PORT, () => console.log(`Travel Partner Viajes Casal disponible en http://localhost:${PORT}`));
+  const bootstrapApp = express();
+  bootstrapApp.disable('x-powered-by');
+  bootstrapApp.get('/api/health', (_req, res) => {
+    res.json({ ok: true, app: 'Travel Partner Viajes Casal' });
+  });
+
+  const server = bootstrapApp.listen(PORT, () => {
+    console.log(`Travel Partner Viajes Casal disponible en http://localhost:${PORT}`);
+  });
+
+  try {
+    const app = await createApp();
+    bootstrapApp.use(app);
+  } catch (error) {
+    server.close();
+    throw error;
+  }
 }
 
 if (process.env.NODE_ENV !== 'test') {
