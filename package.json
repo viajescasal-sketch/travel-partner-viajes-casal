@@ -5,12 +5,20 @@
   "description": "Prototipo navegable Travel Partner Viajes Casal",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": "22.x"
   },
   "dependencies": {
-    "express": "^4.21.2"
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^17.2.1",
+    "express": "^4.21.2",
+    "express-mysql-session": "^3.0.3",
+    "express-rate-limit": "^8.1.0",
+    "express-session": "^1.18.2",
+    "helmet": "^8.1.0",
+    "mysql2": "^3.14.4"
   }
 }

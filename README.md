@@ -31,8 +31,33 @@ Puedes copiar `.env.example` a `.env` para desarrollo local. No publiques `.env`
 - Vista imprimible individual para guardar una cotización como PDF desde el navegador.
 - Selección validada de hasta tres cotizaciones del mismo cliente.
 - Preparación de un único mensaje de WhatsApp.
+- Login real con contraseñas hasheadas mediante bcrypt.
+- Sesiones seguras y persistentes en MySQL para producción.
+- Roles `admin` y `travel_partner`.
+- Cierre de sesión, cambio obligatorio de contraseña y registro de actividad.
+- Helmet y limitación de intentos de acceso.
 
-Los datos son demostrativos y se reinician al recargar. Los enlaces persistentes de PDF se habilitarán cuando se conecte Google Drive; no se incluyen OpenAI API, WhatsApp API, base de datos ni secretos.
+Los datos comerciales siguen siendo demostrativos y se reinician al recargar. MySQL almacena únicamente acceso, sesiones y actividad. Los enlaces persistentes de PDF se habilitarán cuando se conecte Google Drive; no se incluyen OpenAI API, WhatsApp API, CRM real ni secretos.
+
+## Variables de seguridad
+
+La aplicación no inicia en producción si falta alguna variable requerida. Configúralas exclusivamente en Hostinger:
+
+```text
+NODE_ENV=production
+SESSION_SECRET=
+DB_HOST=
+DB_PORT=3306
+DB_NAME=
+DB_USER=
+DB_PASSWORD=
+ADMIN_EMAIL=
+ADMIN_INITIAL_PASSWORD=
+PARTNER_EMAIL=
+PARTNER_INITIAL_PASSWORD=
+```
+
+Las contraseñas iniciales solo se utilizan para crear cuentas inexistentes. Después del primer cambio de contraseña pueden eliminarse del entorno y redesplegarse. Nunca deben añadirse al repositorio.
 
 ## Despliegue en Hostinger
 
