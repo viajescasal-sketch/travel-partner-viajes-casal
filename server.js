@@ -10,6 +10,7 @@ const helmet = require('helmet');
 const session = require('express-session');
 const MySQLSession = require('express-mysql-session')(session);
 const { createDataStore, databaseConfigFromEnv } = require('./src/data-store');
+const { createCrmRouter } = require('./src/crm-routes');
 
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -186,6 +187,13 @@ async function createApp(options = {}) {
   });
 
   app.use('/api', requireAuthentication);
+  app.use('/api', (req, res, next) => {
+    if (req.session.user.mustChangePassword) {
+      return res.status(403).json({ ok: false, error: 'Cambia tu contraseña temporal para continuar' });
+    }
+    return next();
+  });
+  app.use('/api', createCrmRouter(dataStore, { requireRole }));
   app.use(express.static(publicDirectory, { index: false, dotfiles: 'ignore' }));
 
   app.get('*', (req, res, next) => {
@@ -197,7 +205,8 @@ async function createApp(options = {}) {
   app.use((error, _req, res, _next) => {
     const status = error.status || 500;
     if (status >= 500) console.error(error);
-    res.status(status).json({ ok: false, error: status >= 500 ? 'Error interno del servidor' : 'Solicitud inválida' });
+    const message = status >= 500 ? 'Error interno del servidor' : (error.expose && error.message) || 'Solicitud inválida';
+    res.status(status).json({ ok: false, error: message });
   });
 
   app.locals.dataStore = dataStore;
