@@ -18,6 +18,7 @@ const { createLoginFlow, requiresTwofa } = require('./src/login-flow');
 const { createPasswordResetService, createRecoveryRouter, createMailAdminRouter, passwordPolicyError } = require('./src/password-reset');
 
 const PORT = process.env.PORT || 3000;
+const ACTIVITY_RETENTION_DAYS = 730;
 const isProduction = process.env.NODE_ENV === 'production';
 const publicDirectory = path.join(__dirname, 'public');
 const indexFile = path.join(publicDirectory, 'index.html');
@@ -61,6 +62,12 @@ async function createApp(options = {}) {
   await dataStore.initialize();
   const mailer = options.mailer || createMailer(process.env);
   const resetService = createPasswordResetService(dataStore, mailer, process.env);
+  // Conserva la bitácora 2 años: limpia al iniciar y una vez al día.
+  const purge = () => dataStore.purgeActivity(ACTIVITY_RETENTION_DAYS)
+    .then((n) => { if (n) console.log(`Bitácora: se eliminaron ${n} registros con más de 2 años`); })
+    .catch((error) => console.error('No se pudo limpiar la bitácora:', error.message));
+  await purge();
+  if (!options.skipPurgeTimer) setInterval(purge, 24 * 60 * 60 * 1000).unref();
   const loginFlow = createLoginFlow({ dataStore, mailer, env: process.env, publicUser, passwordStamp, isProduction });
 
   if (isProduction) {
@@ -200,9 +207,26 @@ async function createApp(options = {}) {
     }
   });
 
-  app.get('/api/activity', authenticate, requireRole('admin'), async (_req, res, next) => {
+  // Bitácora completa con filtros (solo administradores).
+  app.get('/api/activity', authenticate, requireRole('admin'), async (req, res, next) => {
     try {
-      res.json({ ok: true, activity: await dataStore.listActivity() });
+      const q = req.query;
+      const dayMs = (value, plusDays = 0) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
+        const ms = Date.parse(`${value}T00:00:00-05:00`);
+        return Number.isNaN(ms) ? null : ms + plusDays * 86400000;
+      };
+      const items = await dataStore.listActivity({
+        userId: Number(q.user) || null,
+        type: ['crm', 'security'].includes(q.type) ? q.type : null,
+        entity: ['clients', 'leads', 'quotes', 'trips', 'followups'].includes(q.entity) ? q.entity : null,
+        entityId: Number(q.entityId) || null,
+        fromMs: dayMs(q.from),
+        toMs: dayMs(q.to, 1),
+        beforeId: Number(q.before) || null,
+        limit: Number(q.limit) || 100
+      });
+      res.json({ ok: true, items, activity: items });
     } catch (error) {
       next(error);
     }

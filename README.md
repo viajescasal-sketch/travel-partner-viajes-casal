@@ -102,6 +102,16 @@ Los enlaces persistentes de PDF se habilitarán cuando se conecte Google Drive; 
 - Si el correo no está configurado y el usuario no usa app, el sistema no bloquea el acceso: registra `twofa_skipped_no_mail` en la actividad.
 - El administrador puede **Quitar app** a otro usuario desde **Configuración › Usuarios** (celular perdido).
 
+## Bitácora de actividad (TP-005)
+
+- Cada alta, edición, eliminación, duplicado y reasignación de clientes, leads, cotizaciones, viajes y seguimientos queda en `activity_logs` con usuario, fecha y hora, un resumen del registro (sobrevive aunque se elimine) y los cambios campo por campo (`Etapa: Cotizado → Vendido`).
+- También se registran los cambios automáticos (por ejemplo, el lead que pasa a Vendido al aceptar su cotización) y lo que se elimina en cascada con un cliente.
+- **Administrador:** pantalla **Bitácora** con filtros por usuario, tipo (comercial / accesos y seguridad), sección y fechas, paginación y exportación CSV (`GET /api/activity`).
+- **Cualquier rol:** botón **Ver historial de cambios** en leads, cotizaciones, clientes y viajes que puede ver (`GET /api/history/:entidad/:id`).
+- Se conserva **2 años**: lo más antiguo se borra al iniciar el servidor y una vez al día.
+- Los registros anteriores a esta versión se siguen mostrando (sin el detalle de cambios, que no se guardaba).
+- Los pagos se integrarán a la bitácora cuando existan (TP-201/202).
+
 ## Variables de seguridad
 
 La aplicación no inicia en producción si falta alguna variable requerida. Configúralas exclusivamente en Hostinger:
@@ -146,6 +156,7 @@ Las contraseñas iniciales solo se utilizan para crear cuentas inexistentes. Des
 .
 ├── src/
 │   ├── access.js
+│   ├── audit.js
 │   ├── crm-routes.js
 │   ├── crm-schema.js
 │   ├── data-store.js
