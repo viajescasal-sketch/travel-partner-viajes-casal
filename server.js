@@ -242,11 +242,21 @@ async function createApp(options = {}) {
   return app;
 }
 
+// Página mientras la plataforma termina de arrancar (por ejemplo, justo después de publicar).
+const STARTING_PAGE = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="10"><title>Actualizando · Travel Partner</title></head><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f7f9;font-family:Arial,Helvetica,sans-serif;color:#203342"><main style="max-width:420px;padding:24px;text-align:center"><h1 style="color:#073b66;font-size:22px">Estamos actualizando la plataforma</h1><p>Tarda menos de un minuto. Esta página se recarga sola.</p></main></body></html>`;
+
 async function start() {
   const bootstrapApp = express();
   bootstrapApp.disable('x-powered-by');
+  let ready = false;
   bootstrapApp.get('/api/health', (_req, res) => {
-    res.json({ ok: true, app: 'Travel Partner Viajes Casal' });
+    res.json({ ok: true, app: 'Travel Partner Viajes Casal', ready });
+  });
+  bootstrapApp.use((req, res, next) => {
+    if (ready) return next();
+    res.set('Retry-After', '10');
+    if (req.path.startsWith('/api/')) return res.status(503).json({ ok: false, error: 'La plataforma se está actualizando. Intenta de nuevo en un minuto.' });
+    return res.status(503).type('html').send(STARTING_PAGE);
   });
 
   const server = bootstrapApp.listen(PORT, () => {
@@ -256,6 +266,8 @@ async function start() {
   try {
     const app = await createApp();
     bootstrapApp.use(app);
+    ready = true;
+    console.log('Travel Partner Viajes Casal lista');
   } catch (error) {
     server.close();
     throw error;
