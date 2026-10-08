@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=tp004" />
+    <link rel="stylesheet" href="/styles.css?v=tp005" />
   </head>
   <body>
     <section id="login" class="login">
@@ -120,6 +120,7 @@
           ><button data-page="trips">✈ Viajes</button
           ><button data-page="followups">◷ Seguimientos <em id="followBadge" class="hidden">0</em></button
           ><button data-page="reports" data-admin-only>▥ Reportes</button
+          ><button data-page="activity" data-admin-only>☰ Bitácora</button
           ><button data-page="settings" data-admin-only>
             ⚙ Configuración
           </button>
@@ -449,6 +450,45 @@
               </article>
             </div>
           </section>
+          <section id="activity" class="page">
+            <div class="heading">
+              <div>
+                <p class="eyebrow">CONTROL</p>
+                <h2>Bitácora</h2>
+                <p>Quién creó, editó o eliminó cada registro, con fecha y hora. Se conserva 2 años.</p>
+              </div>
+              <button id="actExport" class="btn secondary">Exportar CSV</button>
+            </div>
+            <div class="toolbar act-filters">
+              <select id="actUser" aria-label="Usuario"></select>
+              <select id="actType" aria-label="Tipo">
+                <option value="">Toda la actividad</option>
+                <option value="crm">Comercial</option>
+                <option value="security">Accesos y seguridad</option>
+              </select>
+              <select id="actEntity" aria-label="Sección">
+                <option value="">Todas las secciones</option>
+                <option value="leads">Leads</option>
+                <option value="quotes">Cotizaciones</option>
+                <option value="clients">Clientes</option>
+                <option value="trips">Viajes</option>
+                <option value="followups">Seguimientos</option>
+              </select>
+              <label class="date-filter">Desde<input type="date" id="actFrom" /></label>
+              <label class="date-filter">Hasta<input type="date" id="actTo" /></label>
+            </div>
+            <article class="panel">
+              <div class="table">
+                <table class="act-table">
+                  <thead>
+                    <tr><th>Fecha y hora</th><th>Usuario</th><th>Acción</th><th>Registro</th><th>Detalle</th></tr>
+                  </thead>
+                  <tbody id="actRows"></tbody>
+                </table>
+              </div>
+              <div class="act-more"><button id="actMore" class="btn secondary small hidden">Cargar más</button></div>
+            </article>
+          </section>
           <section id="settings" class="page">
             <div class="heading">
               <div>
@@ -618,6 +658,7 @@
       .profile #myAccount { margin-left: auto; color: #fff; }
       .profile #profileInitial { flex-shrink: 0; }
       .profile > div { min-width: 0; }
+      .profile > div b, .profile > div small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .profile #myAccount + #logout { margin-left: 0; }
       .check-inline { display: flex !important; flex-direction: row; align-items: center; gap: 8px; font-weight: 500 !important; }
       .check-inline input { width: auto; padding: 0; }
@@ -636,6 +677,25 @@
       .qr-box img { width: 180px; height: 180px; border-radius: 8px; background: #fff; padding: 6px; }
       .secret { font: 600 13px ui-monospace, Menlo, Consolas, monospace; word-break: break-all; user-select: all; }
       .backup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; font: 700 15px ui-monospace, Menlo, Consolas, monospace; background: var(--bg); border-radius: 10px; padding: 12px; user-select: all; }
+      .act-filters { flex-wrap: wrap; align-items: center; }
+      .act-filters select, .date-filter input { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; padding: 8px; }
+      .date-filter { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+      .act-table td { white-space: normal; vertical-align: top; }
+      .act-table td:first-child { white-space: nowrap; }
+      .act-change { display: block; font-size: 11px; }
+      .act-change b { font-weight: 600; }
+      .act-change del { color: #b42318; text-decoration: line-through; }
+      .act-change ins { color: #18815d; text-decoration: none; }
+      .act-note { display: block; font-size: 11px; color: var(--muted); font-style: italic; }
+      .act-pill { display: inline-block; padding: 3px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; white-space: nowrap; background: #eaf7ff; color: #1677a8; }
+      .act-pill.create { background: #e8f7ef; color: #18815d; }
+      .act-pill.delete { background: #fdecec; color: #b13e3e; }
+      .act-pill.security { background: #f1f3f5; color: #5d6b76; }
+      .act-pill.alert { background: #fff5d9; color: #916300; }
+      .act-more { display: flex; justify-content: center; padding-top: 12px; }
+      .timeline-hist { display: grid; gap: 10px; max-height: 60vh; overflow-y: auto; }
+      .timeline-hist .entry { border-left: 3px solid var(--teal); padding: 4px 0 4px 12px; }
+      .timeline-hist .entry small { color: var(--muted); font-size: 11px; display: block; }
       .profile #logout {
         margin-left: auto;
         color: #fff;
@@ -645,6 +705,6 @@
         cursor: wait;
       }
     </style>
-    <script src="/app.js?v=tp004"></script>
+    <script src="/app.js?v=tp005"></script>
   </body>
 </html>

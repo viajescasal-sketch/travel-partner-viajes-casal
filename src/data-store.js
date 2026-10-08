@@ -6,6 +6,32 @@ const { ENTITIES, ENTITY_ORDER, createTableSql, nowCancun } = require('./crm-sch
 
 const phoneKey = (value) => String(value || '').replace(/\D/g, '').slice(-10);
 
+// Las acciones del CRM se llaman crm_<entidad>_<acción>; de ahí se deduce la entidad en registros antiguos.
+function activityEntity(action) {
+  const match = /^crm_(clients|leads|quotes|trips|followups)_/.exec(action || '');
+  return match ? match[1] : null;
+}
+function normalizeActivity(row) {
+  let metadata = row.metadata;
+  if (typeof metadata === 'string') { try { metadata = JSON.parse(metadata); } catch { metadata = null; } }
+  metadata = metadata || {};
+  return {
+    id: Number(row.id),
+    action: row.action,
+    userId: row.user_id == null ? null : Number(row.user_id),
+    userName: row.user_name || null,
+    userEmail: row.user_email || metadata.email || null,
+    entity: row.entity || activityEntity(row.action),
+    entityId: row.entity_id != null ? Number(row.entity_id) : (metadata.id != null ? Number(metadata.id) : null),
+    summary: row.summary || null,
+    changes: Array.isArray(metadata.changes) ? metadata.changes : [],
+    note: metadata.note || null,
+    method: metadata.twofa || null,
+    ip: row.ip_address || null,
+    createdMs: Number(row.created_ms)
+  };
+}
+
 // Convierte una fila de base de datos al formato que usa la página.
 function normalizeRow(entityName, row) {
   if (!row) return null;
@@ -66,6 +92,7 @@ class MySQLDataStore {
       CONSTRAINT fk_activity_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
     await this.migrateUsers();
+    await this.migrateActivity();
     await this.pool.query(`CREATE TABLE IF NOT EXISTS password_resets (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       user_id BIGINT UNSIGNED NOT NULL,
@@ -132,6 +159,19 @@ class MySQLDataStore {
       INDEX idx_trusted_user (user_id),
       CONSTRAINT fk_trusted_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+  }
+
+  async migrateActivity() {
+    const [columns] = await this.pool.query(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'activity_logs'"
+    );
+    const has = (name) => columns.some((c) => c.COLUMN_NAME === name);
+    if (!has('entity')) await this.pool.query('ALTER TABLE activity_logs ADD COLUMN entity VARCHAR(30) NULL AFTER action');
+    if (!has('entity_id')) await this.pool.query('ALTER TABLE activity_logs ADD COLUMN entity_id BIGINT UNSIGNED NULL AFTER entity');
+    if (!has('summary')) {
+      await this.pool.query('ALTER TABLE activity_logs ADD COLUMN summary VARCHAR(255) NULL AFTER entity_id');
+      await this.pool.query('ALTER TABLE activity_logs ADD INDEX idx_activity_entity (entity, entity_id)');
+    }
   }
 
   // ---- Verificación en dos pasos ----
@@ -324,7 +364,11 @@ class MySQLDataStore {
   }
 
   async logActivity(userId, action, req, metadata = null) {
-    await this.pool.execute('INSERT INTO activity_logs (user_id, action, ip_address, user_agent, metadata) VALUES (?, ?, ?, ?, ?)', [userId, action, req.ip, req.get('user-agent') || null, metadata ? JSON.stringify(metadata) : null]);
+    const { entity = null, entityId = null, summary = null, ...rest } = metadata || {};
+    await this.pool.execute(
+      'INSERT INTO activity_logs (user_id, action, entity, entity_id, summary, ip_address, user_agent, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [userId, action, entity, entityId, summary ? String(summary).slice(0, 255) : null, req?.ip || null, req?.get?.('user-agent')?.slice(0, 500) || null, Object.keys(rest).length ? JSON.stringify(rest) : null]
+    );
   }
 
   async listUsers() {
@@ -332,10 +376,40 @@ class MySQLDataStore {
     return rows.map((row) => ({ ...row, id: Number(row.id), active: Boolean(row.active), must_change_password: Boolean(row.must_change_password), twofa_enabled: Boolean(row.twofa_enabled), totp_enabled: Boolean(row.totp_enabled) }));
   }
 
-  async listActivity() {
-    const [rows] = await this.pool.execute(`SELECT a.id, a.action, a.ip_address, a.metadata, a.created_at, u.email
-      FROM activity_logs a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.created_at DESC LIMIT 200`);
-    return rows;
+  // Consulta con filtros: usuario, tipo (crm/seguridad), entidad, registro, fechas (ms) y paginación por id.
+  async listActivity(filters = {}) {
+    const where = [];
+    const params = [];
+    if (filters.userId) { where.push('a.user_id = ?'); params.push(filters.userId); }
+    if (filters.type === 'crm') where.push("a.action LIKE 'crm\\_%'");
+    if (filters.type === 'security') where.push("a.action NOT LIKE 'crm\\_%'");
+    if (filters.entity) {
+      if (filters.entityId) {
+        where.push("((a.entity = ? AND a.entity_id = ?) OR (a.entity IS NULL AND a.action LIKE ? AND JSON_UNQUOTE(JSON_EXTRACT(a.metadata, '$.id')) = ?))");
+        params.push(filters.entity, filters.entityId, `crm\\_${filters.entity}\\_%`, String(filters.entityId));
+      } else {
+        where.push('(a.entity = ? OR (a.entity IS NULL AND a.action LIKE ?))');
+        params.push(filters.entity, `crm\\_${filters.entity}\\_%`);
+      }
+    }
+    if (filters.fromMs) { where.push('a.created_at >= FROM_UNIXTIME(?)'); params.push(Math.floor(filters.fromMs / 1000)); }
+    if (filters.toMs) { where.push('a.created_at < FROM_UNIXTIME(?)'); params.push(Math.floor(filters.toMs / 1000)); }
+    if (filters.beforeId) { where.push('a.id < ?'); params.push(filters.beforeId); }
+    const limit = Math.min(Math.max(Number(filters.limit) || 100, 1), 500);
+    const [rows] = await this.pool.query(
+      `SELECT a.id, a.user_id, a.action, a.entity, a.entity_id, a.summary, a.ip_address, a.metadata,
+              UNIX_TIMESTAMP(a.created_at) * 1000 AS created_ms, u.name AS user_name, u.email AS user_email
+       FROM activity_logs a LEFT JOIN users u ON u.id = a.user_id
+       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+       ORDER BY a.id DESC LIMIT ${limit}`,
+      params
+    );
+    return rows.map(normalizeActivity);
+  }
+
+  async purgeActivity(days) {
+    const [result] = await this.pool.execute('DELETE FROM activity_logs WHERE created_at < (NOW() - INTERVAL ? DAY)', [days]);
+    return result.affectedRows;
   }
 }
 
@@ -363,7 +437,11 @@ class MemoryDataStore {
   async findUserByEmail(email) { return this.users.find((user) => user.email === email) || null; }
   async findUserById(id) { const user = this.users.find((u) => u.id === Number(id)); return user ? { ...user } : null; }
   async updatePassword(id, passwordHash) { const user = this.users.find((u) => u.id === Number(id)); user.password_hash = passwordHash; user.must_change_password = false; }
-  async logActivity(userId, action, req, metadata = null) { this.activity.unshift({ id: this.activity.length + 1, user_id: userId, action, ip_address: req.ip, metadata, created_at: new Date() }); }
+  async logActivity(userId, action, req, metadata = null) {
+    const { entity = null, entityId = null, summary = null, ...rest } = metadata || {};
+    this.activitySeq = (this.activitySeq || 0) + 1;
+    this.activity.unshift({ id: this.activitySeq, user_id: userId, action, entity, entity_id: entityId, summary, ip_address: req?.ip || null, metadata: rest, created_ms: Date.now() });
+  }
   async listUsers() { return this.users.map(({ password_hash, ...user }) => ({ ...user })); }
   async createUser({ email, name, role, passwordHash }) {
     if (this.users.some((u) => u.email === email)) { const error = new Error('duplicado'); error.code = 'ER_DUP_ENTRY'; throw error; }
@@ -409,7 +487,24 @@ class MemoryDataStore {
     this.records.quotes.filter((q) => q.lead_id === Number(leadId)).forEach((q) => { q.owner_id = ownerId; });
     this.records.followups.filter((f) => f.lead_id === Number(leadId) && !f.done).forEach((f) => { f.owner_id = ownerId; });
   }
-  async listActivity() { return this.activity.slice(0, 200); }
+  async listActivity(filters = {}) {
+    const users = new Map(this.users.map((u) => [u.id, u]));
+    let rows = this.activity.map((row) => normalizeActivity({ ...row, user_name: users.get(row.user_id)?.name, user_email: users.get(row.user_id)?.email }));
+    if (filters.userId) rows = rows.filter((r) => r.userId === Number(filters.userId));
+    if (filters.type === 'crm') rows = rows.filter((r) => r.action.startsWith('crm_'));
+    if (filters.type === 'security') rows = rows.filter((r) => !r.action.startsWith('crm_'));
+    if (filters.entity) rows = rows.filter((r) => r.entity === filters.entity && (!filters.entityId || r.entityId === Number(filters.entityId)));
+    if (filters.fromMs) rows = rows.filter((r) => r.createdMs >= filters.fromMs);
+    if (filters.toMs) rows = rows.filter((r) => r.createdMs < filters.toMs);
+    if (filters.beforeId) rows = rows.filter((r) => r.id < filters.beforeId);
+    return rows.slice(0, Math.min(Math.max(Number(filters.limit) || 100, 1), 500));
+  }
+  async purgeActivity(days) {
+    const limit = Date.now() - days * 86400000;
+    const before = this.activity.length;
+    this.activity = this.activity.filter((r) => r.created_ms >= limit);
+    return before - this.activity.length;
+  }
 
   async listRecords(entityName) { return [...this.records[entityName]].sort((a, b) => b.id - a.id).map((row) => ({ ...row })); }
   async getRecord(entityName, id) { const row = this.records[entityName].find((item) => item.id === Number(id)); return row ? { ...row } : null; }

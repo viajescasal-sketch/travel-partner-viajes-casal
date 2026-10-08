@@ -494,6 +494,7 @@ function leadModal(id, presetClientId) {
     ${isAdmin() ? field('Vendedor asignado', `<select name="owner_id">${options(sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`]), lead?.owner_id ?? currentUser.id)}</select>`) : ''}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
     ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Programar seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
+    ${lead ? historyButton('leads', lead.id) : ''}
     ${deleteBlock('lead', lead?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${lead ? 'Guardar cambios' : 'Guardar lead'}</button></div></form>`;
   openModal('REGISTRO COMERCIAL', lead ? `Lead de ${client?.name || ''}` : 'Nuevo lead', html);
@@ -535,6 +536,7 @@ function quoteModal(id, preset = {}) {
     ${quote ? field('Estado', `<select name="status">${options(QUOTE_STATUSES, quote.status)}</select>`) : ''}
     ${field('Servicios incluidos', `<textarea name="services" rows="3" maxlength="4000">${escapeHtml(quote?.services)}</textarea>`, true)}
     ${quote?.status === 'Aceptada' ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-trip-from-quote="${quote.id}">Crear viaje con esta cotización</button></div>` : ''}
+    ${quote ? historyButton('quotes', quote.id) : ''}
     ${deleteBlock('cotización', quote?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${quote ? 'Guardar cambios' : 'Guardar cotización'}</button></div></form>`;
   openModal('PROPUESTA', quote ? `Cotización ${quote.folio}` : 'Nueva cotización', html);
@@ -573,6 +575,7 @@ function clientModal(id) {
     </fieldset>
     ${c ? `<div class="full quick-actions">${canWrite('leads') ? `<button type="button" class="btn secondary small" data-new-lead-client="${c.id}">Nuevo lead</button>` : ''}${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-quote-for="${c.id}">Nueva cotización</button>` : ''}${canWrite('trips') ? `<button type="button" class="btn secondary small" data-new-trip-client="${c.id}">Nuevo viaje</button>` : ''}</div>` : ''}
     ${history}
+    ${c ? historyButton('clients', c.id) : ''}
     ${deleteBlock('cliente y todo su historial', c?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">${readonly ? 'Cerrar' : 'Cancelar'}</button>${readonly ? '' : `<button type="submit" class="btn primary">${c ? 'Guardar cambios' : 'Guardar cliente'}</button>`}</div></form>`;
   openModal('CLIENTE', c ? c.name : 'Nuevo cliente', html);
@@ -598,6 +601,7 @@ function tripModal(id, preset = {}) {
     ${field('Regreso*', `<input name="end_date" type="date" required value="${escapeHtml(t?.end_date ?? fromLead?.end_date)}">`)}
     ${field('Estado', `<select name="status">${options(TRIP_STATUSES, t?.status || 'Confirmado')}</select>`, true)}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(t?.notes)}</textarea>`, true)}
+    ${t ? historyButton('trips', t.id) : ''}
     ${deleteBlock('viaje', t?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${t ? 'Guardar cambios' : 'Guardar viaje'}</button></div></form>`;
   openModal('OPERACIÓN', t ? `Viaje a ${t.destination}` : 'Nuevo viaje', html);
@@ -634,6 +638,99 @@ function followupModal(id, preset = {}) {
   });
   form.client_id.onchange = () => { form.lead_id.innerHTML = leadOptions(form.client_id.value); };
   if (f) bindDelete(`/api/followups/${f.id}`, 'Seguimiento eliminado');
+}
+
+/* ---------- bitácora ---------- */
+const ENTITY_LABELS = { clients: 'Cliente', leads: 'Lead', quotes: 'Cotización', trips: 'Viaje', followups: 'Seguimiento' };
+const SECURITY_LABELS = {
+  login_success: 'Inició sesión', login_failed: 'Intento de acceso fallido', logout: 'Cerró sesión',
+  password_changed: 'Cambió su contraseña', password_reset_requested: 'Pidió recuperar su contraseña',
+  password_reset_completed: 'Recuperó su contraseña', password_reset_mail_failed: 'Falló el correo de recuperación',
+  password_reset_sent_by_admin: 'Envió enlace de recuperación', user_create: 'Creó un usuario', user_update: 'Editó un usuario',
+  user_reset_password: 'Generó contraseña temporal', mail_test_sent: 'Envió correo de prueba',
+  twofa_enabled: 'Activó la verificación en dos pasos', twofa_disabled: 'Desactivó la verificación en dos pasos',
+  totp_enabled: 'Configuró app de autenticación', totp_disabled: 'Quitó su app de autenticación',
+  backup_codes_regenerated: 'Generó códigos de respaldo', twofa_backup_code_used: 'Entró con código de respaldo',
+  twofa_failed: 'Bloqueado por códigos incorrectos', twofa_reset_by_admin: 'Quitó la app de un usuario',
+  trusted_devices_cleared: 'Olvidó sus equipos recordados', twofa_skipped_no_mail: 'Entró sin segundo paso (correo no configurado)',
+  crm_settings_update: 'Cambió el perfil de la agencia', crm_shared_client: 'Registró un cliente que ya atiende otro vendedor'
+};
+const VERB = { create: 'Creó', update: 'Editó', delete: 'Eliminó', duplicate: 'Duplicó', reassign: 'Reasignó' };
+function describeAction(item) {
+  const match = /^crm_(clients|leads|quotes|trips|followups)_(\w+)$/.exec(item.action);
+  if (match && VERB[match[2]]) {
+    const kind = match[2] === 'create' || match[2] === 'duplicate' ? 'create' : match[2] === 'delete' ? 'delete' : 'update';
+    return { text: `${VERB[match[2]]} ${ENTITY_LABELS[match[1]].toLowerCase()}`, kind };
+  }
+  const alert = ['login_failed', 'twofa_failed', 'password_reset_mail_failed', 'crm_shared_client', 'twofa_skipped_no_mail'].includes(item.action);
+  return { text: SECURITY_LABELS[item.action] || item.action, kind: alert ? 'alert' : 'security' };
+}
+function fmtMs(ms) {
+  const d = new Date(ms - 5 * 3600 * 1000);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}, ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+function changesHtml(item) {
+  const parts = item.changes.map((c) => `<span class="act-change"><b>${escapeHtml(c.label)}:</b> ${c.from == null ? '<i>vacío</i>' : `<del>${escapeHtml(c.from)}</del>`} → ${c.to == null ? '<i>vacío</i>' : `<ins>${escapeHtml(c.to)}</ins>`}</span>`);
+  if (item.note) parts.push(`<span class="act-note">${escapeHtml(item.note)}</span>`);
+  if (item.method) parts.push(`<span class="act-note">Verificación: ${escapeHtml(item.method)}</span>`);
+  if (item.action === 'login_failed' && item.userEmail) parts.push(`<span class="act-note">Correo usado: ${escapeHtml(item.userEmail)}</span>`);
+  return parts.join('') || '<span class="muted">—</span>';
+}
+const activityState = { items: [], seq: 0, done: false };
+function activityFilters() {
+  const params = new URLSearchParams();
+  for (const [key, id] of [['user', 'actUser'], ['type', 'actType'], ['entity', 'actEntity'], ['from', 'actFrom'], ['to', 'actTo']]) {
+    const value = $(`#${id}`).value;
+    if (value) params.set(key, value);
+  }
+  return params;
+}
+// Cada consulta lleva un número; si llega una respuesta vieja (filtros cambiados), se descarta.
+async function loadActivity(more = false) {
+  const seq = ++activityState.seq;
+  const params = activityFilters();
+  params.set('limit', '100');
+  if (more && activityState.items.length) params.set('before', activityState.items.at(-1).id);
+  try {
+    const { items } = await api(`/api/activity?${params}`);
+    if (seq !== activityState.seq) return;
+    activityState.items = more ? activityState.items.concat(items) : items;
+    activityState.done = items.length < 100;
+    renderActivity();
+  } catch (error) { if (seq === activityState.seq) toast(error.message); }
+}
+function renderActivity() {
+  const rows = activityState.items;
+  $('#actRows').innerHTML = rows.length ? rows.map((item) => {
+    const action = describeAction(item);
+    const record = item.entity ? `${ENTITY_LABELS[item.entity] || ''}${item.summary ? ` · ${escapeHtml(item.summary)}` : item.entityId ? ` #${item.entityId}` : ''}` : (item.summary ? escapeHtml(item.summary) : '—');
+    return `<tr><td>${escapeHtml(fmtMs(item.createdMs))}</td><td>${escapeHtml(item.userName || item.userEmail || 'Sistema')}</td><td><span class="act-pill ${action.kind}">${escapeHtml(action.text)}</span></td><td>${record}</td><td>${changesHtml(item)}</td></tr>`;
+  }).join('') : emptyRow(5, 'No hay actividad con estos filtros.');
+  $('#actMore').classList.toggle('hidden', activityState.done || !rows.length);
+}
+function fillActivityUsers() {
+  const select = $('#actUser');
+  const current = select.value;
+  select.innerHTML = options(db.users.map((u) => [u.id, u.name]), current, { blank: 'Todos los usuarios' });
+}
+function exportActivity() {
+  const header = ['Fecha y hora', 'Usuario', 'Acción', 'Sección', 'Registro', 'Cambios', 'Nota', 'IP'];
+  const rows = activityState.items.map((i) => [fmtMs(i.createdMs), i.userName || i.userEmail || 'Sistema', describeAction(i).text, ENTITY_LABELS[i.entity] || '', i.summary || '',
+    i.changes.map((c) => `${c.label}: ${c.from ?? 'vacío'} -> ${c.to ?? 'vacío'}`).join(' | '), i.note || '', i.ip || '']);
+  const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: `bitacora-${todayStr()}.csv` });
+  document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+// Historial de un registro dentro de su ventana.
+const historyButton = (entity, id) => `<div class="full"><button type="button" class="link" data-history="${entity}:${id}">Ver historial de cambios</button></div>`;
+async function historyModal(entity, id) {
+  try {
+    const { items } = await api(`/api/history/${entity}/${id}`);
+    const title = items.find((i) => i.summary)?.summary || `${ENTITY_LABELS[entity]} #${id}`;
+    openModal('HISTORIAL', title, `<div class="timeline-hist">${items.length ? items.map((item) => `<div class="entry"><b>${escapeHtml(describeAction(item).text)}</b> · ${escapeHtml(item.userName || 'Sistema')}<small>${escapeHtml(fmtMs(item.createdMs))}</small>${changesHtml(item)}</div>`).join('') : '<p class="empty-note">Sin movimientos registrados.</p>'}</div><div class="modal-actions"><button type="button" class="btn secondary close">Cerrar</button></div>`);
+  } catch (error) { toast(error.message); }
 }
 
 /* ---------- usuarios (administrador) ---------- */
@@ -836,6 +933,7 @@ function showPasswordChange() {
 
 /* ---------- navegación y eventos ---------- */
 function navigate(page) {
+  if (page === 'activity') { fillActivityUsers(); loadActivity(); }
   $$('aside nav button').forEach((b) => b.classList.toggle('active', b.dataset.page === page));
   $$('.page').forEach((p) => p.classList.toggle('active', p.id === page));
   $('#sidebar').classList.remove('open');
@@ -1057,6 +1155,7 @@ document.addEventListener('click', (e) => {
   if ((el = hit('[data-new-lead-client]'))) { leadModal(null, Number(el.dataset.newLeadClient)); return; }
   if ((el = hit('[data-new-trip-client]'))) { tripModal(null, { clientId: Number(el.dataset.newTripClient) }); return; }
   if ((el = hit('[data-trip-from-quote]'))) { tripModal(null, { quoteId: Number(el.dataset.tripFromQuote) }); return; }
+  if ((el = hit('[data-history]'))) { const [entity, id] = el.dataset.history.split(':'); historyModal(entity, Number(id)); return; }
   if ((el = hit('[data-settings-tab]'))) { showSettingsTab(el.dataset.settingsTab); return; }
   if ((el = hit('[data-edit-user]'))) { userModal(Number(el.dataset.editUser)); return; }
   if ((el = hit('[data-reset-user]'))) { resetUserModal(Number(el.dataset.resetUser)); return; }
@@ -1092,6 +1191,9 @@ $('#leadSearch').oninput = (e) => { ui.leadQuery = e.target.value; renderLeads()
 $('#stageFilter').onchange = (e) => { ui.leadStage = e.target.value; renderLeads(); };
 $('#ownerFilter').onchange = (e) => { ui.leadOwner = e.target.value; renderLeads(); };
 $('#newUser').onclick = () => userModal();
+['actUser', 'actType', 'actEntity', 'actFrom', 'actTo'].forEach((id) => { $(`#${id}`).onchange = () => loadActivity(); });
+$('#actMore').onclick = () => loadActivity(true);
+$('#actExport').onclick = exportActivity;
 $('#testMail').onclick = async () => {
   const button = $('#testMail');
   button.disabled = true;

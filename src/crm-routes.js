@@ -10,6 +10,7 @@ const {
   nowCancun
 } = require('./crm-schema');
 const { ROLE_LABELS, SELLER_ROLES, canWrite, buildScope, isVisible, filterData } = require('./access');
+const { summaryFor, diffChanges } = require('./audit');
 
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
 const AGENCY_FIELDS = { name: 120, whatsapp: 40, email: 254, website: 200 };
@@ -61,6 +62,25 @@ function createCrmRouter(dataStore, { requireRole }) {
     const data = {};
     for (const entityName of ENTITY_ORDER) data[entityName] = await dataStore.listRecords(entityName);
     return data;
+  }
+
+  // ---- Bitácora: quién hizo qué y qué cambió ----
+  async function finder() {
+    const data = await loadAll();
+    return (entity, id) => data[entity].find((row) => row.id === Number(id)) || null;
+  }
+  async function audit(req, action, entity, before, after, extra = {}) {
+    const find = await finder();
+    const record = after || before;
+    const changes = action === 'update' ? diffChanges(entity, before, after, find) : [];
+    if (action === 'update' && !changes.length && !extra.note) return;
+    await log(req, `crm_${entity}_${action}`, {
+      entity,
+      entityId: record.id,
+      summary: summaryFor(entity, record, find),
+      ...(changes.length ? { changes } : {}),
+      ...extra
+    });
   }
 
   // Contexto de permisos para la petición actual.
@@ -119,7 +139,7 @@ function createCrmRouter(dataStore, { requireRole }) {
   }
 
   // Ajusta etapas y fechas cuando una cotización cambia de estado.
-  async function applyQuoteEffects(quote) {
+  async function applyQuoteEffects(quote, req) {
     if (quote.status === 'Aceptada' && !quote.accepted_at) {
       quote = await dataStore.updateRecord('quotes', quote.id, { accepted_at: nowCancun() });
     } else if (quote.status !== 'Aceptada' && quote.accepted_at) {
@@ -128,11 +148,13 @@ function createCrmRouter(dataStore, { requireRole }) {
     if (quote.lead_id) {
       const lead = await dataStore.getRecord('leads', quote.lead_id);
       if (lead) {
+        let updated = null;
         if (quote.status === 'Aceptada' && lead.stage !== 'Vendido') {
-          await dataStore.updateRecord('leads', lead.id, { stage: 'Vendido', closed_at: nowCancun() });
+          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Vendido', closed_at: nowCancun() });
         } else if (['Nuevo', 'Calificado'].includes(lead.stage) && quote.status !== 'Rechazada') {
-          await dataStore.updateRecord('leads', lead.id, { stage: 'Cotizado' });
+          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Cotizado' });
         }
+        if (updated && req) await audit(req, 'update', 'leads', lead, updated, { note: `Automático por la cotización ${quote.folio}` });
       }
     }
     return quote;
@@ -191,15 +213,15 @@ function createCrmRouter(dataStore, { requireRole }) {
         if (!client.email && clientData.email) client = await dataStore.updateRecord('clients', client.id, { email: clientData.email });
       } else {
         client = await dataStore.insertRecord('clients', clientData, ownerId);
-        await log(req, 'crm_clients_create', { id: client.id });
+        await audit(req, 'create', 'clients', null, client);
       }
     }
     const data = sanitize('leads', { ...body, client_id: client.id });
     checkDateRange(data);
     if (CLOSED_STAGES.includes(data.stage)) data.closed_at = nowCancun();
     const lead = await dataStore.insertRecord('leads', data, ownerId);
-    await log(req, 'crm_leads_create', { id: lead.id, owner_id: ownerId });
-    if (warning) await log(req, 'crm_shared_client', { lead_id: lead.id, client_id: client.id });
+    await audit(req, 'create', 'leads', null, lead, ownerId !== ctx.user.id ? { note: `Asignado a ${(await dataStore.findUserById(ownerId))?.name || 'otro vendedor'}` } : {});
+    if (warning) await log(req, 'crm_shared_client', { entity: 'leads', entityId: lead.id, summary: `${client.name} · ${lead.destination}`, note: warning });
 
     let followup = null;
     if (body.first_followup_at) {
@@ -212,6 +234,7 @@ function createCrmRouter(dataStore, { requireRole }) {
         due_at: body.first_followup_at
       });
       followup = await dataStore.insertRecord('followups', followupData, ownerId);
+      await audit(req, 'create', 'followups', null, followup);
     }
     res.status(201).json({ ok: true, record: lead, client, followup, warning });
   }));
@@ -229,13 +252,17 @@ function createCrmRouter(dataStore, { requireRole }) {
       if (!CLOSED_STAGES.includes(data.stage)) data.closed_at = null;
     }
     let record = await dataStore.updateRecord('leads', id, data);
-    await log(req, 'crm_leads_update', { id });
+    await audit(req, 'update', 'leads', current, record);
 
     if (body.owner_id !== undefined && Number(body.owner_id) !== current.owner_id) {
       if (ctx.user.role !== 'admin') throw forbidden('Solo el administrador puede reasignar leads');
       const owner = await assignableOwner(parseId(body.owner_id));
       await dataStore.transferLeadOwnership(id, owner.id);
-      await log(req, 'crm_leads_reassign', { id, from: current.owner_id, to: owner.id });
+      const previous = current.owner_id ? await dataStore.findUserById(current.owner_id) : null;
+      await log(req, 'crm_leads_reassign', {
+        entity: 'leads', entityId: id, summary: summaryFor('leads', current, ctx.find),
+        changes: [{ field: 'owner_id', label: 'Vendedor', from: previous?.name || null, to: owner.name }]
+      });
       record = await dataStore.getRecord('leads', id);
     }
     res.json({ ok: true, record });
@@ -249,8 +276,8 @@ function createCrmRouter(dataStore, { requireRole }) {
     const lead = ctx.checkRef('leads', data.lead_id);
     checkLeadMatchesClient(lead, data.client_id);
     let record = await insertQuote(data, lead?.owner_id ?? ctx.user.id);
-    record = await applyQuoteEffects(record);
-    await log(req, 'crm_quotes_create', { id: record.id, folio: record.folio });
+    record = await applyQuoteEffects(record, req);
+    await audit(req, 'create', 'quotes', null, record);
     res.status(201).json({ ok: true, record });
   }));
 
@@ -259,7 +286,7 @@ function createCrmRouter(dataStore, { requireRole }) {
     const source = ctx.mustSee('quotes', parseId(req.params.id));
     const { id, folio, accepted_at, owner_id, created_at, updated_at, ...rest } = source;
     const record = await insertQuote({ ...rest, status: 'Borrador', accepted_at: null }, owner_id ?? ctx.user.id);
-    await log(req, 'crm_quotes_duplicate', { from: source.folio, id: record.id });
+    await audit(req, 'duplicate', 'quotes', null, record, { note: `Copia de ${source.folio}` });
     res.status(201).json({ ok: true, record });
   }));
 
@@ -273,8 +300,8 @@ function createCrmRouter(dataStore, { requireRole }) {
     const lead = data.lead_id !== undefined ? ctx.checkRef('leads', data.lead_id) : (current.lead_id ? ctx.find('leads', current.lead_id) : null);
     checkLeadMatchesClient(lead, clientId);
     let record = await dataStore.updateRecord('quotes', id, data);
-    record = await applyQuoteEffects(record);
-    await log(req, 'crm_quotes_update', { id });
+    record = await applyQuoteEffects(record, req);
+    await audit(req, 'update', 'quotes', current, record);
     res.json({ ok: true, record });
   }));
 
@@ -282,16 +309,16 @@ function createCrmRouter(dataStore, { requireRole }) {
   router.post('/clients', requireWrite('clients'), wrap(async (req, res) => {
     const data = sanitize('clients', req.body);
     const record = await dataStore.insertRecord('clients', data, req.session.user.id);
-    await log(req, 'crm_clients_create', { id: record.id });
+    await audit(req, 'create', 'clients', null, record);
     res.status(201).json({ ok: true, record });
   }));
 
   router.patch('/clients/:id', requireWrite('clients'), wrap(async (req, res) => {
     const id = parseId(req.params.id);
     const ctx = await context(req);
-    ctx.mustSee('clients', id);
+    const current = ctx.mustSee('clients', id);
     const record = await dataStore.updateRecord('clients', id, sanitize('clients', req.body, { partial: true }));
-    await log(req, 'crm_clients_update', { id });
+    await audit(req, 'update', 'clients', current, record);
     res.json({ ok: true, record });
   }));
 
@@ -304,7 +331,7 @@ function createCrmRouter(dataStore, { requireRole }) {
     const quote = ctx.checkRef('quotes', data.quote_id);
     if (quote && quote.client_id !== data.client_id) throw new ValidationError('La cotización no pertenece a ese cliente');
     const record = await dataStore.insertRecord('trips', data, ctx.user.id);
-    await log(req, 'crm_trips_create', { id: record.id });
+    await audit(req, 'create', 'trips', null, record);
     res.status(201).json({ ok: true, record });
   }));
 
@@ -317,7 +344,7 @@ function createCrmRouter(dataStore, { requireRole }) {
     if (data.client_id !== undefined) ctx.checkRef('clients', data.client_id);
     if (data.quote_id !== undefined) ctx.checkRef('quotes', data.quote_id);
     const record = await dataStore.updateRecord('trips', id, data);
-    await log(req, 'crm_trips_update', { id });
+    await audit(req, 'update', 'trips', current, record);
     res.json({ ok: true, record });
   }));
 
@@ -330,19 +357,19 @@ function createCrmRouter(dataStore, { requireRole }) {
     if (lead && data.client_id !== lead.client_id) throw new ValidationError('El lead no pertenece a ese cliente');
     ctx.checkRef('clients', data.client_id);
     const record = await dataStore.insertRecord('followups', data, lead?.owner_id ?? ctx.user.id);
-    await log(req, 'crm_followups_create', { id: record.id });
+    await audit(req, 'create', 'followups', null, record);
     res.status(201).json({ ok: true, record });
   }));
 
   router.patch('/followups/:id', requireWrite('followups'), wrap(async (req, res) => {
     const id = parseId(req.params.id);
     const ctx = await context(req);
-    ctx.mustSee('followups', id);
+    const current = ctx.mustSee('followups', id);
     const data = sanitize('followups', req.body, { partial: true });
     if (data.lead_id !== undefined) ctx.checkRef('leads', data.lead_id);
     if (data.client_id !== undefined) ctx.checkRef('clients', data.client_id);
     const record = await dataStore.updateRecord('followups', id, data);
-    await log(req, 'crm_followups_update', { id });
+    await audit(req, 'update', 'followups', current, record);
     res.json({ ok: true, record });
   }));
 
@@ -350,12 +377,36 @@ function createCrmRouter(dataStore, { requireRole }) {
   for (const entityName of ENTITY_ORDER) {
     router.delete(`/${entityName}/:id`, adminOnly, wrap(async (req, res) => {
       const id = parseId(req.params.id);
+      const data = await loadAll();
+      const find = (entity, rid) => data[entity].find((row) => row.id === Number(rid)) || null;
+      const before = find(entityName, id);
+      if (!before) throw notFound(ENTITIES[entityName].label);
+      // Lo que se elimina en cascada con un cliente.
+      let note = null;
+      if (entityName === 'clients') {
+        const count = (entity) => data[entity].filter((row) => row.client_id === id).length;
+        const parts = [['leads', 'leads'], ['quotes', 'cotizaciones'], ['trips', 'viajes'], ['followups', 'seguimientos']]
+          .map(([entity, label]) => [count(entity), label]).filter(([n]) => n).map(([n, label]) => `${n} ${label}`);
+        if (parts.length) note = `También se eliminaron: ${parts.join(', ')}`;
+      }
+      const summary = summaryFor(entityName, before, find);
       const deleted = await dataStore.deleteRecord(entityName, id);
       if (!deleted) throw notFound(ENTITIES[entityName].label);
-      await log(req, `crm_${entityName}_delete`, { id });
+      await log(req, `crm_${entityName}_delete`, { entity: entityName, entityId: id, summary, ...(note ? { note } : {}) });
       res.json({ ok: true });
     }));
   }
+
+  // ---- Historial de un registro (visible para quien puede ver el registro) ----
+  router.get('/history/:entity/:id', wrap(async (req, res) => {
+    const entity = req.params.entity;
+    if (!ENTITY_ORDER.includes(entity)) throw notFound('registro');
+    const id = parseId(req.params.id);
+    const ctx = await context(req);
+    ctx.mustSee(entity, id);
+    const items = await dataStore.listActivity({ entity, entityId: id, limit: 200 });
+    res.json({ ok: true, items });
+  }));
 
   // ---- Perfil de la agencia ----
   router.put('/settings/agency', adminOnly, wrap(async (req, res) => {
