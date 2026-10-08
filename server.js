@@ -11,6 +11,8 @@ const session = require('express-session');
 const MySQLSession = require('express-mysql-session')(session);
 const { createDataStore, databaseConfigFromEnv } = require('./src/data-store');
 const { createCrmRouter } = require('./src/crm-routes');
+const { createUserRouter } = require('./src/user-routes');
+const { ROLE_LABELS } = require('./src/access');
 
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -23,9 +25,13 @@ function publicUser(user) {
     email: user.email,
     name: user.name,
     role: user.role,
+    roleLabel: ROLE_LABELS[user.role] || user.role,
     mustChangePassword: Boolean(user.must_change_password)
   };
 }
+
+// Huella de la contraseña: si el administrador la restablece, las sesiones abiertas se cierran.
+const passwordStamp = (user) => String(user.password_hash || '').slice(-16);
 
 function requireAuthentication(req, res, next) {
   if (!req.session?.user) {
@@ -54,6 +60,22 @@ async function createApp(options = {}) {
   if (isProduction) {
     app.set('trust proxy', 1);
   }
+
+  // Revisa en cada petición que el usuario siga activo y toma su rol actual.
+  const authenticate = async (req, res, next) => {
+    if (!req.session?.user) return res.status(401).json({ ok: false, error: 'Autenticación requerida' });
+    try {
+      const user = await dataStore.findUserById(req.session.user.id);
+      if (!user || !user.active || (req.session.pwd && req.session.pwd !== passwordStamp(user))) {
+        await new Promise((resolve) => req.session.destroy(() => resolve()));
+        return res.status(401).json({ ok: false, error: 'Tu sesión terminó. Vuelve a iniciar sesión.' });
+      }
+      req.session.user = publicUser(user);
+      return next();
+    } catch (error) {
+      return next(error);
+    }
+  };
 
   app.disable('x-powered-by');
   app.use(helmet({
@@ -126,6 +148,8 @@ async function createApp(options = {}) {
 
       await new Promise((resolve, reject) => req.session.regenerate((error) => error ? reject(error) : resolve()));
       req.session.user = publicUser(user);
+      req.session.pwd = passwordStamp(user);
+      await dataStore.touchLogin(user.id);
       await dataStore.logActivity(user.id, 'login_success', req);
       return res.json({ ok: true, user: req.session.user });
     } catch (error) {
@@ -133,11 +157,11 @@ async function createApp(options = {}) {
     }
   });
 
-  app.get('/api/auth/me', requireAuthentication, (req, res) => {
+  app.get('/api/auth/me', authenticate, (req, res) => {
     res.json({ ok: true, user: req.session.user });
   });
 
-  app.post('/api/auth/change-password', requireAuthentication, async (req, res, next) => {
+  app.post('/api/auth/change-password', authenticate, async (req, res, next) => {
     try {
       const currentPassword = String(req.body.currentPassword || '');
       const newPassword = String(req.body.newPassword || '');
@@ -151,6 +175,7 @@ async function createApp(options = {}) {
       const passwordHash = await bcrypt.hash(newPassword, 12);
       await dataStore.updatePassword(user.id, passwordHash);
       req.session.user.mustChangePassword = false;
+      req.session.pwd = passwordStamp({ password_hash: passwordHash });
       await dataStore.logActivity(user.id, 'password_changed', req);
       return res.json({ ok: true });
     } catch (error) {
@@ -158,7 +183,7 @@ async function createApp(options = {}) {
     }
   });
 
-  app.post('/api/auth/logout', requireAuthentication, async (req, res, next) => {
+  app.post('/api/auth/logout', authenticate, async (req, res, next) => {
     const userId = req.session.user.id;
     try {
       await dataStore.logActivity(userId, 'logout', req);
@@ -170,15 +195,7 @@ async function createApp(options = {}) {
     }
   });
 
-  app.get('/api/users', requireAuthentication, requireRole('admin'), async (_req, res, next) => {
-    try {
-      res.json({ ok: true, users: await dataStore.listUsers() });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get('/api/activity', requireAuthentication, requireRole('admin'), async (_req, res, next) => {
+  app.get('/api/activity', authenticate, requireRole('admin'), async (_req, res, next) => {
     try {
       res.json({ ok: true, activity: await dataStore.listActivity() });
     } catch (error) {
@@ -186,13 +203,14 @@ async function createApp(options = {}) {
     }
   });
 
-  app.use('/api', requireAuthentication);
+  app.use('/api', authenticate);
   app.use('/api', (req, res, next) => {
     if (req.session.user.mustChangePassword) {
       return res.status(403).json({ ok: false, error: 'Cambia tu contraseña temporal para continuar' });
     }
     return next();
   });
+  app.use('/api/users', createUserRouter(dataStore, { requireRole, destroyUserSessions: async () => {} }));
   app.use('/api', createCrmRouter(dataStore, { requireRole }));
   app.use(express.static(publicDirectory, { index: false, dotfiles: 'ignore' }));
 

@@ -64,6 +64,24 @@ Pruebas: `npm test` usa memoria. Para probar contra MySQL: `TEST_DB_NAME=... TES
 
 Los enlaces persistentes de PDF se habilitarán cuando se conecte Google Drive; no se incluyen OpenAI API, WhatsApp API ni secretos.
 
+## Usuarios y roles (TP-002)
+
+| Rol (valor en BD) | Ve | Puede |
+| --- | --- | --- |
+| Administrador (`admin`) | Todo | Todo: reasignar leads, eliminar, gestionar usuarios y configuración |
+| Vendedor (`travel_partner`) | Sus leads y los clientes, cotizaciones, viajes y seguimientos que cuelgan de ellos | Crear y editar dentro de lo suyo |
+| Operaciones (`operaciones`) | Todos los clientes, cotizaciones y viajes; no ve leads | Crear y editar viajes y sus propios seguimientos |
+| Consulta (`consulta`) | Todo | Solo lectura (rol heredado) |
+
+- Las reglas viven en `src/access.js` y se aplican en el servidor; un registro ajeno responde 404.
+- El administrador crea usuarios en **Configuración › Usuarios**. Se genera una contraseña temporal de 14 caracteres que el usuario cambia en su primer acceso.
+- Desactivar un usuario o restablecer su contraseña cierra sus sesiones abiertas. Cambiar el rol aplica desde la siguiente acción.
+- Siempre queda al menos un administrador activo; nadie puede quitarse a sí mismo el rol de administrador.
+- Si un vendedor registra un WhatsApp que ya atiende otro vendedor, el lead se crea con un aviso y el administrador ve la marca **Cliente compartido**.
+- Al reasignar un lead se mueven con él sus cotizaciones y seguimientos pendientes.
+- Las variables `ADMIN_*` y `PARTNER_*` solo crean las cuentas iniciales si no existen; si falta la contraseña inicial, el servidor arranca igual y lo avisa en el registro.
+- Para que Hostinger no muestre archivos viejos, `index.html` carga `app.js?v=...` y `styles.css?v=...`; cambia ese valor en cada versión.
+
 ## Variables de seguridad
 
 La aplicación no inicia en producción si falta alguna variable requerida. Configúralas exclusivamente en Hostinger:
@@ -101,9 +119,11 @@ Las contraseñas iniciales solo se utilizan para crear cuentas inexistentes. Des
 ```text
 .
 ├── src/
+│   ├── access.js
 │   ├── crm-routes.js
 │   ├── crm-schema.js
-│   └── data-store.js
+│   ├── data-store.js
+│   └── user-routes.js
 ├── test/
 ├── public/
 │   ├── app.js

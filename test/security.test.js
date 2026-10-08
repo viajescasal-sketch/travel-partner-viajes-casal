@@ -48,17 +48,20 @@ test('autenticación, roles, cambio de contraseña y cierre de sesión', async (
   assert.match(setCookie, /SameSite=Lax/i);
   const adminCookie = cookieFrom(adminLogin);
 
-  const adminUsers = await fetch(`${baseUrl}/api/users`, { headers: { cookie: adminCookie } });
-  assert.equal(adminUsers.status, 200);
-  const usersPayload = await adminUsers.json();
-  assert.equal(usersPayload.users.length, 2);
-  assert.equal(JSON.stringify(usersPayload).includes('password_hash'), false);
+  const blockedUsers = await fetch(`${baseUrl}/api/users`, { headers: { cookie: adminCookie } });
+  assert.equal(blockedUsers.status, 403, 'primero debe cambiar la contraseña temporal');
 
   const change = await fetch(`${baseUrl}/api/auth/change-password`, {
     method: 'POST', headers: { cookie: adminCookie, 'content-type': 'application/json' },
     body: JSON.stringify({ currentPassword: process.env.ADMIN_INITIAL_PASSWORD, newPassword: 'NuevaSegura12345' })
   });
   assert.equal(change.status, 200);
+
+  const adminUsers = await fetch(`${baseUrl}/api/users`, { headers: { cookie: adminCookie } });
+  assert.equal(adminUsers.status, 200);
+  const usersPayload = await adminUsers.json();
+  assert.equal(usersPayload.users.length, 2);
+  assert.equal(JSON.stringify(usersPayload).includes('password_hash'), false);
 
   const logout = await fetch(`${baseUrl}/api/auth/logout`, { method: 'POST', headers: { cookie: adminCookie } });
   assert.equal(logout.status, 200);

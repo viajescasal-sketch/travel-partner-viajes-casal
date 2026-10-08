@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=tp002" />
   </head>
   <body>
     <section id="login" class="login">
@@ -68,7 +68,7 @@
         </div>
         <nav id="nav">
           <button class="active" data-page="dashboard">⌂ Dashboard</button
-          ><button data-page="leads">◎ Leads <em id="leadBadge" class="hidden">0</em></button
+          ><button data-page="leads" data-hide-ops>◎ Leads <em id="leadBadge" class="hidden">0</em></button
           ><button data-page="quotes">▤ Cotizaciones</button
           ><button data-page="clients">◉ Clientes</button
           ><button data-page="trips">✈ Viajes</button
@@ -113,7 +113,7 @@
           <div class="header-actions">
             <button id="theme" class="icon">☾</button
             ><button class="icon">♢</button
-            ><button class="btn primary" data-action="lead">
+            ><button class="btn primary" data-action="lead" data-hide-ops>
               + Nuevo lead
             </button>
           </div>
@@ -127,9 +127,9 @@
                 <p>Estas son las prioridades comerciales de hoy.</p>
               </div>
               <div>
-                <button class="btn secondary" data-action="quote">
+                <button class="btn secondary" data-action="quote" data-hide-ops>
                   Nueva cotización</button
-                ><button class="btn primary" data-action="lead">
+                ><button class="btn primary" data-action="lead" data-hide-ops>
                   Registrar lead
                 </button>
               </div>
@@ -164,7 +164,7 @@
               </article>
             </div>
             <div class="grid two">
-              <article class="panel">
+              <article class="panel" data-hide-ops>
                 <div class="panel-head">
                   <div>
                     <h3>Embudo comercial</h3>
@@ -186,7 +186,7 @@
                 </div>
                 <div class="tasks" id="todayTasks"></div>
               </article>
-              <article class="panel full">
+              <article class="panel full" data-hide-ops>
                 <div class="panel-head">
                   <div>
                     <h3>Oportunidades recientes</h3>
@@ -217,7 +217,7 @@
                 <h2>Leads</h2>
                 <p>Registra, califica y prioriza oportunidades.</p>
               </div>
-              <button class="btn primary" data-action="lead">
+              <button class="btn primary" data-action="lead" data-hide-ops>
                 + Registrar lead
               </button>
             </div>
@@ -233,13 +233,14 @@
                 <option>Negociación</option>
                 <option>Vendido</option>
                 <option>Perdido</option></select
+              ><select id="ownerFilter" class="hidden" aria-label="Filtrar por vendedor"></select
               ><button id="exportLeads" class="btn secondary">Exportar CSV</button>
             </div>
             <article class="panel">
               <div class="table">
                 <table>
                   <thead>
-                    <tr>
+                    <tr id="leadHead">
                       <th>Lead</th>
                       <th>Destino</th>
                       <th>Fechas</th>
@@ -260,7 +261,7 @@
                 <h2>Cotizaciones</h2>
                 <p>Un PDF por propuesta, listo para compartir.</p>
               </div>
-              <button class="btn primary" data-action="quote">
+              <button class="btn primary" data-action="quote" data-hide-ops>
                 + Nueva cotización
               </button>
             </div>
@@ -287,7 +288,7 @@
                 <h2>Clientes</h2>
                 <p>Historial, preferencias y valor de cada relación.</p>
               </div>
-              <button class="btn primary" data-action="client">
+              <button class="btn primary" data-action="client" data-hide-ops>
                 + Nuevo cliente
               </button>
             </div>
@@ -410,12 +411,43 @@
               </div>
             </div>
             <div class="settings">
-              <nav>
-                <button class="active">Perfil de agencia</button
-                ><button>Travel Partners</button><button>Plantilla PDF</button
-                ><button>Integraciones</button>
+              <nav id="settingsNav">
+                <button class="active" data-settings-tab="agencyPanel">Perfil de agencia</button
+                ><button data-settings-tab="usersPanel">Usuarios</button
+                ><button data-settings-tab="pdfPanel">Plantilla PDF</button
+                ><button data-settings-tab="integrationsPanel">Integraciones</button>
               </nav>
-              <article class="panel">
+              <article class="panel settings-panel" id="usersPanel" hidden>
+                <div class="panel-head">
+                  <div>
+                    <h3>Usuarios</h3>
+                    <p>Crea accesos, asigna roles y desactiva cuentas.</p>
+                  </div>
+                  <button class="btn primary small" id="newUser">+ Nuevo usuario</button>
+                </div>
+                <div class="table">
+                  <table>
+                    <thead>
+                      <tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th></th></tr>
+                    </thead>
+                    <tbody id="userRows"></tbody>
+                  </table>
+                </div>
+                <div class="role-help">
+                  <p><b>Administrador:</b> ve y edita todo, reasigna leads, gestiona usuarios y configuración.</p>
+                  <p><b>Vendedor:</b> ve solo sus leads, los clientes y cotizaciones de esos leads, y sus seguimientos.</p>
+                  <p><b>Operaciones:</b> gestiona todos los viajes, consulta clientes y cotizaciones sin editarlos, y no ve leads.</p>
+                </div>
+              </article>
+              <article class="panel settings-panel" id="pdfPanel" hidden>
+                <h3>Plantilla PDF</h3>
+                <p class="empty-note">Próximamente: logo, colores y textos legales de la cotización.</p>
+              </article>
+              <article class="panel settings-panel" id="integrationsPanel" hidden>
+                <h3>Integraciones</h3>
+                <p class="empty-note">Próximamente: bot de WhatsApp, formulario web y Google Drive.</p>
+              </article>
+              <article class="panel settings-panel" id="agencyPanel">
                 <h3>Perfil de agencia</h3>
                 <div class="form-grid">
                   <label
@@ -507,6 +539,18 @@
       .calendar-head #calToday { font-size: 11px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; }
       .history-block > b { display: block; }
       .history-block > small { display: block; margin-top: 2px; }
+      body.role-operaciones [data-hide-ops], body.role-consulta [data-hide-ops], body.role-consulta [data-action] { display: none !important; }
+      .badge-shared { display: inline-block; margin-left: 6px; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: 700; background: #fff5d9; color: #916300; }
+      .owner-chip { font-size: 10px; color: var(--muted); }
+      #ownerFilter { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; padding: 8px; }
+      .settings-panel[hidden] { display: none; }
+      .role-help { margin-top: 14px; display: grid; gap: 4px; font-size: 11px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 12px; }
+      .role-help p { margin: 0; }
+      .user-actions { display: flex; gap: 8px; justify-content: flex-end; }
+      .pill-off { background: #f1f3f5; color: #5d6b76; }
+      .temp-pass { font: 700 20px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .08em; background: var(--bg); border: 1px dashed var(--border); border-radius: 10px; padding: 14px; text-align: center; user-select: all; }
+      .note-warn { background: #fff5d9; color: #6b4a00; border-radius: 10px; padding: 10px 12px; font-size: 12px; }
+      fieldset.readonly { border: 0; padding: 0; margin: 0; display: contents; }
       .profile #logout {
         margin-left: auto;
         color: #fff;
@@ -516,6 +560,6 @@
         cursor: wait;
       }
     </style>
-    <script src="/app.js"></script>
+    <script src="/app.js?v=tp002"></script>
   </body>
 </html>

@@ -46,10 +46,11 @@ class MySQLDataStore {
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       email VARCHAR(254) NOT NULL UNIQUE,
       name VARCHAR(120) NOT NULL,
-      role ENUM('admin','travel_partner','consulta') NOT NULL,
+      role ENUM('admin','travel_partner','operaciones','consulta') NOT NULL,
       password_hash VARCHAR(100) NOT NULL,
       active BOOLEAN NOT NULL DEFAULT TRUE,
       must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
+      last_login_at DATETIME NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
@@ -64,6 +65,7 @@ class MySQLDataStore {
       INDEX idx_activity_user (user_id), INDEX idx_activity_created (created_at),
       CONSTRAINT fk_activity_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+    await this.migrateUsers();
     for (const entityName of ENTITY_ORDER) {
       await this.pool.query(createTableSql(entityName));
     }
@@ -74,6 +76,50 @@ class MySQLDataStore {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
     await this.bootstrapUser(this.env.ADMIN_EMAIL, 'Administrador', 'admin', this.env.ADMIN_INITIAL_PASSWORD);
     await this.bootstrapUser(this.env.PARTNER_EMAIL, 'Paulina', 'travel_partner', this.env.PARTNER_INITIAL_PASSWORD);
+  }
+
+  // Ajusta tablas creadas por versiones anteriores sin borrar datos.
+  async migrateUsers() {
+    const [columns] = await this.pool.query(
+      "SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'"
+    );
+    const role = columns.find((c) => c.COLUMN_NAME === 'role');
+    if (role && !String(role.COLUMN_TYPE).includes('operaciones')) {
+      await this.pool.query("ALTER TABLE users MODIFY role ENUM('admin','travel_partner','operaciones','consulta') NOT NULL");
+    }
+    if (!columns.some((c) => c.COLUMN_NAME === 'last_login_at')) {
+      await this.pool.query('ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER must_change_password');
+    }
+  }
+
+  async createUser({ email, name, role, passwordHash }) {
+    const [result] = await this.pool.execute(
+      'INSERT INTO users (email, name, role, password_hash, must_change_password) VALUES (?, ?, ?, ?, TRUE)',
+      [email, name, role, passwordHash]
+    );
+    return this.findUserById(result.insertId);
+  }
+
+  async updateUser(id, fields) {
+    const allowed = ['name', 'role', 'active'];
+    const columns = Object.keys(fields).filter((key) => allowed.includes(key));
+    if (!columns.length) return this.findUserById(id);
+    await this.pool.execute(`UPDATE users SET ${columns.map((c) => `\`${c}\` = ?`).join(', ')} WHERE id = ?`, [...columns.map((c) => fields[c]), id]);
+    return this.findUserById(id);
+  }
+
+  async setTemporaryPassword(id, passwordHash) {
+    await this.pool.execute('UPDATE users SET password_hash = ?, must_change_password = TRUE WHERE id = ?', [passwordHash, id]);
+  }
+
+  async touchLogin(id) {
+    await this.pool.execute('UPDATE users SET last_login_at = ? WHERE id = ?', [nowCancun(), id]);
+  }
+
+  async transferLeadOwnership(leadId, ownerId) {
+    await this.pool.execute('UPDATE crm_leads SET owner_id = ?, updated_at = ? WHERE id = ?', [ownerId, nowCancun(), leadId]);
+    await this.pool.execute('UPDATE crm_quotes SET owner_id = ? WHERE lead_id = ?', [ownerId, leadId]);
+    await this.pool.execute('UPDATE crm_followups SET owner_id = ? WHERE lead_id = ? AND done = FALSE', [ownerId, leadId]);
   }
 
   async listRecords(entityName) {
@@ -145,7 +191,10 @@ class MySQLDataStore {
     const normalized = email.trim().toLowerCase();
     const [rows] = await this.pool.execute('SELECT id FROM users WHERE email = ? LIMIT 1', [normalized]);
     if (rows.length) return;
-    if (!password) throw new Error(`Falta la contraseña inicial para crear ${normalized}`);
+    if (!password) {
+      console.warn(`Aviso: no se creó ${normalized} porque falta su contraseña inicial`);
+      return;
+    }
     const passwordHash = await bcrypt.hash(password, 12);
     await this.pool.execute('INSERT INTO users (email, name, role, password_hash) VALUES (?, ?, ?, ?)', [normalized, name, role, passwordHash]);
   }
@@ -169,12 +218,12 @@ class MySQLDataStore {
   }
 
   async listUsers() {
-    const [rows] = await this.pool.execute('SELECT id, email, name, role, active, must_change_password, created_at FROM users ORDER BY created_at');
-    return rows;
+    const [rows] = await this.pool.execute('SELECT id, email, name, role, active, must_change_password, last_login_at, created_at FROM users ORDER BY created_at');
+    return rows.map((row) => ({ ...row, id: Number(row.id), active: Boolean(row.active), must_change_password: Boolean(row.must_change_password) }));
   }
 
   async listActivity() {
-    const [rows] = await this.pool.execute(`SELECT a.id, a.action, a.ip_address, a.created_at, u.email
+    const [rows] = await this.pool.execute(`SELECT a.id, a.action, a.ip_address, a.metadata, a.created_at, u.email
       FROM activity_logs a LEFT JOIN users u ON u.id = a.user_id ORDER BY a.created_at DESC LIMIT 200`);
     return rows;
   }
@@ -202,10 +251,29 @@ class MemoryDataStore {
   }
 
   async findUserByEmail(email) { return this.users.find((user) => user.email === email) || null; }
-  async findUserById(id) { return this.users.find((user) => user.id === Number(id)) || null; }
-  async updatePassword(id, passwordHash) { const user = await this.findUserById(id); user.password_hash = passwordHash; user.must_change_password = false; }
+  async findUserById(id) { const user = this.users.find((u) => u.id === Number(id)); return user ? { ...user } : null; }
+  async updatePassword(id, passwordHash) { const user = this.users.find((u) => u.id === Number(id)); user.password_hash = passwordHash; user.must_change_password = false; }
   async logActivity(userId, action, req, metadata = null) { this.activity.unshift({ id: this.activity.length + 1, user_id: userId, action, ip_address: req.ip, metadata, created_at: new Date() }); }
-  async listUsers() { return this.users.map(({ password_hash, ...user }) => user); }
+  async listUsers() { return this.users.map(({ password_hash, ...user }) => ({ ...user })); }
+  async createUser({ email, name, role, passwordHash }) {
+    if (this.users.some((u) => u.email === email)) { const error = new Error('duplicado'); error.code = 'ER_DUP_ENTRY'; throw error; }
+    const user = { id: Math.max(0, ...this.users.map((u) => u.id)) + 1, email, name, role, password_hash: passwordHash, active: true, must_change_password: true, last_login_at: null, created_at: nowCancun() };
+    this.users.push(user);
+    return { ...user };
+  }
+  async updateUser(id, fields) {
+    const user = this.users.find((u) => u.id === Number(id));
+    if (!user) return null;
+    for (const key of ['name', 'role', 'active']) if (fields[key] !== undefined) user[key] = fields[key];
+    return { ...user };
+  }
+  async setTemporaryPassword(id, passwordHash) { const user = this.users.find((u) => u.id === Number(id)); user.password_hash = passwordHash; user.must_change_password = true; }
+  async touchLogin(id) { const user = this.users.find((u) => u.id === Number(id)); if (user) user.last_login_at = nowCancun(); }
+  async transferLeadOwnership(leadId, ownerId) {
+    const lead = this.records.leads.find((l) => l.id === Number(leadId)); if (lead) { lead.owner_id = ownerId; lead.updated_at = nowCancun(); }
+    this.records.quotes.filter((q) => q.lead_id === Number(leadId)).forEach((q) => { q.owner_id = ownerId; });
+    this.records.followups.filter((f) => f.lead_id === Number(leadId) && !f.done).forEach((f) => { f.owner_id = ownerId; });
+  }
   async listActivity() { return this.activity.slice(0, 200); }
 
   async listRecords(entityName) { return [...this.records[entityName]].sort((a, b) => b.id - a.id).map((row) => ({ ...row })); }

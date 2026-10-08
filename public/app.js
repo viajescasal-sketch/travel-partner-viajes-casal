@@ -18,8 +18,8 @@ const MONTHS_LONG = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Jul
 const WEEKDAYS = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
 const SOURCE_COLORS = ['var(--teal)', '#0b4f7a', 'var(--coral)', 'var(--gold)', '#7a5bd0', '#8a99a6'];
 
-const db = { clients: [], leads: [], quotes: [], trips: [], followups: [], agency: {} };
-const ui = { leadQuery: '', leadStage: '', quoteQuery: '', clientQuery: '', funnelRange: 'month', calYear: 0, calMonth: 0, calDay: '' };
+const db = { clients: [], leads: [], quotes: [], trips: [], followups: [], users: [], agency: {} };
+const ui = { leadQuery: '', leadStage: '', leadOwner: '', settingsTab: 'agencyPanel', quoteQuery: '', clientQuery: '', funnelRange: 'month', calYear: 0, calMonth: 0, calDay: '' };
 const selectedQuoteIds = new Set();
 let currentUser = null;
 let passwordChangeRequired = false;
@@ -31,7 +31,24 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const money = (n) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(Number(n) || 0);
 const initials = (n) => String(n || '?').split(' ').filter(Boolean).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
+const ROLE_LABELS = { admin: 'Administrador', travel_partner: 'Vendedor', operaciones: 'Operaciones', consulta: 'Consulta' };
+const WRITE_RULES = {
+  admin: ['clients', 'leads', 'quotes', 'trips', 'followups'],
+  travel_partner: ['clients', 'leads', 'quotes', 'trips', 'followups'],
+  operaciones: ['trips', 'followups'],
+  consulta: []
+};
 const isAdmin = () => currentUser?.role === 'admin';
+const isOps = () => currentUser?.role === 'operaciones';
+const canWrite = (entity) => (WRITE_RULES[currentUser?.role] || []).includes(entity);
+const userName = (id) => db.users.find((u) => u.id === Number(id))?.name || (Number(id) === currentUser?.id ? currentUser.name : 'Sin asignar');
+const sellers = () => db.users.filter((u) => u.active && ['admin', 'travel_partner'].includes(u.role));
+// Clientes con leads de más de un vendedor (solo el administrador los ve todos).
+const sharedClientIds = () => {
+  const owners = new Map();
+  db.leads.forEach((l) => { if (!owners.has(l.client_id)) owners.set(l.client_id, new Set()); owners.get(l.client_id).add(l.owner_id); });
+  return new Set([...owners].filter(([, set]) => set.size > 1).map(([id]) => id));
+};
 
 // Cancún usa UTC-5 todo el año.
 function nowLocal() { return new Date(Date.now() - 5 * 3600 * 1000); }
@@ -93,7 +110,7 @@ const send = (method, url, body) => api(url, { method, body: body === undefined 
 async function loadAll() {
   try {
     const data = await api('/api/crm');
-    for (const key of ['clients', 'leads', 'quotes', 'trips', 'followups']) db[key] = data[key] || [];
+    for (const key of ['clients', 'leads', 'quotes', 'trips', 'followups', 'users']) db[key] = data[key] || [];
     db.agency = data.settings?.agency || {};
     loaded = true;
     renderAll();
@@ -127,6 +144,7 @@ function renderAll() {
   renderCalendar();
   renderReports();
   renderSettings();
+  if (isAdmin() && ui.settingsTab === 'usersPanel') loadUsers();
 }
 
 function renderBadges() {
@@ -149,6 +167,8 @@ function renderDashboard() {
   const d = nowLocal();
   $('#todayLabel').textContent = `${WEEKDAYS[d.getUTCDay()]}, ${d.getUTCDate()} DE ${MONTHS_LONG[d.getUTCMonth()].toUpperCase()}`;
 
+  if (isOps()) { renderOpsDashboard(today); return; }
+  setKpiLabels(['Leads activos', 'Cotizaciones enviadas', 'Ventas del mes', 'Conversión']);
   const active = db.leads.filter((l) => !CLOSED.includes(l.stage));
   const newThisMonth = db.leads.filter((l) => monthKey(l.created_at) === month).length;
   $('#kpiLeads').textContent = active.length;
@@ -189,25 +209,58 @@ function renderDashboard() {
     : emptyRow(5, 'Aún no hay leads. Registra el primero con “Registrar lead”.');
 }
 
+function setKpiLabels(labels) {
+  $$('#dashboard .kpis article span').forEach((span, i) => { if (span.firstChild?.nodeType === 3) span.firstChild.textContent = labels[i]; });
+}
+
+// Dashboard de Operaciones: enfocado en viajes.
+function renderOpsDashboard(today) {
+  setKpiLabels(['Salidas próximas (30 días)', 'En viaje hoy', 'Documentación pendiente', 'Postviaje por cerrar']);
+  const open = db.trips.filter((t) => t.status !== 'Cerrado');
+  const soon = open.filter((t) => t.start_date > today && t.start_date <= addDays(today, 30));
+  $('#kpiLeads').textContent = soon.length;
+  $('#kpiLeadsNote').textContent = soon[0] ? `Próxima: ${fmtDate(soon.sort((a, b) => a.start_date.localeCompare(b.start_date))[0].start_date)}` : 'Sin salidas próximas';
+  $('#kpiQuotes').textContent = open.filter((t) => t.start_date <= today && t.end_date >= today).length;
+  $('#kpiQuotesNote').textContent = 'Clientes de viaje';
+  const docs = open.filter((t) => t.status === 'Documentación pendiente');
+  $('#kpiSales').textContent = docs.length;
+  $('#kpiSalesNote').textContent = docs.length ? 'Revisa vouchers y pagos' : 'Todo al día';
+  const post = open.filter((t) => t.end_date < today);
+  $('#kpiConv').textContent = post.length;
+  $('#kpiConvNote').textContent = 'Pedir reseña o cerrar';
+  const due = pendingFollowups().filter((f) => f.due_at.slice(0, 10) <= today).slice(0, 6);
+  $('#todayTasks').innerHTML = due.length ? due.map((f) => `<label><input type="checkbox" data-done="${f.id}"><span><b>${escapeHtml(f.title)}</b><small>${escapeHtml([clientName(f.client_id), f.details].filter(Boolean).join(' · '))}</small></span><em class="${f.due_at.slice(0, 10) < today ? '' : 'soft'}">${f.due_at.slice(0, 10) < today ? 'Vencido' : f.due_at.slice(11, 16)}</em></label>`).join('')
+    : '<p class="empty-note">Sin pendientes para hoy.</p>';
+}
+
 /* ---------- leads ---------- */
 function filteredLeads() {
   const q = ui.leadQuery.toLowerCase();
   return db.leads.filter((l) => {
     if (ui.leadStage && l.stage !== ui.leadStage) return false;
+    if (ui.leadOwner && String(l.owner_id) !== ui.leadOwner) return false;
     if (!q) return true;
     const c = clientById(l.client_id);
     return [c?.name, c?.phone, c?.email, l.destination, l.stage, l.notes, l.source].join(' ').toLowerCase().includes(q);
   });
 }
 function renderLeads() {
+  const admin = isAdmin();
+  const filter = $('#ownerFilter');
+  filter.classList.toggle('hidden', !admin);
+  if (admin) filter.innerHTML = options(sellers().map((u) => [u.id, u.name]), ui.leadOwner, { blank: 'Todos los vendedores' });
+  $('#leadHead').innerHTML = ['Lead', 'Destino', 'Fechas', 'Etapa', 'Prioridad', ...(admin ? ['Vendedor'] : []), 'Seguimiento'].map((h) => `<th>${h}</th>`).join('');
+  const shared = admin ? sharedClientIds() : new Set();
   const list = filteredLeads();
-  $('#leadRows').innerHTML = list.length ? list.map((l) =>
-    `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td><td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`).join('')
-    : emptyRow(6, db.leads.length ? 'Ningún lead coincide con la búsqueda.' : 'Aún no hay leads registrados.');
+  const cols = admin ? 7 : 6;
+  $('#leadRows').innerHTML = list.length ? list.map((l) => {
+    const badge = shared.has(l.client_id) ? '<span class="badge-shared" title="Este cliente tiene leads con más de un vendedor">Cliente compartido</span>' : '';
+    return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
+  }).join('') : emptyRow(cols, db.leads.length ? 'Ningún lead coincide con la búsqueda.' : 'Aún no hay leads registrados.');
 }
 function exportLeads() {
-  const header = ['Cliente', 'WhatsApp', 'Correo', 'Destino', 'Salida', 'Regreso', 'Viajeros', 'Presupuesto', 'Etapa', 'Prioridad', 'Origen', 'Creado', 'Notas'];
-  const rows = filteredLeads().map((l) => { const c = clientById(l.client_id) || {}; return [c.name, c.phone, c.email, l.destination, l.start_date, l.end_date, l.travelers, l.budget, l.stage, l.priority, l.source, l.created_at, l.notes]; });
+  const header = ['Cliente', 'WhatsApp', 'Correo', 'Destino', 'Salida', 'Regreso', 'Viajeros', 'Presupuesto', 'Etapa', 'Prioridad', 'Origen', 'Vendedor', 'Creado', 'Notas'];
+  const rows = filteredLeads().map((l) => { const c = clientById(l.client_id) || {}; return [c.name, c.phone, c.email, l.destination, l.start_date, l.end_date, l.travelers, l.budget, l.stage, l.priority, l.source, userName(l.owner_id), l.created_at, l.notes]; });
   const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
   const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
   const a = Object.assign(document.createElement('a'), { href: url, download: `leads-${todayStr()}.csv` });
@@ -223,8 +276,10 @@ function renderQuotes() {
   $('#qAccepted').textContent = count('Aceptada');
   const q = ui.quoteQuery.toLowerCase();
   const list = db.quotes.filter((x) => !q || [x.folio, clientName(x.client_id), x.hotel, x.destination, x.status].join(' ').toLowerCase().includes(q));
+  const editable = canWrite('quotes');
+  $('#multiSend').classList.toggle('hidden', !editable);
   $('#quoteGrid').innerHTML = list.length ? list.map((x) =>
-    `<article class="card"><div class="card-top"><div><label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label><span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span><h3>${escapeHtml(x.folio)}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div><div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div></div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p><label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label><div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Vista para PDF</button><button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button></div></article>`).join('')
+    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span><h3>${escapeHtml(x.folio)}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Vista para PDF</button>${editable ? `<button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
     : `<p class="empty-note">${db.quotes.length ? 'Ninguna cotización coincide con la búsqueda.' : 'Aún no hay cotizaciones. Crea la primera con “+ Nueva cotización”.'}</p>`;
 }
 
@@ -289,7 +344,7 @@ function renderClients() {
     const value = quotes.filter((x) => x.status === 'Aceptada').reduce((s, x) => s + x.price, 0);
     const destinations = [...new Set(db.leads.filter((l) => l.client_id === c.id).map((l) => l.destination))].slice(0, 2);
     const tags = [...destinations, ...String(c.tags || '').split(',').map((t) => t.trim()).filter(Boolean)].slice(0, 5);
-    return `<article class="card"><div class="card-top">${clientCell(c, c.phone || c.email || '')}<button class="icon" data-client="${c.id}" title="Ver cliente" aria-label="Ver cliente">⋮</button></div><div class="client-stats"><div><b>${quotes.length}</b><span>Cotizaciones</span></div><div><b>${trips}</b><span>Viajes</span></div><div><b>${money(value)}</b><span>Vendido</span></div></div><p>Preferencias</p><div class="tags">${tags.length ? tags.map((t) => `<span>${escapeHtml(t)}</span>`).join('') : '<small class="muted">Sin preferencias registradas</small>'}</div><div class="card-actions"><button class="btn secondary small" data-client="${c.id}">Historial</button><button class="btn primary small" data-quote-for="${c.id}">Cotizar</button></div></article>`;
+    return `<article class="card"><div class="card-top">${clientCell(c, c.phone || c.email || '')}<button class="icon" data-client="${c.id}" title="Ver cliente" aria-label="Ver cliente">⋮</button></div><div class="client-stats"><div><b>${quotes.length}</b><span>Cotizaciones</span></div><div><b>${trips}</b><span>Viajes</span></div><div><b>${money(value)}</b><span>Vendido</span></div></div><p>Preferencias</p><div class="tags">${tags.length ? tags.map((t) => `<span>${escapeHtml(t)}</span>`).join('') : '<small class="muted">Sin preferencias registradas</small>'}</div><div class="card-actions"><button class="btn secondary small" data-client="${c.id}">Historial</button>${canWrite('quotes') ? `<button class="btn primary small" data-quote-for="${c.id}">Cotizar</button>` : `<button class="btn primary small" data-new-trip-client="${c.id}">Nuevo viaje</button>`}</div></article>`;
   }).join('') : `<p class="empty-note">${db.clients.length ? 'Ningún cliente coincide con la búsqueda.' : 'Los clientes se crean al registrar un lead o con “+ Nuevo cliente”.'}</p>`;
 }
 
@@ -421,6 +476,7 @@ function bindDelete(url, message) {
 const clean = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]));
 
 function leadModal(id, presetClientId) {
+  if (!canWrite('leads')) return;
   const lead = id ? leadById(id) : null;
   const client = lead ? clientById(lead.client_id) : presetClientId ? clientById(presetClientId) : null;
   const clientFields = client
@@ -435,6 +491,7 @@ function leadModal(id, presetClientId) {
     ${field('Presupuesto (MXN)', `<input name="budget" type="number" min="0" step="1" value="${escapeHtml(lead?.budget)}">`)}
     ${lead ? field('Etapa', `<select name="stage">${options(STAGES, lead.stage)}</select>`) : field('Primer seguimiento', '<input name="first_followup_at" type="datetime-local">')}
     ${field('Prioridad', `<select name="priority">${options(PRIORITIES, lead?.priority || 'Media')}</select>`)}
+    ${isAdmin() ? field('Vendedor asignado', `<select name="owner_id">${options(sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`]), lead?.owner_id ?? currentUser.id)}</select>`) : ''}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
     ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Programar seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
     ${deleteBlock('lead', lead?.id)}
@@ -445,16 +502,23 @@ function leadModal(id, presetClientId) {
       destination: v.destination, source: v.source, start_date: v.start_date || null, end_date: v.end_date || null,
       travelers: v.travelers || null, budget: v.budget || null, priority: v.priority, notes: v.notes || null
     });
-    if (lead) return mutate(() => send('PATCH', `/api/leads/${lead.id}`, { ...body, stage: v.stage }), 'Lead actualizado');
+    if (v.owner_id) body.owner_id = Number(v.owner_id);
+    if (lead) {
+      const reassigned = body.owner_id && body.owner_id !== lead.owner_id;
+      return mutate(() => send('PATCH', `/api/leads/${lead.id}`, { ...body, stage: v.stage }), reassigned ? `Lead reasignado a ${userName(body.owner_id)}` : 'Lead actualizado');
+    }
     if (client) body.client_id = client.id;
     else body.client = clean({ name: v.name, phone: v.phone, email: v.email || null });
     if (v.first_followup_at) body.first_followup_at = v.first_followup_at;
-    return mutate(() => send('POST', '/api/leads', body), 'Lead registrado');
+    const result = await mutate(() => send('POST', '/api/leads', body), 'Lead registrado');
+    if (result?.warning) toast(result.warning, 7000);
+    return result;
   });
   if (lead) bindDelete(`/api/leads/${lead.id}`, 'Lead eliminado');
 }
 
 function quoteModal(id, preset = {}) {
+  if (!canWrite('quotes')) { if (id) openPrintableQuote(id); return; }
   const quote = id ? quoteById(id) : null;
   if (!quote && !db.clients.length) { toast('Primero registra un lead o un cliente'); return; }
   const clientId = quote?.client_id ?? preset.clientId ?? db.clients[0]?.id;
@@ -499,16 +563,18 @@ function clientModal(id) {
       ${list(`Seguimientos (${fups.length})`, fups.slice(0, 8).map((f) => `<li>${f.done ? '✓ ' : ''}${escapeHtml(f.title)} · ${escapeHtml(fmtDue(f.due_at))}</li>`))}
     </div>`;
   })() : '';
-  const html = `<form class="modal-form">
+  const readonly = !canWrite('clients');
+  const html = `<form class="modal-form"><fieldset class="readonly"${readonly ? ' disabled' : ''}>
     ${field('Nombre*', `<input name="name" required maxlength="120" value="${escapeHtml(c?.name)}">`)}
     ${field('WhatsApp', `<input name="phone" maxlength="40" value="${escapeHtml(c?.phone)}">`)}
     ${field('Correo', `<input name="email" type="email" maxlength="254" value="${escapeHtml(c?.email)}">`)}
     ${field('Preferencias (separadas por coma)', `<input name="tags" maxlength="255" placeholder="Pareja, Todo incluido" value="${escapeHtml(c?.tags)}">`)}
     ${field('Notas', `<textarea name="notes" rows="2" maxlength="4000">${escapeHtml(c?.notes)}</textarea>`, true)}
-    ${c ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-new-lead-client="${c.id}">Nuevo lead</button><button type="button" class="btn secondary small" data-quote-for="${c.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-new-trip-client="${c.id}">Nuevo viaje</button></div>` : ''}
+    </fieldset>
+    ${c ? `<div class="full quick-actions">${canWrite('leads') ? `<button type="button" class="btn secondary small" data-new-lead-client="${c.id}">Nuevo lead</button>` : ''}${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-quote-for="${c.id}">Nueva cotización</button>` : ''}${canWrite('trips') ? `<button type="button" class="btn secondary small" data-new-trip-client="${c.id}">Nuevo viaje</button>` : ''}</div>` : ''}
     ${history}
     ${deleteBlock('cliente y todo su historial', c?.id)}
-    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${c ? 'Guardar cambios' : 'Guardar cliente'}</button></div></form>`;
+    <div class="modal-actions"><button type="button" class="btn secondary close">${readonly ? 'Cerrar' : 'Cancelar'}</button>${readonly ? '' : `<button type="submit" class="btn primary">${c ? 'Guardar cambios' : 'Guardar cliente'}</button>`}</div></form>`;
   openModal('CLIENTE', c ? c.name : 'Nuevo cliente', html);
   bindForm((v) => {
     const body = clean({ name: v.name, phone: v.phone || null, email: v.email || null, tags: v.tags || null, notes: v.notes || null });
@@ -570,6 +636,96 @@ function followupModal(id, preset = {}) {
   if (f) bindDelete(`/api/followups/${f.id}`, 'Seguimiento eliminado');
 }
 
+/* ---------- usuarios (administrador) ---------- */
+let usersCache = [];
+async function loadUsers() {
+  try {
+    usersCache = (await api('/api/users')).users;
+    renderUsers();
+  } catch (error) { toast(error.message); }
+}
+function fmtStamp(value) {
+  if (!value) return 'Nunca';
+  const v = String(value).replace('T', ' ');
+  return `${fmtDate(v.slice(0, 10))}, ${v.slice(11, 16)}`;
+}
+function renderUsers() {
+  $('#userRows').innerHTML = usersCache.length ? usersCache.map((u) => `<tr>
+    <td>${clientCell({ name: u.name }, u.email)}</td>
+    <td>${escapeHtml(u.roleLabel)}</td>
+    <td><span class="status ${u.active ? (u.mustChangePassword ? 'quoted' : 'accepted') : 'pill-off'}">${u.active ? (u.mustChangePassword ? 'Pendiente de primer acceso' : 'Activo') : 'Desactivado'}</span></td>
+    <td>${escapeHtml(fmtStamp(u.lastLoginAt))}</td>
+    <td><div class="user-actions"><button class="link" data-edit-user="${u.id}">Editar</button>${u.id !== currentUser.id ? `<button class="link" data-reset-user="${u.id}">Nueva contraseña</button>` : ''}</div></td></tr>`).join('')
+    : emptyRow(5, 'Sin usuarios');
+}
+function showTemporaryPassword(user, password, intro) {
+  const url = location.origin;
+  const message = `Hola ${user.name}, este es tu acceso a la plataforma de Viajes Casal:\n${url}\nCorreo: ${user.email}\nContraseña temporal: ${password}\nAl entrar te pedirá crear tu propia contraseña.`;
+  openModal('ACCESO', `Acceso de ${user.name}`, `<div class="modal-form">
+    <p class="full">${escapeHtml(intro)}</p>
+    <div class="full temp-pass" id="tempPass">${escapeHtml(password)}</div>
+    <p class="full note-warn">Esta contraseña solo se muestra ahora. Cópiala y compártela por WhatsApp; al entrar, ${escapeHtml(user.name)} deberá crear la suya.</p>
+    <label class="full">Mensaje listo para enviar<textarea id="accessMessage" rows="6" readonly>${escapeHtml(message)}</textarea></label>
+    <div class="modal-actions"><button type="button" class="btn secondary close">Listo</button><button type="button" class="btn primary" id="copyAccess">Copiar mensaje</button></div></div>`);
+  $('#copyAccess').onclick = async () => {
+    try { await navigator.clipboard.writeText($('#accessMessage').value); toast('Mensaje copiado'); }
+    catch { $('#accessMessage').select(); toast('Selecciona y copia el mensaje con Ctrl+C'); }
+  };
+}
+function userModal(id) {
+  const u = id ? usersCache.find((x) => x.id === Number(id)) : null;
+  const self = u && u.id === currentUser.id;
+  const roleOptions = options(Object.entries(ROLE_LABELS).filter(([k]) => k !== 'consulta' || u?.role === 'consulta'), u?.role || 'travel_partner');
+  const html = `<form class="modal-form">
+    ${field('Nombre*', `<input name="name" required maxlength="120" value="${escapeHtml(u?.name)}">`)}
+    ${field('Correo*', `<input name="email" type="email" required maxlength="254" value="${escapeHtml(u?.email)}" ${u ? 'disabled' : ''}>`)}
+    ${field('Rol', `<select name="role" ${self ? 'disabled' : ''}>${roleOptions}</select>`)}
+    ${u ? field('Estado', `<select name="active" ${self ? 'disabled' : ''}>${options([['1', 'Activo'], ['0', 'Desactivado']], u.active ? '1' : '0')}</select>`) : ''}
+    ${self ? '<p class="full note-warn">No puedes cambiar tu propio rol ni desactivar tu cuenta.</p>' : ''}
+    ${u ? '' : '<p class="full muted">Al guardar se genera una contraseña temporal para compartir con el usuario.</p>'}
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${u ? 'Guardar cambios' : 'Crear usuario'}</button></div></form>`;
+  openModal('USUARIOS', u ? `Editar a ${u.name}` : 'Nuevo usuario', html);
+  bindForm(async (v) => {
+    try {
+      if (u) {
+        const body = { name: v.name };
+        if (!self) { body.role = v.role; body.active = v.active === '1'; }
+        await send('PATCH', `/api/users/${u.id}`, body);
+        toast(body.active === false ? `${v.name} ya no puede entrar` : 'Usuario actualizado');
+        await loadAll();
+        await loadUsers();
+        return true;
+      }
+      const result = await send('POST', '/api/users', { name: v.name, email: v.email, role: v.role });
+      await loadAll();
+      await loadUsers();
+      showTemporaryPassword(result.user, result.temporaryPassword, `Usuario creado con el rol ${result.user.roleLabel}.`);
+      return false;
+    } catch (error) {
+      toast(error.message);
+      return false;
+    }
+  });
+}
+function resetUserModal(id) {
+  const u = usersCache.find((x) => x.id === Number(id));
+  if (!u) return;
+  openModal('USUARIOS', `Nueva contraseña para ${u.name}`, `<div class="modal-form"><p class="full">Se generará una contraseña temporal y se cerrarán las sesiones abiertas de ${escapeHtml(u.name)}. Su contraseña actual dejará de funcionar.</p><div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="button" class="btn primary" id="confirmReset">Generar contraseña</button></div></div>`);
+  $('#confirmReset').onclick = async () => {
+    try {
+      const result = await send('POST', `/api/users/${u.id}/reset-password`);
+      await loadUsers();
+      showTemporaryPassword(u, result.temporaryPassword, 'Contraseña temporal generada.');
+    } catch (error) { toast(error.message); }
+  };
+}
+function showSettingsTab(tab) {
+  ui.settingsTab = tab;
+  $$('#settingsNav [data-settings-tab]').forEach((b) => b.classList.toggle('active', b.dataset.settingsTab === tab));
+  $$('.settings-panel').forEach((p) => { p.hidden = p.id !== tab; });
+  if (tab === 'usersPanel') loadUsers();
+}
+
 /* ---------- sesión ---------- */
 function showLogin() {
   currentUser = null; loaded = false;
@@ -581,7 +737,9 @@ function applyUser(user) {
   currentUser = user;
   $('#profileName').textContent = user.name;
   $('#profileInitial').textContent = user.name.charAt(0).toUpperCase();
-  $('#profileRole').textContent = user.role === 'admin' ? 'Administrador' : user.role === 'consulta' ? 'Consulta' : 'Travel Partner';
+  $('#profileRole').textContent = user.roleLabel || ROLE_LABELS[user.role] || user.role;
+  document.body.classList.remove(...Object.keys(ROLE_LABELS).map((r) => `role-${r}`));
+  document.body.classList.add(`role-${user.role}`);
   $('#dashboard .heading h2').textContent = `Hola, ${user.name} 👋`;
   $$('[data-admin-only]').forEach((el) => el.classList.toggle('hidden', user.role !== 'admin'));
   $('#login').classList.add('hidden');
@@ -625,12 +783,12 @@ function navigate(page) {
   $('#sidebar').classList.remove('open');
   scrollTo({ top: 0, behavior: 'smooth' });
 }
-function toast(text) {
+function toast(text, ms = 3200) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = text;
   $('#toasts').append(el);
-  setTimeout(() => el.remove(), 3200);
+  setTimeout(() => el.remove(), ms);
 }
 
 $('#nav').onclick = (e) => { const b = e.target.closest('[data-page]'); if (b) navigate(b.dataset.page); };
@@ -692,6 +850,9 @@ document.addEventListener('click', (e) => {
   if ((el = hit('[data-new-lead-client]'))) { leadModal(null, Number(el.dataset.newLeadClient)); return; }
   if ((el = hit('[data-new-trip-client]'))) { tripModal(null, { clientId: Number(el.dataset.newTripClient) }); return; }
   if ((el = hit('[data-trip-from-quote]'))) { tripModal(null, { quoteId: Number(el.dataset.tripFromQuote) }); return; }
+  if ((el = hit('[data-settings-tab]'))) { showSettingsTab(el.dataset.settingsTab); return; }
+  if ((el = hit('[data-edit-user]'))) { userModal(Number(el.dataset.editUser)); return; }
+  if ((el = hit('[data-reset-user]'))) { resetUserModal(Number(el.dataset.resetUser)); return; }
   if ((el = hit('[data-edit-quote]'))) { quoteModal(Number(el.dataset.editQuote)); return; }
   if ((el = hit('[data-lead]'))) { leadModal(Number(el.dataset.lead)); return; }
   if ((el = hit('[data-client]'))) { clientModal(Number(el.dataset.client)); return; }
@@ -717,6 +878,8 @@ document.addEventListener('change', (e) => {
 
 $('#leadSearch').oninput = (e) => { ui.leadQuery = e.target.value; renderLeads(); };
 $('#stageFilter').onchange = (e) => { ui.leadStage = e.target.value; renderLeads(); };
+$('#ownerFilter').onchange = (e) => { ui.leadOwner = e.target.value; renderLeads(); };
+$('#newUser').onclick = () => userModal();
 $('#exportLeads').onclick = exportLeads;
 $('#quoteSearch').oninput = (e) => { ui.quoteQuery = e.target.value; renderQuotes(); };
 $('#clientSearch').oninput = (e) => { ui.clientQuery = e.target.value; renderClients(); };
