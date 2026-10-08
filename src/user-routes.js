@@ -28,7 +28,9 @@ function temporaryPassword() {
 const publicUser = (u) => ({
   id: Number(u.id), email: u.email, name: u.name, role: u.role, roleLabel: ROLE_LABELS[u.role] || u.role,
   active: Boolean(u.active), mustChangePassword: Boolean(u.must_change_password),
-  lastLoginAt: u.last_login_at || null, createdAt: u.created_at || null
+  lastLoginAt: u.last_login_at || null, createdAt: u.created_at || null,
+  twofa: u.role === 'admin' || Boolean(u.twofa_enabled) || Boolean(u.totp_enabled),
+  twofaApp: Boolean(u.totp_enabled)
 });
 
 function httpError(status, message) {

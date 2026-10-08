@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=tp003" />
+    <link rel="stylesheet" href="/styles.css?v=tp004" />
   </head>
   <body>
     <section id="login" class="login">
@@ -59,6 +59,24 @@
           ><small class="demo"
             >Acceso exclusivo para usuarios autorizados.</small
           >
+        </form>
+        <form id="twofaForm" class="hidden">
+          <div class="brand">
+            <div class="logo">VB</div>
+            <div><b>Travel Partner</b><small>Viajes Casal</small></div>
+          </div>
+          <h2>Verifica que eres tú</h2>
+          <p id="twofaIntro"></p>
+          <label>Código<input id="twofaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="9" required /></label>
+          <label class="check-inline"><input type="checkbox" id="twofaRemember" checked /> Recordar este equipo por 30 días</label>
+          <p id="twofaError" class="form-error hidden" role="alert"></p>
+          <p id="twofaNotice" class="form-ok hidden" role="status"></p>
+          <button id="twofaButton" class="btn primary">Verificar</button>
+          <div class="twofa-links">
+            <button type="button" id="twofaEmail" class="link-btn">Reenviar código por correo</button>
+            <button type="button" id="twofaBackup" class="link-btn">Usar un código de respaldo</button>
+          </div>
+          <button type="button" class="link-btn back-login">Volver a iniciar sesión</button>
         </form>
         <form id="forgotForm" class="hidden" novalidate>
           <div class="brand">
@@ -117,6 +135,7 @@
               <b id="profileName">Usuario</b
               ><small id="profileRole">Sesión segura</small>
             </div>
+            <button id="myAccount" class="icon" title="Mi cuenta" aria-label="Mi cuenta">⚙</button>
             <button
               id="logout"
               class="icon"
@@ -456,7 +475,7 @@
                 <div class="table">
                   <table>
                     <thead>
-                      <tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th></th></tr>
+                      <tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>2 pasos</th><th>Último acceso</th><th></th></tr>
                     </thead>
                     <tbody id="userRows"></tbody>
                   </table>
@@ -596,6 +615,27 @@
       .integration p { margin: 6px 0 0; font-size: 12px; }
       .mail-ok { color: #18815d; font-weight: 700; }
       .mail-off { color: #b42318; font-weight: 700; }
+      .profile #myAccount { margin-left: auto; color: #fff; }
+      .profile #profileInitial { flex-shrink: 0; }
+      .profile > div { min-width: 0; }
+      .profile #myAccount + #logout { margin-left: 0; }
+      .check-inline { display: flex !important; flex-direction: row; align-items: center; gap: 8px; font-weight: 500 !important; }
+      .check-inline input { width: auto; padding: 0; }
+      .twofa-links { display: flex; flex-wrap: wrap; gap: 14px; }
+      #twofaCode { font: 700 22px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .3em; text-align: center; }
+      .acct { display: grid; gap: 14px; }
+      .acct section { border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: grid; gap: 8px; }
+      .acct h4 { margin: 0; font-size: 14px; }
+      .acct p { margin: 0; font-size: 12px; color: var(--muted); }
+      .acct .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .acct input { padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+      .pill { display: inline-block; padding: 3px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+      .pill.on { background: #e8f7ef; color: #18815d; }
+      .pill.off { background: #f1f3f5; color: #5d6b76; }
+      .qr-box { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+      .qr-box img { width: 180px; height: 180px; border-radius: 8px; background: #fff; padding: 6px; }
+      .secret { font: 600 13px ui-monospace, Menlo, Consolas, monospace; word-break: break-all; user-select: all; }
+      .backup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; font: 700 15px ui-monospace, Menlo, Consolas, monospace; background: var(--bg); border-radius: 10px; padding: 12px; user-select: all; }
       .profile #logout {
         margin-left: auto;
         color: #fff;
@@ -605,6 +645,6 @@
         cursor: wait;
       }
     </style>
-    <script src="/app.js?v=tp003"></script>
+    <script src="/app.js?v=tp004"></script>
   </body>
 </html>

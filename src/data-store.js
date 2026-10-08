@@ -101,6 +101,81 @@ class MySQLDataStore {
     if (!columns.some((c) => c.COLUMN_NAME === 'last_login_at')) {
       await this.pool.query('ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER must_change_password');
     }
+    const twofaColumns = {
+      twofa_enabled: 'BOOLEAN NOT NULL DEFAULT FALSE',
+      totp_enabled: 'BOOLEAN NOT NULL DEFAULT FALSE',
+      totp_secret: 'TEXT NULL',
+      backup_codes: 'TEXT NULL'
+    };
+    for (const [name, definition] of Object.entries(twofaColumns)) {
+      if (!columns.some((c) => c.COLUMN_NAME === name)) await this.pool.query(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
+    }
+    await this.pool.query(`CREATE TABLE IF NOT EXISTS twofa_codes (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      code_hash CHAR(64) NOT NULL,
+      expires_at BIGINT UNSIGNED NOT NULL,
+      attempts INT UNSIGNED NOT NULL DEFAULT 0,
+      used_at BIGINT UNSIGNED NULL,
+      created_at BIGINT UNSIGNED NOT NULL,
+      INDEX idx_twofa_user (user_id),
+      CONSTRAINT fk_twofa_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+    await this.pool.query(`CREATE TABLE IF NOT EXISTS trusted_devices (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      token_hash CHAR(64) NOT NULL UNIQUE,
+      user_agent VARCHAR(300) NULL,
+      expires_at BIGINT UNSIGNED NOT NULL,
+      last_used_at BIGINT UNSIGNED NULL,
+      created_at BIGINT UNSIGNED NOT NULL,
+      INDEX idx_trusted_user (user_id),
+      CONSTRAINT fk_trusted_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+  }
+
+  // ---- Verificación en dos pasos ----
+  async updateUserSecurity(id, fields) {
+    const allowed = ['twofa_enabled', 'totp_enabled', 'totp_secret', 'backup_codes'];
+    const columns = Object.keys(fields).filter((key) => allowed.includes(key));
+    if (!columns.length) return;
+    await this.pool.execute(`UPDATE users SET ${columns.map((c) => `\`${c}\` = ?`).join(', ')} WHERE id = ?`, [...columns.map((c) => fields[c]), id]);
+  }
+
+  async createEmailCode({ userId, codeHash, expiresAt }) {
+    await this.pool.execute('UPDATE twofa_codes SET used_at = ? WHERE user_id = ? AND used_at IS NULL', [Date.now(), userId]);
+    await this.pool.execute('INSERT INTO twofa_codes (user_id, code_hash, expires_at, created_at) VALUES (?, ?, ?, ?)', [userId, codeHash, expiresAt, Date.now()]);
+  }
+
+  async activeEmailCode(userId) {
+    const [rows] = await this.pool.execute('SELECT * FROM twofa_codes WHERE user_id = ? AND used_at IS NULL AND expires_at > ? ORDER BY id DESC LIMIT 1', [userId, Date.now()]);
+    const row = rows[0];
+    return row ? { id: Number(row.id), code_hash: row.code_hash, attempts: Number(row.attempts), created_at: Number(row.created_at) } : null;
+  }
+
+  async lastEmailCodeAt(userId) {
+    const [rows] = await this.pool.execute('SELECT MAX(created_at) AS last FROM twofa_codes WHERE user_id = ?', [userId]);
+    return rows[0]?.last == null ? null : Number(rows[0].last);
+  }
+
+  async addCodeAttempt(id) { await this.pool.execute('UPDATE twofa_codes SET attempts = attempts + 1 WHERE id = ?', [id]); }
+  async useEmailCode(id) { await this.pool.execute('UPDATE twofa_codes SET used_at = ? WHERE id = ?', [Date.now(), id]); }
+
+  async createTrustedDevice({ userId, tokenHash, expiresAt, userAgent }) {
+    await this.pool.execute('INSERT INTO trusted_devices (user_id, token_hash, user_agent, expires_at, created_at) VALUES (?, ?, ?, ?, ?)', [userId, tokenHash, String(userAgent || '').slice(0, 300), expiresAt, Date.now()]);
+  }
+
+  async findTrustedDevice(tokenHash) {
+    const [rows] = await this.pool.execute('SELECT * FROM trusted_devices WHERE token_hash = ? LIMIT 1', [tokenHash]);
+    const row = rows[0];
+    return row ? { id: Number(row.id), user_id: Number(row.user_id), expires_at: Number(row.expires_at) } : null;
+  }
+
+  async touchTrustedDevice(id) { await this.pool.execute('UPDATE trusted_devices SET last_used_at = ? WHERE id = ?', [Date.now(), id]); }
+  async deleteTrustedDevices(userId) { await this.pool.execute('DELETE FROM trusted_devices WHERE user_id = ?', [userId]); }
+  async countTrustedDevices(userId) {
+    const [rows] = await this.pool.execute('SELECT COUNT(*) AS n FROM trusted_devices WHERE user_id = ? AND expires_at > ?', [userId, Date.now()]);
+    return Number(rows[0].n);
   }
 
   async createUser({ email, name, role, passwordHash }) {
@@ -253,8 +328,8 @@ class MySQLDataStore {
   }
 
   async listUsers() {
-    const [rows] = await this.pool.execute('SELECT id, email, name, role, active, must_change_password, last_login_at, created_at FROM users ORDER BY created_at');
-    return rows.map((row) => ({ ...row, id: Number(row.id), active: Boolean(row.active), must_change_password: Boolean(row.must_change_password) }));
+    const [rows] = await this.pool.execute('SELECT id, email, name, role, active, must_change_password, last_login_at, twofa_enabled, totp_enabled, created_at FROM users ORDER BY created_at');
+    return rows.map((row) => ({ ...row, id: Number(row.id), active: Boolean(row.active), must_change_password: Boolean(row.must_change_password), twofa_enabled: Boolean(row.twofa_enabled), totp_enabled: Boolean(row.totp_enabled) }));
   }
 
   async listActivity() {
@@ -310,6 +385,24 @@ class MemoryDataStore {
   async findPasswordReset(tokenHash) { const row = (this.resets || []).find((r) => r.token_hash === tokenHash); return row ? { ...row } : null; }
   async lastPasswordResetAt(userId) { const rows = (this.resets || []).filter((r) => r.user_id === userId); return rows.length ? Math.max(...rows.map((r) => r.created_at)) : null; }
   async invalidatePasswordResets(userId) { (this.resets || []).filter((r) => r.user_id === userId && r.used_at == null).forEach((r) => { r.used_at = Date.now(); }); }
+  async updateUserSecurity(id, fields) {
+    const user = this.users.find((u) => u.id === Number(id));
+    for (const key of ['twofa_enabled', 'totp_enabled', 'totp_secret', 'backup_codes']) if (fields[key] !== undefined) user[key] = fields[key];
+  }
+  async createEmailCode({ userId, codeHash, expiresAt }) {
+    this.codes = this.codes || [];
+    this.codes.filter((c) => c.user_id === userId && c.used_at == null).forEach((c) => { c.used_at = Date.now(); });
+    this.codes.push({ id: this.codes.length + 1, user_id: userId, code_hash: codeHash, expires_at: expiresAt, attempts: 0, used_at: null, created_at: Date.now() });
+  }
+  async activeEmailCode(userId) { const row = [...(this.codes || [])].reverse().find((c) => c.user_id === userId && c.used_at == null && c.expires_at > Date.now()); return row ? { ...row } : null; }
+  async lastEmailCodeAt(userId) { const rows = (this.codes || []).filter((c) => c.user_id === userId); return rows.length ? Math.max(...rows.map((c) => c.created_at)) : null; }
+  async addCodeAttempt(id) { const row = this.codes.find((c) => c.id === id); row.attempts += 1; }
+  async useEmailCode(id) { const row = this.codes.find((c) => c.id === id); row.used_at = Date.now(); }
+  async createTrustedDevice({ userId, tokenHash, expiresAt, userAgent }) { this.devices = this.devices || []; this.devices.push({ id: this.devices.length + 1, user_id: userId, token_hash: tokenHash, user_agent: userAgent, expires_at: expiresAt, created_at: Date.now() }); }
+  async findTrustedDevice(tokenHash) { const row = (this.devices || []).find((d) => d.token_hash === tokenHash); return row ? { ...row } : null; }
+  async touchTrustedDevice(id) { const row = this.devices.find((d) => d.id === id); if (row) row.last_used_at = Date.now(); }
+  async deleteTrustedDevices(userId) { this.devices = (this.devices || []).filter((d) => d.user_id !== userId); }
+  async countTrustedDevices(userId) { return (this.devices || []).filter((d) => d.user_id === userId && d.expires_at > Date.now()).length; }
   async touchLogin(id) { const user = this.users.find((u) => u.id === Number(id)); if (user) user.last_login_at = nowCancun(); }
   async transferLeadOwnership(leadId, ownerId) {
     const lead = this.records.leads.find((l) => l.id === Number(leadId)); if (lead) { lead.owner_id = ownerId; lead.updated_at = nowCancun(); }

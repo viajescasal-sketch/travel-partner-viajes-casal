@@ -14,6 +14,7 @@ const { createCrmRouter } = require('./src/crm-routes');
 const { createUserRouter } = require('./src/user-routes');
 const { ROLE_LABELS } = require('./src/access');
 const { createMailer } = require('./src/mailer');
+const { createLoginFlow, requiresTwofa } = require('./src/login-flow');
 const { createPasswordResetService, createRecoveryRouter, createMailAdminRouter, passwordPolicyError } = require('./src/password-reset');
 
 const PORT = process.env.PORT || 3000;
@@ -60,6 +61,7 @@ async function createApp(options = {}) {
   await dataStore.initialize();
   const mailer = options.mailer || createMailer(process.env);
   const resetService = createPasswordResetService(dataStore, mailer, process.env);
+  const loginFlow = createLoginFlow({ dataStore, mailer, env: process.env, publicUser, passwordStamp, isProduction });
 
   if (isProduction) {
     app.set('trust proxy', 1);
@@ -73,6 +75,11 @@ async function createApp(options = {}) {
       if (!user || !user.active || (req.session.pwd && req.session.pwd !== passwordStamp(user))) {
         await new Promise((resolve) => req.session.destroy(() => resolve()));
         return res.status(401).json({ ok: false, error: 'Tu sesión terminó. Vuelve a iniciar sesión.' });
+      }
+      // Sesiones abiertas antes de exigir el segundo paso deben volver a entrar.
+      if (requiresTwofa(user) && !req.session.mfa) {
+        await new Promise((resolve) => req.session.destroy(() => resolve()));
+        return res.status(401).json({ ok: false, error: 'Por seguridad vuelve a iniciar sesión para verificar tu identidad.' });
       }
       req.session.user = publicUser(user);
       return next();
@@ -150,12 +157,7 @@ async function createApp(options = {}) {
         return res.status(401).json({ ok: false, error: 'Correo o contraseña incorrectos' });
       }
 
-      await new Promise((resolve, reject) => req.session.regenerate((error) => error ? reject(error) : resolve()));
-      req.session.user = publicUser(user);
-      req.session.pwd = passwordStamp(user);
-      await dataStore.touchLogin(user.id);
-      await dataStore.logActivity(user.id, 'login_success', req);
-      return res.json({ ok: true, user: req.session.user });
+      return await loginFlow.startLogin(req, res, user);
     } catch (error) {
       return next(error);
     }
@@ -206,6 +208,7 @@ async function createApp(options = {}) {
     }
   });
 
+  app.use('/api/auth', loginFlow.router);
   app.use('/api/auth', createRecoveryRouter(dataStore, mailer, resetService, process.env));
   app.use('/api', authenticate);
   app.use('/api', (req, res, next) => {
@@ -214,6 +217,8 @@ async function createApp(options = {}) {
     }
     return next();
   });
+  app.use('/api/account', loginFlow.account);
+  app.post('/api/users/:id/reset-2fa', requireRole('admin'), loginFlow.adminReset);
   app.use('/api', createMailAdminRouter(dataStore, mailer, resetService, { requireRole }, process.env));
   app.use('/api/users', createUserRouter(dataStore, { requireRole, destroyUserSessions: async () => {} }));
   app.use('/api', createCrmRouter(dataStore, { requireRole }));

@@ -654,9 +654,10 @@ function renderUsers() {
     <td>${clientCell({ name: u.name }, u.email)}</td>
     <td>${escapeHtml(u.roleLabel)}</td>
     <td><span class="status ${u.active ? (u.mustChangePassword ? 'quoted' : 'accepted') : 'pill-off'}">${u.active ? (u.mustChangePassword ? 'Pendiente de primer acceso' : 'Activo') : 'Desactivado'}</span></td>
+    <td>${u.twofa ? (u.twofaApp ? 'App' : 'Correo') : '—'}</td>
     <td>${escapeHtml(fmtStamp(u.lastLoginAt))}</td>
-    <td><div class="user-actions"><button class="link" data-edit-user="${u.id}">Editar</button>${u.id !== currentUser.id ? `<button class="link" data-reset-user="${u.id}">Nueva contraseña</button>` : ''}</div></td></tr>`).join('')
-    : emptyRow(5, 'Sin usuarios');
+    <td><div class="user-actions"><button class="link" data-edit-user="${u.id}">Editar</button>${u.id !== currentUser.id ? `<button class="link" data-reset-user="${u.id}">Nueva contraseña</button>` : ''}${u.twofaApp && u.id !== currentUser.id ? `<button class="link" data-reset-2fa="${u.id}">Quitar app</button>` : ''}</div></td></tr>`).join('')
+    : emptyRow(6, 'Sin usuarios');
 }
 function showTemporaryPassword(user, password, intro) {
   const url = location.origin;
@@ -749,9 +750,9 @@ async function loadMailStatus() {
 /* ---------- recuperación de contraseña ---------- */
 let resetToken = null;
 function showAuthView(view) {
-  ['loginForm', 'forgotForm', 'resetForm'].forEach((id) => $(`#${id}`).classList.toggle('hidden', id !== view));
-  ['loginError', 'loginNotice', 'forgotError', 'forgotDone', 'resetError'].forEach((id) => $(`#${id}`).classList.add('hidden'));
-  const focus = { loginForm: '#loginEmail', forgotForm: '#forgotEmail', resetForm: '#resetPassword' }[view];
+  ['loginForm', 'twofaForm', 'forgotForm', 'resetForm'].forEach((id) => $(`#${id}`).classList.toggle('hidden', id !== view));
+  ['loginError', 'loginNotice', 'twofaError', 'twofaNotice', 'forgotError', 'forgotDone', 'resetError'].forEach((id) => $(`#${id}`).classList.add('hidden'));
+  const focus = { loginForm: '#loginEmail', twofaForm: '#twofaCode', forgotForm: '#forgotEmail', resetForm: '#resetPassword' }[view];
   setTimeout(() => $(focus)?.focus(), 0);
 }
 const showMessage = (id, text) => { const el = $(`#${id}`); el.textContent = text; el.classList.remove('hidden'); };
@@ -864,6 +865,7 @@ $('#loginForm').onsubmit = async (e) => {
   try {
     const payload = await send('POST', '/api/auth/login', { email: $('#loginEmail').value, password: $('#loginPassword').value });
     $('#loginPassword').value = '';
+    if (payload.twofa) { showTwofa(payload.twofa); return; }
     applyUser(payload.user);
     toast('Sesión iniciada correctamente');
   } catch (requestError) {
@@ -873,6 +875,111 @@ $('#loginForm').onsubmit = async (e) => {
     button.disabled = false;
   }
 };
+// ---- Segundo paso del inicio de sesión ----
+function showTwofa(info) {
+  showAuthView('twofaForm');
+  $('#twofaCode').value = '';
+  $('#twofaCode').setAttribute('inputmode', 'numeric');
+  $('#twofaIntro').textContent = info.method === 'app'
+    ? 'Escribe el código de 6 dígitos que muestra tu app de autenticación.'
+    : `Enviamos un código de 6 dígitos a ${info.email}. Vence en 10 minutos; si no lo ves, revisa spam.`;
+  const emailLink = $('#twofaEmail');
+  emailLink.classList.toggle('hidden', !info.canUseEmail);
+  emailLink.textContent = info.method === 'app' ? 'No tengo mi celular: enviarme un código por correo' : 'Reenviar código por correo';
+  $('#twofaBackup').classList.toggle('hidden', info.method !== 'app');
+}
+$('#twofaForm').onsubmit = async (e) => {
+  e.preventDefault();
+  $('#twofaError').classList.add('hidden');
+  const button = $('#twofaButton');
+  button.disabled = true;
+  try {
+    const result = await send('POST', '/api/auth/2fa/verify', { code: $('#twofaCode').value, remember: $('#twofaRemember').checked });
+    showAuthView('loginForm');
+    applyUser(result.user);
+    toast('Sesión iniciada correctamente');
+  } catch (error) {
+    if (/vuelve a iniciar sesión/i.test(error.message)) { showAuthView('loginForm'); showMessage('loginError', error.message); }
+    else { showMessage('twofaError', error.message); $('#twofaCode').select(); }
+  } finally {
+    button.disabled = false;
+  }
+};
+$('#twofaEmail').onclick = async () => {
+  $('#twofaError').classList.add('hidden');
+  try {
+    const result = await send('POST', '/api/auth/2fa/send-email');
+    showMessage('twofaNotice', `Enviamos un código nuevo a ${result.email}.`);
+    $('#twofaIntro').textContent = 'Escribe el código de 6 dígitos que llegó a tu correo.';
+    $('#twofaCode').focus();
+  } catch (error) {
+    if (/vuelve a iniciar sesión/i.test(error.message)) { showAuthView('loginForm'); showMessage('loginError', error.message); }
+    else showMessage('twofaError', error.message);
+  }
+};
+$('#twofaBackup').onclick = () => {
+  $('#twofaCode').setAttribute('inputmode', 'text');
+  $('#twofaIntro').textContent = 'Escribe uno de tus códigos de respaldo (formato XXXX-XXXX). Cada código sirve una sola vez.';
+  $('#twofaCode').value = '';
+  $('#twofaCode').focus();
+};
+
+// ---- Mi cuenta ----
+async function accountModal(view = {}) {
+  let data;
+  try { data = await api('/api/account'); } catch (error) { toast(error.message); return; }
+  const t = data.twofa;
+  const pill = (on, yes, no) => `<span class="pill ${on ? 'on' : 'off'}">${on ? yes : no}</span>`;
+  const twofaSection = t.required
+    ? `<p>Como administrador, la verificación es obligatoria. Al entrar en un equipo nuevo te pedimos un código ${t.app ? 'de tu app (o por correo como respaldo)' : `enviado a ${escapeHtml(t.email_masked)}`}.</p>`
+    : t.active
+      ? `<p>Al entrar en un equipo nuevo te pedimos un código ${t.app ? 'de tu app' : `enviado a ${escapeHtml(t.email_masked)}`}.</p><div class="row"><input type="password" id="acctPassOff" placeholder="Tu contraseña" autocomplete="current-password"><button class="btn secondary small" id="twofaOff">Desactivar</button></div>`
+      : `<p>Actívala para pedir un código por correo al entrar desde un equipo nuevo.</p><div class="row"><button class="btn primary small" id="twofaOn" ${t.mailConfigured ? '' : 'disabled title="El correo de la plataforma no está configurado"'}>Activar código por correo</button></div>`;
+  const appSection = view.setup
+    ? `<div class="qr-box"><img src="${view.setup.qr}" alt="Código QR para la app de autenticación"><div><p>1. Abre Google Authenticator o Microsoft Authenticator y escanea el código.</p><p>2. Si no puedes escanear, escribe esta clave:</p><p class="secret">${escapeHtml(view.setup.secret.replace(/(.{4})/g, '$1 ').trim())}</p></div></div>
+       <div class="row"><input id="totpCode" inputmode="numeric" maxlength="6" placeholder="Código de 6 dígitos" autocomplete="one-time-code"><button class="btn primary small" id="totpEnable">Confirmar</button><button class="btn secondary small" id="totpCancel">Cancelar</button></div>`
+    : view.backupCodes
+      ? `<p class="note-warn">Guarda estos códigos en un lugar seguro. Cada uno sirve una vez si pierdes tu celular y solo se muestran ahora.</p><div class="backup-grid" id="backupCodes">${view.backupCodes.map((c) => `<span>${c}</span>`).join('')}</div><div class="row"><button class="btn secondary small" id="copyBackup">Copiar códigos</button></div>`
+      : t.app
+        ? `<p>${pill(true, 'Activa', '')} Te quedan ${t.backupCodesLeft} códigos de respaldo.</p><div class="row"><input type="password" id="acctPassApp" placeholder="Tu contraseña" autocomplete="current-password"><button class="btn secondary small" id="newBackup">Nuevos códigos de respaldo</button><button class="btn secondary small" id="totpOff">Quitar app</button></div>`
+        : '<p>Más seguro que el correo: el código lo genera tu celular, sin internet.</p><div class="row"><button class="btn secondary small" id="totpSetup">Configurar app de autenticación</button></div>';
+  openModal('MI CUENTA', data.user.name, `<div class="acct">
+    <section><h4>Mis datos</h4><p>${escapeHtml(data.user.email)} · ${escapeHtml(data.user.roleLabel)}</p><div class="row"><button class="btn secondary small" id="acctChangePass">Cambiar mi contraseña</button></div></section>
+    <section><h4>Verificación en dos pasos ${pill(t.active, 'Activa', 'Desactivada')}</h4>${twofaSection}</section>
+    <section><h4>App de autenticación</h4>${appSection}</section>
+    <section><h4>Equipos recordados</h4><p>${t.trustedDevices ? `${t.trustedDevices} equipo(s) no piden código durante 30 días.` : 'Ningún equipo recordado.'}</p>${t.trustedDevices ? '<div class="row"><button class="btn secondary small" id="forgetDevices">Olvidar todos los equipos</button></div>' : ''}</section>
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cerrar</button></div></div>`);
+  const on = (id, fn) => { const el = $(`#${id}`); if (el) el.onclick = async () => { el.disabled = true; try { await fn(); } catch (error) { toast(error.message, 6000); el.disabled = false; } }; };
+  on('acctChangePass', async () => voluntaryPasswordChange());
+  on('twofaOn', async () => { await send('POST', '/api/account/twofa', { enabled: true }); toast('Verificación activada'); accountModal(); });
+  on('twofaOff', async () => { await send('POST', '/api/account/twofa', { enabled: false, password: $('#acctPassOff').value }); toast('Verificación desactivada'); accountModal(); });
+  on('totpSetup', async () => accountModal({ setup: await send('POST', '/api/account/totp/setup') }));
+  on('totpCancel', async () => accountModal());
+  on('totpEnable', async () => { const r = await send('POST', '/api/account/totp/enable', { code: $('#totpCode').value }); toast('App de autenticación activada'); accountModal({ backupCodes: r.backupCodes }); });
+  on('newBackup', async () => { const r = await send('POST', '/api/account/backup-codes', { password: $('#acctPassApp').value }); accountModal({ backupCodes: r.backupCodes }); });
+  on('totpOff', async () => { await send('POST', '/api/account/totp/disable', { password: $('#acctPassApp').value }); toast('App quitada; recibirás el código por correo'); accountModal(); });
+  on('forgetDevices', async () => { await send('POST', '/api/account/forget-devices'); toast('Equipos olvidados'); accountModal(); });
+  on('copyBackup', async () => {
+    const text = view.backupCodes.join('\n');
+    try { await navigator.clipboard.writeText(text); toast('Códigos copiados'); } catch { toast('Selecciona los códigos y cópialos con Ctrl+C'); }
+    $('#copyBackup').disabled = false;
+  });
+}
+function voluntaryPasswordChange() {
+  openModal('MI CUENTA', 'Cambiar mi contraseña', `<form class="modal-form">
+    ${field('Contraseña actual', '<input name="currentPassword" type="password" autocomplete="current-password" required>', true)}
+    ${field('Nueva contraseña', '<input name="newPassword" type="password" autocomplete="new-password" minlength="12" required>')}
+    ${field('Confirmar contraseña', '<input name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required>')}
+    <p class="full muted">Al menos 12 caracteres con mayúscula, minúscula y número.</p>
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">Guardar contraseña</button></div></form>`);
+  bindForm(async (v) => {
+    if (v.newPassword !== v.confirmPassword) { toast('Las contraseñas no coinciden'); return false; }
+    try { await send('POST', '/api/auth/change-password', { currentPassword: v.currentPassword, newPassword: v.newPassword }); toast('Contraseña actualizada'); return true; }
+    catch (error) { toast(error.message); return false; }
+  });
+}
+$('#myAccount').onclick = () => accountModal();
+
 $('#forgotLink').onclick = () => {
   showAuthView('forgotForm');
   $('#forgotEmail').value = $('#loginEmail').value;
@@ -953,6 +1060,11 @@ document.addEventListener('click', (e) => {
   if ((el = hit('[data-settings-tab]'))) { showSettingsTab(el.dataset.settingsTab); return; }
   if ((el = hit('[data-edit-user]'))) { userModal(Number(el.dataset.editUser)); return; }
   if ((el = hit('[data-reset-user]'))) { resetUserModal(Number(el.dataset.resetUser)); return; }
+  if ((el = hit('[data-reset-2fa]'))) {
+    const id = Number(el.dataset.reset2fa);
+    send('POST', `/api/users/${id}/reset-2fa`).then((r) => { toast(r.message, 6000); loadUsers(); }).catch((error) => toast(error.message));
+    return;
+  }
   if ((el = hit('[data-edit-quote]'))) { quoteModal(Number(el.dataset.editQuote)); return; }
   if ((el = hit('[data-lead]'))) { leadModal(Number(el.dataset.lead)); return; }
   if ((el = hit('[data-client]'))) { clientModal(Number(el.dataset.client)); return; }

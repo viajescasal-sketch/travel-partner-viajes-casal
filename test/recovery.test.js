@@ -121,7 +121,10 @@ test('recuperación de contraseña por correo', async (context) => {
 
   // --- Administrador ---
   const admin = clientFor(baseUrl);
-  await admin('POST', '/api/auth/login', { email: 'admin@example.test', password: 'AdminTemporal123' });
+  const adminLogin = await admin('POST', '/api/auth/login', { email: 'admin@example.test', password: 'AdminTemporal123' });
+  assert.equal(adminLogin.body.twofa.method, 'email', 'el administrador necesita código');
+  const adminCode = /(\d{6})/.exec(mailer.sent.at(-1).subject)[1];
+  assert.equal((await admin('POST', '/api/auth/2fa/verify', { code: adminCode })).status, 200);
   await admin('POST', '/api/auth/change-password', { currentPassword: 'AdminTemporal123', newPassword: 'AdminNueva2026x' });
   const status = await admin('GET', '/api/settings/mail-status');
   assert.deepEqual([status.body.configured, status.body.appUrl], [true, 'https://travelpartner.viajescasal.com']);

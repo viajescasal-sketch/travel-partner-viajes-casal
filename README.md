@@ -91,6 +91,17 @@ Los enlaces persistentes de PDF se habilitarán cuando se conecte Google Drive; 
 - El administrador puede enviar el enlace desde **Configuración › Usuarios › Nueva contraseña**, y probar el correo desde **Configuración › Integraciones**.
 - Variables en Hostinger: `APP_URL`, `SMTP_HOST` (`smtp.hostinger.com`), `SMTP_PORT` (`465`), `SMTP_USER`, `SMTP_PASSWORD` y `MAIL_FROM`. Sin ellas, en producción la recuperación responde que no está activa; en desarrollo el enlace se muestra en la consola.
 
+## Verificación en dos pasos (TP-004)
+
+- **Administradores:** obligatoria. **Vendedores y Operaciones:** opcional, desde **Mi cuenta** (botón ⚙ junto al nombre).
+- **Métodos:** código de 6 dígitos por correo (vence en 10 minutos) o app de autenticación (Google o Microsoft Authenticator, estándar TOTP). Quien usa la app tiene 8 códigos de respaldo de un solo uso y puede pedir el código por correo si no trae el celular.
+- **Recordar este equipo:** 30 días (cookie `tp.td`, guardada solo como hash en `trusted_devices`). Restablecer la contraseña por correo olvida todos los equipos.
+- **Límites:** 5 códigos incorrectos cancelan el intento; 60 segundos entre reenvíos; 20 intentos por IP cada 15 minutos.
+- Las sesiones de quien requiere el segundo paso y no lo completó se cierran (por ejemplo, al publicar esta versión o al ascender a alguien a administrador).
+- El secreto de la app se guarda cifrado con una llave derivada de `SESSION_SECRET`. **Si cambias `SESSION_SECRET`, las apps dejan de funcionar** y esos usuarios entrarán con el código por correo hasta volver a configurarla.
+- Si el correo no está configurado y el usuario no usa app, el sistema no bloquea el acceso: registra `twofa_skipped_no_mail` en la actividad.
+- El administrador puede **Quitar app** a otro usuario desde **Configuración › Usuarios** (celular perdido).
+
 ## Variables de seguridad
 
 La aplicación no inicia en producción si falta alguna variable requerida. Configúralas exclusivamente en Hostinger:
@@ -138,8 +149,10 @@ Las contraseñas iniciales solo se utilizan para crear cuentas inexistentes. Des
 │   ├── crm-routes.js
 │   ├── crm-schema.js
 │   ├── data-store.js
+│   ├── login-flow.js
 │   ├── mailer.js
 │   ├── password-reset.js
+│   ├── twofa.js
 │   └── user-routes.js
 ├── test/
 ├── public/

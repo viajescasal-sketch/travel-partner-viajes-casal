@@ -114,6 +114,7 @@ function createRecoveryRouter(dataStore, mailer, service, env = process.env) {
       if (policy) return res.status(400).json({ ok: false, error: policy });
       await dataStore.updatePassword(found.user.id, await bcrypt.hash(password, 12));
       await dataStore.invalidatePasswordResets(found.user.id);
+      await dataStore.deleteTrustedDevices(found.user.id);
       await dataStore.logActivity(found.user.id, 'password_reset_completed', req);
       return res.json({ ok: true, message: 'Tu contraseña se actualizó. Ya puedes iniciar sesión.' });
     } catch (error) {
