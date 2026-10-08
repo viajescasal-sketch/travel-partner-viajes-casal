@@ -13,6 +13,8 @@ const { createDataStore, databaseConfigFromEnv } = require('./src/data-store');
 const { createCrmRouter } = require('./src/crm-routes');
 const { createUserRouter } = require('./src/user-routes');
 const { ROLE_LABELS } = require('./src/access');
+const { createMailer } = require('./src/mailer');
+const { createPasswordResetService, createRecoveryRouter, createMailAdminRouter, passwordPolicyError } = require('./src/password-reset');
 
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -56,6 +58,8 @@ async function createApp(options = {}) {
   const app = express();
   const dataStore = options.dataStore || createDataStore(process.env);
   await dataStore.initialize();
+  const mailer = options.mailer || createMailer(process.env);
+  const resetService = createPasswordResetService(dataStore, mailer, process.env);
 
   if (isProduction) {
     app.set('trust proxy', 1);
@@ -165,9 +169,8 @@ async function createApp(options = {}) {
     try {
       const currentPassword = String(req.body.currentPassword || '');
       const newPassword = String(req.body.newPassword || '');
-      if (newPassword.length < 12 || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
-        return res.status(400).json({ ok: false, error: 'La nueva contraseña debe tener 12 caracteres, mayúscula, minúscula y número' });
-      }
+      const policyError = passwordPolicyError(newPassword);
+      if (policyError) return res.status(400).json({ ok: false, error: policyError });
       const user = await dataStore.findUserById(req.session.user.id);
       if (!user || !await bcrypt.compare(currentPassword, user.password_hash)) {
         return res.status(401).json({ ok: false, error: 'La contraseña actual es incorrecta' });
@@ -203,6 +206,7 @@ async function createApp(options = {}) {
     }
   });
 
+  app.use('/api/auth', createRecoveryRouter(dataStore, mailer, resetService, process.env));
   app.use('/api', authenticate);
   app.use('/api', (req, res, next) => {
     if (req.session.user.mustChangePassword) {
@@ -210,6 +214,7 @@ async function createApp(options = {}) {
     }
     return next();
   });
+  app.use('/api', createMailAdminRouter(dataStore, mailer, resetService, { requireRole }, process.env));
   app.use('/api/users', createUserRouter(dataStore, { requireRole, destroyUserSessions: async () => {} }));
   app.use('/api', createCrmRouter(dataStore, { requireRole }));
   app.use(express.static(publicDirectory, { index: false, dotfiles: 'ignore' }));
@@ -228,6 +233,7 @@ async function createApp(options = {}) {
   });
 
   app.locals.dataStore = dataStore;
+  app.locals.mailer = mailer;
   return app;
 }
 

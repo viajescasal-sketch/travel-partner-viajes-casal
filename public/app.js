@@ -710,7 +710,16 @@ function userModal(id) {
 function resetUserModal(id) {
   const u = usersCache.find((x) => x.id === Number(id));
   if (!u) return;
-  openModal('USUARIOS', `Nueva contraseña para ${u.name}`, `<div class="modal-form"><p class="full">Se generará una contraseña temporal y se cerrarán las sesiones abiertas de ${escapeHtml(u.name)}. Su contraseña actual dejará de funcionar.</p><div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="button" class="btn primary" id="confirmReset">Generar contraseña</button></div></div>`);
+  openModal('USUARIOS', `Nueva contraseña para ${u.name}`, `<div class="modal-form">
+    <p class="full"><b>Opción 1 · Enlace por correo:</b> ${escapeHtml(u.name)} recibe en ${escapeHtml(u.email)} un enlace para crear su contraseña (vence en 30 minutos). Su contraseña actual sigue funcionando hasta que la cambie.</p>
+    <p class="full"><b>Opción 2 · Contraseña temporal:</b> se genera una para compartir por WhatsApp y se cierran sus sesiones abiertas. Su contraseña actual deja de funcionar.</p>
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="button" class="btn secondary" id="sendResetLink">Enviar enlace por correo</button><button type="button" class="btn primary" id="confirmReset">Generar contraseña temporal</button></div></div>`);
+  $('#sendResetLink').onclick = async () => {
+    const button = $('#sendResetLink');
+    button.disabled = true;
+    try { toast((await send('POST', `/api/users/${u.id}/send-reset`)).message, 6000); close(); }
+    catch (error) { toast(error.message, 7000); button.disabled = false; }
+  };
   $('#confirmReset').onclick = async () => {
     try {
       const result = await send('POST', `/api/users/${u.id}/reset-password`);
@@ -724,11 +733,58 @@ function showSettingsTab(tab) {
   $$('#settingsNav [data-settings-tab]').forEach((b) => b.classList.toggle('active', b.dataset.settingsTab === tab));
   $$('.settings-panel').forEach((p) => { p.hidden = p.id !== tab; });
   if (tab === 'usersPanel') loadUsers();
+  if (tab === 'integrationsPanel') loadMailStatus();
+}
+async function loadMailStatus() {
+  const el = $('#mailStatus'), button = $('#testMail');
+  try {
+    const status = await api('/api/settings/mail-status');
+    el.innerHTML = status.configured
+      ? `<span class="mail-ok">Configurado</span> · envía desde ${escapeHtml(status.from)} · enlaces a ${escapeHtml(status.appUrl)}`
+      : '<span class="mail-off">Sin configurar</span> · faltan las variables SMTP en Hostinger';
+    button.disabled = !status.configured;
+  } catch (error) { el.textContent = error.message; }
+}
+
+/* ---------- recuperación de contraseña ---------- */
+let resetToken = null;
+function showAuthView(view) {
+  ['loginForm', 'forgotForm', 'resetForm'].forEach((id) => $(`#${id}`).classList.toggle('hidden', id !== view));
+  ['loginError', 'loginNotice', 'forgotError', 'forgotDone', 'resetError'].forEach((id) => $(`#${id}`).classList.add('hidden'));
+  const focus = { loginForm: '#loginEmail', forgotForm: '#forgotEmail', resetForm: '#resetPassword' }[view];
+  setTimeout(() => $(focus)?.focus(), 0);
+}
+const showMessage = (id, text) => { const el = $(`#${id}`); el.textContent = text; el.classList.remove('hidden'); };
+
+// Si la página se abre desde el enlace del correo (#reset=...), muestra el formulario.
+async function handleResetLink() {
+  const match = /^#reset=([\w-]{20,200})$/.exec(location.hash);
+  if (!match) return false;
+  resetToken = match[1];
+  history.replaceState(null, '', location.pathname);
+  $('#platform').classList.add('hidden');
+  $('#login').classList.remove('hidden');
+  try {
+    const result = await send('POST', '/api/auth/reset-password/verify', { token: resetToken });
+    if (!result.valid) {
+      resetToken = null;
+      showAuthView('forgotForm');
+      showMessage('forgotError', 'El enlace ya venció o ya se usó. Escribe tu correo y te enviamos uno nuevo.');
+      return true;
+    }
+    showAuthView('resetForm');
+    $('#resetIntro').textContent = `Hola ${result.name}, usa al menos 12 caracteres con mayúscula, minúscula y número.`;
+  } catch (error) {
+    showAuthView('forgotForm');
+    showMessage('forgotError', error.message);
+  }
+  return true;
 }
 
 /* ---------- sesión ---------- */
 function showLogin() {
   currentUser = null; loaded = false;
+  showAuthView('loginForm');
   $('#platform').classList.add('hidden');
   $('#login').classList.remove('hidden');
   $('#loginPassword').value = '';
@@ -748,6 +804,7 @@ function applyUser(user) {
   else loadAll();
 }
 async function restoreSession() {
+  if (await handleResetLink()) return;
   try { applyUser((await api('/api/auth/me')).user); }
   catch { $('#login').classList.remove('hidden'); $('#platform').classList.add('hidden'); }
 }
@@ -816,6 +873,49 @@ $('#loginForm').onsubmit = async (e) => {
     button.disabled = false;
   }
 };
+$('#forgotLink').onclick = () => {
+  showAuthView('forgotForm');
+  $('#forgotEmail').value = $('#loginEmail').value;
+};
+$$('.back-login').forEach((b) => { b.onclick = () => showAuthView('loginForm'); });
+$('#forgotForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const button = $('#forgotButton');
+  $('#forgotError').classList.add('hidden');
+  $('#forgotDone').classList.add('hidden');
+  const email = $('#forgotEmail').value.trim();
+  if (!email) { showMessage('forgotError', 'Escribe tu correo'); return; }
+  button.disabled = true;
+  try {
+    const result = await send('POST', '/api/auth/forgot-password', { email });
+    showMessage('forgotDone', result.message);
+  } catch (error) {
+    showMessage('forgotError', error.message);
+  } finally {
+    button.disabled = false;
+  }
+};
+$('#resetForm').onsubmit = async (e) => {
+  e.preventDefault();
+  $('#resetError').classList.add('hidden');
+  const password = $('#resetPassword').value;
+  if (password !== $('#resetConfirm').value) { showMessage('resetError', 'Las contraseñas no coinciden'); return; }
+  const button = $('#resetButton');
+  button.disabled = true;
+  try {
+    const result = await send('POST', '/api/auth/reset-password', { token: resetToken, newPassword: password });
+    resetToken = null;
+    $('#resetPassword').value = '';
+    $('#resetConfirm').value = '';
+    showAuthView('loginForm');
+    showMessage('loginNotice', result.message);
+  } catch (error) {
+    showMessage('resetError', error.message);
+  } finally {
+    button.disabled = false;
+  }
+};
+
 $('#logout').onclick = async () => {
   try { await send('POST', '/api/auth/logout'); } catch { /* sesión ya cerrada */ }
   showLogin();
@@ -880,6 +980,13 @@ $('#leadSearch').oninput = (e) => { ui.leadQuery = e.target.value; renderLeads()
 $('#stageFilter').onchange = (e) => { ui.leadStage = e.target.value; renderLeads(); };
 $('#ownerFilter').onchange = (e) => { ui.leadOwner = e.target.value; renderLeads(); };
 $('#newUser').onclick = () => userModal();
+$('#testMail').onclick = async () => {
+  const button = $('#testMail');
+  button.disabled = true;
+  try { toast((await send('POST', '/api/settings/test-email')).message, 6000); }
+  catch (error) { toast(error.message, 7000); }
+  finally { button.disabled = false; }
+};
 $('#exportLeads').onclick = exportLeads;
 $('#quoteSearch').oninput = (e) => { ui.quoteQuery = e.target.value; renderQuotes(); };
 $('#clientSearch').oninput = (e) => { ui.clientQuery = e.target.value; renderClients(); };
@@ -902,5 +1009,8 @@ $('#cancelSettings').onclick = renderSettings;
 
 // Refresca la fecha y los datos cada 5 minutos para que el dashboard no se quede en el día anterior.
 setInterval(() => { if (currentUser && !currentUser.mustChangePassword && $('#modalBg').classList.contains('hidden')) loadAll(); }, 5 * 60 * 1000);
+
+// El enlace del correo también funciona si se pega en una pestaña donde la plataforma ya está abierta.
+window.addEventListener('hashchange', () => { if (location.hash.startsWith('#reset=')) handleResetLink(); });
 
 restoreSession();

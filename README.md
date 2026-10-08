@@ -82,6 +82,15 @@ Los enlaces persistentes de PDF se habilitarán cuando se conecte Google Drive; 
 - Las variables `ADMIN_*` y `PARTNER_*` solo crean las cuentas iniciales si no existen; si falta la contraseña inicial, el servidor arranca igual y lo avisa en el registro.
 - Para que Hostinger no muestre archivos viejos, `index.html` carga `app.js?v=...` y `styles.css?v=...`; cambia ese valor en cada versión.
 
+## Recuperar contraseña (TP-003)
+
+- En el inicio de sesión, **¿Olvidaste tu contraseña?** pide el correo y envía un enlace `APP_URL/#reset=...` que vence en **30 minutos** y sirve **una sola vez**.
+- La respuesta es la misma exista o no la cuenta (no revela qué correos están registrados) y el correo se envía después de responder.
+- Límites: 5 solicitudes por IP cada 15 minutos y una por usuario cada 60 segundos. Pedir un enlace nuevo invalida el anterior.
+- El token se guarda solo como hash SHA-256 en `password_resets`. Al usarlo se cierran las sesiones abiertas del usuario.
+- El administrador puede enviar el enlace desde **Configuración › Usuarios › Nueva contraseña**, y probar el correo desde **Configuración › Integraciones**.
+- Variables en Hostinger: `APP_URL`, `SMTP_HOST` (`smtp.hostinger.com`), `SMTP_PORT` (`465`), `SMTP_USER`, `SMTP_PASSWORD` y `MAIL_FROM`. Sin ellas, en producción la recuperación responde que no está activa; en desarrollo el enlace se muestra en la consola.
+
 ## Variables de seguridad
 
 La aplicación no inicia en producción si falta alguna variable requerida. Configúralas exclusivamente en Hostinger:
@@ -98,6 +107,12 @@ ADMIN_EMAIL=
 ADMIN_INITIAL_PASSWORD=
 PARTNER_EMAIL=
 PARTNER_INITIAL_PASSWORD=
+APP_URL=
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASSWORD=
+MAIL_FROM=
 ```
 
 Las contraseñas iniciales solo se utilizan para crear cuentas inexistentes. Después del primer cambio de contraseña pueden eliminarse del entorno y redesplegarse. Nunca deben añadirse al repositorio.
@@ -123,6 +138,8 @@ Las contraseñas iniciales solo se utilizan para crear cuentas inexistentes. Des
 │   ├── crm-routes.js
 │   ├── crm-schema.js
 │   ├── data-store.js
+│   ├── mailer.js
+│   ├── password-reset.js
 │   └── user-routes.js
 ├── test/
 ├── public/

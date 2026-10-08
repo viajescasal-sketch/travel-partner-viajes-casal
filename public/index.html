@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=tp002" />
+    <link rel="stylesheet" href="/styles.css?v=tp003" />
   </head>
   <body>
     <section id="login" class="login">
@@ -51,12 +51,40 @@
               autocomplete="current-password"
               required
           /></label>
+          <button type="button" id="forgotLink" class="link-btn">¿Olvidaste tu contraseña?</button>
           <p id="loginError" class="form-error hidden" role="alert"></p>
+          <p id="loginNotice" class="form-ok hidden" role="status"></p>
           <button id="loginButton" class="btn primary">
             Entrar a la plataforma</button
           ><small class="demo"
             >Acceso exclusivo para usuarios autorizados.</small
           >
+        </form>
+        <form id="forgotForm" class="hidden" novalidate>
+          <div class="brand">
+            <div class="logo">VB</div>
+            <div><b>Travel Partner</b><small>Viajes Casal</small></div>
+          </div>
+          <h2>Recupera tu acceso</h2>
+          <p>Escribe el correo con el que entras a la plataforma. Te enviaremos un enlace para crear una nueva contraseña; vence en 30 minutos.</p>
+          <label>Correo<input id="forgotEmail" type="email" autocomplete="email" required /></label>
+          <p id="forgotError" class="form-error hidden" role="alert"></p>
+          <p id="forgotDone" class="form-ok hidden" role="status"></p>
+          <button id="forgotButton" class="btn primary">Enviar enlace</button>
+          <button type="button" class="link-btn back-login">Volver a iniciar sesión</button>
+        </form>
+        <form id="resetForm" class="hidden">
+          <div class="brand">
+            <div class="logo">VB</div>
+            <div><b>Travel Partner</b><small>Viajes Casal</small></div>
+          </div>
+          <h2>Crea tu nueva contraseña</h2>
+          <p id="resetIntro">Usa al menos 12 caracteres con mayúscula, minúscula y número.</p>
+          <label>Nueva contraseña<input id="resetPassword" type="password" autocomplete="new-password" minlength="12" required /></label>
+          <label>Confirmar contraseña<input id="resetConfirm" type="password" autocomplete="new-password" minlength="12" required /></label>
+          <p id="resetError" class="form-error hidden" role="alert"></p>
+          <button id="resetButton" class="btn primary">Guardar contraseña</button>
+          <button type="button" class="link-btn back-login">Volver a iniciar sesión</button>
         </form>
       </div>
     </section>
@@ -445,6 +473,14 @@
               </article>
               <article class="panel settings-panel" id="integrationsPanel" hidden>
                 <h3>Integraciones</h3>
+                <div class="integration">
+                  <div>
+                    <b>Correo de la plataforma</b>
+                    <small>Envía los enlaces de “¿Olvidaste tu contraseña?”.</small>
+                    <p id="mailStatus" class="muted">Revisando…</p>
+                  </div>
+                  <button id="testMail" class="btn secondary small" disabled>Enviar correo de prueba</button>
+                </div>
                 <p class="empty-note">Próximamente: bot de WhatsApp, formulario web y Google Drive.</p>
               </article>
               <article class="panel settings-panel" id="agencyPanel">
@@ -551,6 +587,15 @@
       .temp-pass { font: 700 20px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .08em; background: var(--bg); border: 1px dashed var(--border); border-radius: 10px; padding: 14px; text-align: center; user-select: all; }
       .note-warn { background: #fff5d9; color: #6b4a00; border-radius: 10px; padding: 10px 12px; font-size: 12px; }
       fieldset.readonly { border: 0; padding: 0; margin: 0; display: contents; }
+      .link-btn { background: none; border: 0; padding: 0; color: #0b86b4; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; justify-self: start; text-decoration: underline; }
+      .link-btn:focus-visible { outline: 2px solid #0b86b4; outline-offset: 2px; }
+      .form-ok { color: #18815d !important; background: #e8f7ef; border: 1px solid #bfe8d3; border-radius: 8px; padding: 9px; margin: 0; font-size: 12px; }
+      .integration { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin: 12px 0; }
+      .integration b { display: block; font-size: 13px; }
+      .integration small { color: var(--muted); font-size: 11px; }
+      .integration p { margin: 6px 0 0; font-size: 12px; }
+      .mail-ok { color: #18815d; font-weight: 700; }
+      .mail-off { color: #b42318; font-weight: 700; }
       .profile #logout {
         margin-left: auto;
         color: #fff;
@@ -560,6 +605,6 @@
         cursor: wait;
       }
     </style>
-    <script src="/app.js?v=tp002"></script>
+    <script src="/app.js?v=tp003"></script>
   </body>
 </html>

@@ -66,6 +66,17 @@ class MySQLDataStore {
       CONSTRAINT fk_activity_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
     await this.migrateUsers();
+    await this.pool.query(`CREATE TABLE IF NOT EXISTS password_resets (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      token_hash CHAR(64) NOT NULL UNIQUE,
+      expires_at BIGINT UNSIGNED NOT NULL,
+      used_at BIGINT UNSIGNED NULL,
+      requested_ip VARCHAR(64) NULL,
+      created_at BIGINT UNSIGNED NOT NULL,
+      INDEX idx_reset_user (user_id),
+      CONSTRAINT fk_reset_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
     for (const entityName of ENTITY_ORDER) {
       await this.pool.query(createTableSql(entityName));
     }
@@ -110,6 +121,30 @@ class MySQLDataStore {
 
   async setTemporaryPassword(id, passwordHash) {
     await this.pool.execute('UPDATE users SET password_hash = ?, must_change_password = TRUE WHERE id = ?', [passwordHash, id]);
+  }
+
+  // ---- Enlaces de recuperación (las fechas se guardan en milisegundos UTC) ----
+  async createPasswordReset({ userId, tokenHash, expiresAt, ip }) {
+    await this.pool.execute(
+      'INSERT INTO password_resets (user_id, token_hash, expires_at, requested_ip, created_at) VALUES (?, ?, ?, ?, ?)',
+      [userId, tokenHash, expiresAt, ip || null, Date.now()]
+    );
+  }
+
+  async findPasswordReset(tokenHash) {
+    const [rows] = await this.pool.execute('SELECT * FROM password_resets WHERE token_hash = ? LIMIT 1', [tokenHash]);
+    const row = rows[0];
+    return row ? { ...row, id: Number(row.id), user_id: Number(row.user_id), expires_at: Number(row.expires_at), used_at: row.used_at == null ? null : Number(row.used_at), created_at: Number(row.created_at) } : null;
+  }
+
+  async lastPasswordResetAt(userId) {
+    const [rows] = await this.pool.execute('SELECT MAX(created_at) AS last FROM password_resets WHERE user_id = ?', [userId]);
+    return rows[0]?.last == null ? null : Number(rows[0].last);
+  }
+
+  // Marca como usados todos los enlaces pendientes del usuario (el nuevo o el que se acaba de usar).
+  async invalidatePasswordResets(userId) {
+    await this.pool.execute('UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL', [Date.now(), userId]);
   }
 
   async touchLogin(id) {
@@ -268,6 +303,13 @@ class MemoryDataStore {
     return { ...user };
   }
   async setTemporaryPassword(id, passwordHash) { const user = this.users.find((u) => u.id === Number(id)); user.password_hash = passwordHash; user.must_change_password = true; }
+  async createPasswordReset({ userId, tokenHash, expiresAt, ip }) {
+    this.resets = this.resets || [];
+    this.resets.push({ id: this.resets.length + 1, user_id: userId, token_hash: tokenHash, expires_at: expiresAt, used_at: null, requested_ip: ip || null, created_at: Date.now() });
+  }
+  async findPasswordReset(tokenHash) { const row = (this.resets || []).find((r) => r.token_hash === tokenHash); return row ? { ...row } : null; }
+  async lastPasswordResetAt(userId) { const rows = (this.resets || []).filter((r) => r.user_id === userId); return rows.length ? Math.max(...rows.map((r) => r.created_at)) : null; }
+  async invalidatePasswordResets(userId) { (this.resets || []).filter((r) => r.user_id === userId && r.used_at == null).forEach((r) => { r.used_at = Date.now(); }); }
   async touchLogin(id) { const user = this.users.find((u) => u.id === Number(id)); if (user) user.last_login_at = nowCancun(); }
   async transferLeadOwnership(leadId, ownerId) {
     const lead = this.records.leads.find((l) => l.id === Number(leadId)); if (lead) { lead.owner_id = ownerId; lead.updated_at = nowCancun(); }
