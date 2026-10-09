@@ -35,7 +35,7 @@ function createMailer(env = process.env) {
   return {
     configured,
     from: configured ? config.from : null,
-    async send({ to, subject, html, text }) {
+    async send({ to, subject, html, text, attachments }) {
       if (!transport) {
         if (env.NODE_ENV !== 'production') {
           console.log(`[correo no configurado] Para: ${to}\nAsunto: ${subject}\n${text}`);
@@ -45,7 +45,7 @@ function createMailer(env = process.env) {
         error.code = 'MAIL_NOT_CONFIGURED';
         throw error;
       }
-      const info = await transport.sendMail({ from: config.from, to, subject, html, text });
+      const info = await transport.sendMail({ from: config.from, to, subject, html, text, ...(attachments ? { attachments } : {}) });
       return { delivered: true, id: info.messageId };
     },
     async verify() {

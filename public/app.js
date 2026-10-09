@@ -261,13 +261,49 @@ function renderLeads() {
     return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}${qualChip(l)}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
   }).join('') : emptyRow(cols, db.leads.length ? 'Ningún lead coincide con la búsqueda.' : 'Aún no hay leads registrados.');
 }
-function exportLeads() {
-  const header = ['Cliente', 'WhatsApp', 'Correo', 'Destino', 'Salida', 'Regreso', 'Viajeros', 'Presupuesto', 'Etapa', 'Prioridad', 'Origen', 'Vendedor', 'Creado', 'Notas'];
-  const rows = filteredLeads().map((l) => { const c = clientById(l.client_id) || {}; return [c.name, c.phone, c.email, l.destination, l.start_date, l.end_date, l.travelers, l.budget, l.stage, l.priority, l.source, userName(l.owner_id), l.created_at, l.notes]; });
-  const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-  const a = Object.assign(document.createElement('a'), { href: url, download: `leads-${todayStr()}.csv` });
-  document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+// Exportar a Excel o CSV: cada rol descarga solo lo que puede ver.
+const EXPORT_SECTIONS = [['clients', 'Clientes'], ['leads', 'Leads'], ['quotes', 'Cotizaciones'], ['sales', 'Ventas'], ['trips', 'Viajes'], ['followups', 'Seguimientos'], ['users', 'Usuarios']];
+const EXPORT_BY_ROLE = { admin: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups', 'users'], travel_partner: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups'], operaciones: ['trips', 'followups'], consulta: [] };
+function exportModal(preset) {
+  const allowed = EXPORT_BY_ROLE[currentUser?.role] || [];
+  if (!allowed.length) { toast('Tu rol no permite exportar información'); return; }
+  const chosen = preset ? [preset] : allowed.filter((k) => k !== 'users');
+  const scopeNote = isAdmin() ? 'Incluye la información de todos los vendedores.' : isOps() ? 'Incluye los viajes y seguimientos que gestionas.' : 'Incluye solo tus clientes, leads y ventas.';
+  openModal('EXPORTAR', 'Descargar información', `<form class="modal-form">
+    <p class="full muted">${scopeNote}</p>
+    <div class="full"><b class="exp-label">Secciones</b><div class="cz-svc">${EXPORT_SECTIONS.filter(([k]) => allowed.includes(k)).map(([k, label]) => `<label><input type="checkbox" name="sec" value="${k}" ${chosen.includes(k) ? 'checked' : ''}> ${label}</label>`).join('')}</div></div>
+    <div class="full"><b class="exp-label">Formato</b><div class="cz-kind exp-format"><label><input type="radio" name="format" value="xlsx" checked> Excel (.xlsx) · una hoja por sección</label><label><input type="radio" name="format" value="csv"> CSV · un archivo por sección</label></div></div>
+    ${field('Desde (opcional)', '<input name="from" type="date">')}
+    ${field('Hasta (opcional)', '<input name="to" type="date">')}
+    <p class="full muted">Las fechas filtran por fecha de registro (ventas: fecha de venta; seguimientos: fecha programada). La descarga queda registrada en la bitácora.</p>
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">Descargar</button></div></form>`);
+  bindForm(async (v, form) => {
+    const sections = [...form.querySelectorAll('[name="sec"]:checked')].map((el) => el.value);
+    if (!sections.length) { toast('Elige al menos una sección'); return false; }
+    if (v.from && v.to && v.to < v.from) { toast('La fecha “hasta” no puede ser anterior a “desde”'); return false; }
+    const params = new URLSearchParams({ format: v.format, sections: sections.join(',') });
+    if (v.from) params.set('from', v.from);
+    if (v.to) params.set('to', v.to);
+    return downloadFile(`/api/export?${params}`);
+  });
+}
+// Descarga con la sesión actual y avisa si hay error.
+async function downloadFile(url) {
+  try {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 401 && currentUser) showLogin();
+      throw new Error(payload.error || 'No se pudo descargar');
+    }
+    const name = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') || '')?.[1] || 'descarga';
+    const blobUrl = URL.createObjectURL(await response.blob());
+    const a = Object.assign(document.createElement('a'), { href: blobUrl, download: name });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+    toast(`Descargado: ${name}`);
+    return true;
+  } catch (error) { toast(error.message, 6000); return false; }
 }
 
 /* ---------- cotizaciones ---------- */
@@ -1227,6 +1263,50 @@ $('#saveQuestions').onclick = async () => {
 $('#saveDocSettings').onclick = saveDocSettings;
 $('#cancelDocSettings').onclick = renderDocSettings;
 
+/* ---------- Configuración: respaldos ---------- */
+const kb = (bytes) => (bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
+const fmtLocal = (value) => { const v = String(value || '').replace('T', ' '); return v ? `${fmtDate(v.slice(0, 10))} ${v.slice(0, 4)}, ${v.slice(11, 16)}` : ''; };
+async function loadBackups() {
+  try {
+    const data = await api('/api/backups');
+    const lastAuto = data.backups.find((b) => b.kind === 'auto');
+    const emailOk = data.settings.sendEmail && data.mailConfigured;
+    $('#backupStatus').innerHTML = `
+      <div><span>Próximo automático</span><b>${escapeHtml(fmtLocal(data.nextRun))}</b></div>
+      <div><span>Último automático</span><b>${lastAuto ? escapeHtml(fmtLocal(lastAuto.createdAt)) : 'Aún no se hace'}</b></div>
+      <div><span>Copia por correo</span><b class="${emailOk ? 'mail-ok' : 'mail-off'}">${!data.settings.sendEmail ? 'Desactivada' : data.mailConfigured ? escapeHtml(data.recipients || 'Sin destinatario') : 'Correo de la plataforma sin configurar'}</b></div>
+      <div><span>Guardados</span><b>${data.backups.length} de ${data.keep}</b></div>`;
+    $('#backupSendEmail').checked = Boolean(data.settings.sendEmail);
+    $('#backupEmail').value = data.settings.email || '';
+    $('#backupEmail').placeholder = data.recipients ? `Vacío = ${data.recipients}` : 'correo@ejemplo.com';
+    $('#backupRows').innerHTML = data.backups.length ? data.backups.map((b) => `<tr>
+      <td>${escapeHtml(fmtLocal(b.createdAt))}</td>
+      <td>${b.kind === 'auto' ? 'Automático' : `Manual${b.createdBy ? ` · ${escapeHtml(b.createdBy)}` : ''}`}</td>
+      <td>${escapeHtml(Object.entries(b.summary.counts || {}).filter(([k]) => k !== 'Usuarios').map(([k, n]) => `${n} ${k.toLowerCase()}`).join(' · '))}</td>
+      <td class="${/^Enviado/.test(b.emailStatus || '') ? 'mail-ok' : 'muted'}">${escapeHtml(b.emailStatus || '—')}</td>
+      <td><div class="user-actions"><button class="link" data-backup-dl="${b.id}:xlsx">Excel (${kb(b.xlsxSize)})</button><button class="link" data-backup-dl="${b.id}:json" title="Copia completa para restaurar">Copia técnica</button></div></td></tr>`).join('')
+      : emptyRow(5, 'Todavía no hay respaldos. Usa “Hacer respaldo ahora” o espera al automático de las 2:00 a.m.');
+  } catch (error) { toast(error.message); }
+}
+$('#backupNow').onclick = async () => {
+  const button = $('#backupNow');
+  button.disabled = true;
+  button.textContent = 'Respaldando…';
+  try { const r = await send('POST', '/api/backups'); toast(`Respaldo listo · ${r.emailStatus}`, 7000); await loadBackups(); }
+  catch (error) { toast(error.message, 6000); }
+  finally { button.disabled = false; button.textContent = 'Hacer respaldo ahora'; }
+};
+$('#saveBackupSettings').onclick = async () => {
+  try { await send('PUT', '/api/backups/settings', { sendEmail: $('#backupSendEmail').checked, email: $('#backupEmail').value }); toast('Configuración de respaldos guardada'); loadBackups(); }
+  catch (error) { toast(error.message, 6000); }
+};
+$('#backupRows').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-backup-dl]');
+  if (!btn) return;
+  const [id, type] = btn.dataset.backupDl.split(':');
+  downloadFile(`/api/backups/${id}/download?type=${type}`);
+});
+
 /* ---------- Configuración: integraciones ---------- */
 function renderIntegrations() {
   const d = db.documents || {};
@@ -1239,7 +1319,7 @@ function renderIntegrations() {
     card('Documentos para clientes <span class="tag-ok">Activo</span>', 'Cotización (hasta 4 propuestas) y Confirmación de servicios con el diseño de Viajes Casal, listas para guardar en PDF y enviar por WhatsApp.', '', '', '<p><button class="link" data-settings-tab="pdfPanel">Editar textos y redes de la plantilla</button></p>')
     + card(`WhatsApp de la agencia ${wa ? '<span class="tag-ok">Listo</span>' : '<span class="tag-soon">Sin número</span>'}`, wa ? `Enlace directo y código QR para ${escapeHtml(waNumber)}. Úsalo en tu sitio, redes o material impreso.` : 'Agrega el WhatsApp en Perfil de agencia o en Plantilla PDF.', wa, wa)
     + card(`Reseñas de Google ${reviews ? '<span class="tag-ok">Listo</span>' : '<span class="tag-soon">Sin enlace</span>'}`, reviews ? 'Aparece al pie de la cotización y la confirmación. Comparte el QR al terminar cada viaje.' : 'Agrega el enlace en Plantilla PDF.', reviews, reviews)
-    + `<div class="int-soon"><div><b>Bot de WhatsApp → CRM</b>Que el bot cree el lead con sus respuestas. Próximamente (TP-101).</div><div><b>Formulario web</b>Solicitudes de tu sitio directo a Leads. Próximamente (TP-102).</div><div><b>Respaldos y exportación</b>Copia diaria y descarga a Excel. Próximamente (TP-007).</div></div>`;
+    + `<div class="int-soon"><div><b>Bot de WhatsApp → CRM</b>Que el bot cree el lead con sus respuestas. Próximamente (TP-101).</div><div><b>Formulario web</b>Solicitudes de tu sitio directo a Leads. Próximamente (TP-102).</div><div><b>Respaldos y exportación <span class="tag-ok">Activo</span></b>Copia diaria a las 2:00 a.m. y descarga a Excel/CSV. <button class="link" data-settings-tab="backupsPanel">Ver respaldos</button></div></div>`;
 }
 $('#integrationCards').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-copy]');
@@ -1260,7 +1340,8 @@ const SECURITY_LABELS = {
   backup_codes_regenerated: 'Generó códigos de respaldo', twofa_backup_code_used: 'Entró con código de respaldo',
   twofa_failed: 'Bloqueado por códigos incorrectos', twofa_reset_by_admin: 'Quitó la app de un usuario',
   trusted_devices_cleared: 'Olvidó sus equipos recordados', twofa_skipped_no_mail: 'Entró sin segundo paso (correo no configurado)',
-  crm_settings_update: 'Cambió la configuración', profile_update: 'Actualizó el perfil para documentos', crm_shared_client: 'Registró un cliente que ya atiende otro vendedor'
+  crm_settings_update: 'Cambió la configuración', profile_update: 'Actualizó el perfil para documentos',
+  backup_auto: 'Respaldo automático diario', backup_manual: 'Hizo un respaldo', backup_download: 'Descargó un respaldo', data_export: 'Exportó información', crm_shared_client: 'Registró un cliente que ya atiende otro vendedor'
 };
 const VERB = { create: 'Creó', update: 'Editó', delete: 'Eliminó', duplicate: 'Duplicó', reassign: 'Reasignó' };
 function describeAction(item) {
@@ -1442,6 +1523,7 @@ function showSettingsTab(tab) {
   if (tab === 'integrationsPanel') { loadMailStatus(); renderIntegrations(); }
   if (tab === 'pdfPanel') renderDocSettings();
   if (tab === 'questionsPanel') renderQuestionsEditor(true);
+  if (tab === 'backupsPanel') loadBackups();
 }
 async function loadMailStatus() {
   const el = $('#mailStatus'), button = $('#testMail');
@@ -1817,7 +1899,8 @@ $('#testMail').onclick = async () => {
   catch (error) { toast(error.message, 7000); }
   finally { button.disabled = false; }
 };
-$('#exportLeads').onclick = exportLeads;
+$('#exportLeads').onclick = () => exportModal('leads');
+$('#exportBtn').onclick = () => exportModal();
 $('#quoteSearch').oninput = (e) => { ui.quoteQuery = e.target.value; renderQuotes(); };
 $('#clientSearch').oninput = (e) => { ui.clientQuery = e.target.value; renderClients(); };
 $('#funnelRange').onchange = (e) => { ui.funnelRange = e.target.value; renderDashboard(); };

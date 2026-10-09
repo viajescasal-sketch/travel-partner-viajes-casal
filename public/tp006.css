@@ -156,3 +156,18 @@ body.dark .doc-settings legend { color: #fff; }
 .q-opt .pts input { width: 60px; text-align: right; }
 .q-legend { font-size: 11px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 10px 12px; line-height: 1.5; }
 .cz input:not([type=checkbox]):not([type=radio]):not([type=file]), .cz select, .cz textarea { font-size: 12px; }
+
+/* TP-007 · Respaldos y exportación */
+.backup-status { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.backup-status div { background: var(--bg); border-radius: 12px; padding: 12px; display: grid; gap: 4px; }
+.backup-status span { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+.backup-status b { font-size: 13px; overflow-wrap: anywhere; }
+.backup-settings { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 14px; }
+.backup-settings > label:not(.check-inline) { flex: 1; min-width: 240px; font-size: 11px; font-weight: 700; display: grid; gap: 5px; }
+.backup-settings input:not([type=checkbox]) { padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+#backupRows td { white-space: normal; }
+.exp-label { display: block; font-size: 11px; margin-bottom: 8px; }
+.exp-format label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; border: 1.5px solid var(--border); border-radius: 20px; padding: 7px 12px; cursor: pointer; }
+.exp-format input { width: auto !important; margin: 0 !important; }
+body.role-consulta #exportBtn { display: none; }
+@media (max-width: 860px) { .backup-status { grid-template-columns: 1fr 1fr; } }

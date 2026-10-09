@@ -59,6 +59,16 @@ function serializeRow(entityName, record) {
   return out;
 }
 
+function normalizeBackup(row) {
+  let summary = row.summary;
+  if (typeof summary === 'string') { try { summary = JSON.parse(summary); } catch { summary = {}; } }
+  return {
+    id: Number(row.id), kind: row.kind, createdAt: row.created_at, summary: summary || {},
+    emailStatus: row.email_status || null, xlsxSize: Number(row.xlsx_size || 0), jsonSize: Number(row.json_size || 0),
+    createdBy: row.created_by_name || null
+  };
+}
+
 // Datos públicos del perfil de un usuario para documentos.
 const PROFILE_FIELDS = { phone: 40, bio: 1500, website: 200 };
 
@@ -133,6 +143,18 @@ class MySQLDataStore {
       data MEDIUMBLOB NOT NULL,
       created_at DATETIME NOT NULL,
       CONSTRAINT fk_media_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+    await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_backups (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      kind VARCHAR(10) NOT NULL,
+      created_at DATETIME NOT NULL,
+      created_by BIGINT UNSIGNED NULL,
+      summary TEXT NULL,
+      email_status VARCHAR(255) NULL,
+      xlsx MEDIUMBLOB NOT NULL,
+      json_gz MEDIUMBLOB NOT NULL,
+      INDEX idx_backups_created (created_at),
+      CONSTRAINT fk_backups_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
     await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_settings (
       setting_key VARCHAR(60) NOT NULL PRIMARY KEY,
@@ -218,6 +240,55 @@ class MySQLDataStore {
   async getMedia(id) {
     const [rows] = await this.pool.execute('SELECT mime, data FROM crm_media WHERE id = ? LIMIT 1', [id]);
     return rows[0] ? { mime: rows[0].mime, data: rows[0].data } : null;
+  }
+
+  // ---- Respaldos (se conservan los más recientes) ----
+  async createBackup({ kind, userId, summary, xlsx, jsonGz, createdAt }) {
+    const [result] = await this.pool.execute(
+      'INSERT INTO crm_backups (kind, created_at, created_by, summary, xlsx, json_gz) VALUES (?, ?, ?, ?, ?, ?)',
+      [kind, createdAt || nowCancun(), userId ?? null, JSON.stringify(summary || {}), xlsx, jsonGz]
+    );
+    return Number(result.insertId);
+  }
+
+  // Candado de MySQL: evita que dos procesos hagan el respaldo automático al mismo tiempo.
+  async withLock(name, fn) {
+    const conn = await this.pool.getConnection();
+    try {
+      const [rows] = await conn.query('SELECT GET_LOCK(?, 0) AS ok', [name]);
+      if (Number(rows[0].ok) !== 1) return null;
+      try { return await fn(); } finally { await conn.query('SELECT RELEASE_LOCK(?)', [name]); }
+    } finally { conn.release(); }
+  }
+
+  async updateBackupStatus(id, emailStatus) {
+    await this.pool.execute('UPDATE crm_backups SET email_status = ? WHERE id = ?', [String(emailStatus || '').slice(0, 255), id]);
+  }
+
+  async listBackups() {
+    const [rows] = await this.pool.query(
+      `SELECT b.id, b.kind, b.created_at, b.summary, b.email_status, LENGTH(b.xlsx) AS xlsx_size, LENGTH(b.json_gz) AS json_size, u.name AS created_by_name
+       FROM crm_backups b LEFT JOIN users u ON u.id = b.created_by ORDER BY b.id DESC LIMIT 100`
+    );
+    return rows.map(normalizeBackup);
+  }
+
+  async getBackupFile(id, type) {
+    const column = type === 'json' ? 'json_gz' : 'xlsx';
+    const [rows] = await this.pool.execute(`SELECT created_at, ${column} AS data FROM crm_backups WHERE id = ? LIMIT 1`, [id]);
+    return rows[0] ? { createdAt: rows[0].created_at, data: rows[0].data } : null;
+  }
+
+  async lastBackupAt(kind) {
+    const [rows] = await this.pool.execute('SELECT MAX(created_at) AS last FROM crm_backups WHERE kind = ?', [kind]);
+    return rows[0]?.last || null;
+  }
+
+  async pruneBackups(keep) {
+    const [rows] = await this.pool.query('SELECT id FROM crm_backups ORDER BY id DESC');
+    const remove = rows.slice(keep).map((r) => Number(r.id));
+    if (remove.length) await this.pool.query(`DELETE FROM crm_backups WHERE id IN (${remove.map(() => '?').join(',')})`, remove);
+    return remove.length;
   }
 
   async updateProfile(id, fields) {
@@ -579,6 +650,20 @@ class MemoryDataStore {
     return this.media.length;
   }
   async getMedia(id) { const row = (this.media || []).find((m) => m.id === Number(id)); return row ? { mime: row.mime, data: row.data } : null; }
+  async createBackup({ kind, userId, summary, xlsx, jsonGz, createdAt }) {
+    this.backups = this.backups || [];
+    this.backupSeq = (this.backupSeq || 0) + 1;
+    this.backups.unshift({ id: this.backupSeq, kind, created_at: createdAt || nowCancun(), created_by: userId ?? null, summary, xlsx: Buffer.from(xlsx), json_gz: Buffer.from(jsonGz), email_status: null });
+    return this.backupSeq;
+  }
+  async withLock(_name, fn) { return fn(); }
+  async updateBackupStatus(id, status) { const b = (this.backups || []).find((x) => x.id === Number(id)); if (b) b.email_status = status; }
+  async listBackups() {
+    return (this.backups || []).map((b) => normalizeBackup({ ...b, summary: JSON.stringify(b.summary), xlsx_size: b.xlsx.length, json_size: b.json_gz.length, created_by_name: this.users.find((u) => u.id === b.created_by)?.name }));
+  }
+  async getBackupFile(id, type) { const b = (this.backups || []).find((x) => x.id === Number(id)); return b ? { createdAt: b.created_at, data: type === 'json' ? b.json_gz : b.xlsx } : null; }
+  async lastBackupAt(kind) { const b = (this.backups || []).filter((x) => x.kind === kind); return b.length ? b.map((x) => x.created_at).sort().at(-1) : null; }
+  async pruneBackups(keep) { const before = (this.backups || []).length; this.backups = (this.backups || []).slice(0, keep); return before - this.backups.length; }
   async updateProfile(id, fields) {
     const user = this.users.find((u) => u.id === Number(id));
     for (const key of [...Object.keys(PROFILE_FIELDS), 'photo_media_id']) if (fields[key] !== undefined) user[key] = fields[key];

@@ -10,8 +10,8 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=tp006" />
-    <link rel="stylesheet" href="/tp006.css?v=tp006" />
+    <link rel="stylesheet" href="/styles.css?v=tp007" />
+    <link rel="stylesheet" href="/tp006.css?v=tp007" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -162,7 +162,7 @@
           </div>
           <div class="header-actions">
             <button id="theme" class="icon">☾</button
-            ><button class="icon">♢</button
+            ><button id="exportBtn" class="icon" title="Exportar a Excel o CSV" aria-label="Exportar a Excel o CSV">⤓</button
             ><button class="btn primary" data-action="lead" data-hide-ops>
               + Nuevo lead
             </button>
@@ -284,7 +284,7 @@
                 <option>Vendido</option>
                 <option>Perdido</option></select
               ><select id="ownerFilter" class="hidden" aria-label="Filtrar por vendedor"></select
-              ><button id="exportLeads" class="btn secondary">Exportar CSV</button>
+              ><button id="exportLeads" class="btn secondary">Exportar</button>
             </div>
             <article class="panel">
               <div class="table">
@@ -506,7 +506,8 @@
                 ><button data-settings-tab="usersPanel">Usuarios</button
                 ><button data-settings-tab="pdfPanel">Plantilla PDF</button
                 ><button data-settings-tab="questionsPanel">Preguntas de calificación</button
-                ><button data-settings-tab="integrationsPanel">Integraciones</button>
+                ><button data-settings-tab="integrationsPanel">Integraciones</button
+                ><button data-settings-tab="backupsPanel">Respaldos</button>
               </nav>
               <article class="panel settings-panel" id="usersPanel" hidden>
                 <div class="panel-head">
@@ -569,6 +570,27 @@
                   <button id="testMail" class="btn secondary small" disabled>Enviar correo de prueba</button>
                 </div>
                 <div id="integrationCards"></div>
+              </article>
+              <article class="panel settings-panel" id="backupsPanel" hidden>
+                <div class="panel-head">
+                  <div>
+                    <h3>Respaldos</h3>
+                    <p>Copia automática diaria a las 2:00 a.m. (hora de Cancún). Se guardan los últimos 30.</p>
+                  </div>
+                  <button class="btn primary small" id="backupNow">Hacer respaldo ahora</button>
+                </div>
+                <div id="backupStatus" class="backup-status"></div>
+                <div class="backup-settings">
+                  <label class="check-inline"><input type="checkbox" id="backupSendEmail" /> Enviar cada respaldo por correo</label>
+                  <label>Correo(s) que reciben el respaldo<input id="backupEmail" maxlength="600" placeholder="Si lo dejas vacío, se envía a los administradores" /></label>
+                  <button class="btn secondary small" id="saveBackupSettings">Guardar</button>
+                </div>
+                <div class="table">
+                  <table>
+                    <thead><tr><th>Fecha</th><th>Tipo</th><th>Contenido</th><th>Correo</th><th>Descargar</th></tr></thead>
+                    <tbody id="backupRows"></tbody>
+                  </table>
+                </div>
               </article>
               <article class="panel settings-panel" id="agencyPanel">
                 <h3>Perfil de agencia</h3>
@@ -733,7 +755,7 @@
         cursor: wait;
       }
     </style>
-    <script src="/docs/documents.js?v=tp006"></script>
-    <script src="/app.js?v=tp006"></script>
+    <script src="/docs/documents.js?v=tp007"></script>
+    <script src="/app.js?v=tp007"></script>
   </body>
 </html>

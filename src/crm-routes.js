@@ -17,6 +17,8 @@ const {
   checkImage, MAX_IMAGE_BYTES, sellerInfo
 } = require('./documents');
 const { PROFILE_FIELDS } = require('./data-store');
+const { ROLE_SECTIONS, SECTIONS, buildSheets } = require('./export');
+const { buildXlsx, buildCsv, zip } = require('./xlsx');
 
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
 const AGENCY_FIELDS = { name: 120, whatsapp: 40, email: 254, website: 200 };
@@ -502,6 +504,50 @@ function createCrmRouter(dataStore, { requireRole }) {
       canEdit: canWrite(ctx.user, 'trips'),
       ...(await documentContext())
     });
+  }));
+
+  // ---- Exportar a Excel o CSV (cada quien lo que puede ver) ----
+  router.get('/export', wrap(async (req, res) => {
+    const ctx = await context(req);
+    const allowed = ROLE_SECTIONS[ctx.user.role] || [];
+    const sections = [...new Set(String(req.query.sections || '').split(',').map((x) => x.trim()))].filter((x) => allowed.includes(x));
+    if (!sections.length) throw allowed.length ? new ValidationError('Elige al menos una sección para exportar') : forbidden();
+    const format = req.query.format === 'csv' ? 'csv' : 'xlsx';
+    const range = {};
+    for (const key of ['from', 'to']) {
+      const value = String(req.query[key] || '');
+      if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new ValidationError('Fecha inválida');
+      if (value) range[key] = value;
+    }
+    const visible = filterData(ctx.scope, ctx.data);
+    const users = (await dataStore.listUsers()).map(({ id, name, email, role, active, last_login_at }) => ({ id, name, email, role, active, last_login_at }));
+    const sheets = buildSheets(sections, visible, { users: ctx.user.role === 'admin' ? users : users.map(({ id, name }) => ({ id, name })), questions: (await allSettings()).leadQuestions, range });
+    const day = nowCancun().slice(0, 10);
+    const base = sections.length === 1 ? SECTIONS[sections[0]].toLowerCase() : 'travel-partner';
+    let file;
+    let filename;
+    let type;
+    if (format === 'xlsx') {
+      file = buildXlsx(sheets);
+      filename = `${base}-${day}.xlsx`;
+      type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    } else if (sheets.length === 1) {
+      file = buildCsv(sheets[0]);
+      filename = `${base}-${day}.csv`;
+      type = 'text/csv; charset=utf-8';
+    } else {
+      file = zip(sheets.map((s) => ({ name: `${s.name.toLowerCase()}-${day}.csv`, data: buildCsv(s) })));
+      filename = `${base}-csv-${day}.zip`;
+      type = 'application/zip';
+    }
+    await log(req, 'data_export', {
+      summary: sheets.map((s) => `${s.name} (${s.rows.length})`).join(', '),
+      note: `${format === 'xlsx' ? 'Excel' : 'CSV'}${range.from || range.to ? ` · del ${range.from || 'inicio'} al ${range.to || 'hoy'}` : ''}`
+    });
+    res.set('Cache-Control', 'no-store');
+    res.attachment(filename);
+    res.type(type);
+    res.send(file);
   }));
 
   // ---- Imágenes ----

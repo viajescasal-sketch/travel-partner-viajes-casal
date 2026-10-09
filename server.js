@@ -16,6 +16,7 @@ const { ROLE_LABELS } = require('./src/access');
 const { createMailer } = require('./src/mailer');
 const { createLoginFlow, requiresTwofa } = require('./src/login-flow');
 const { createPasswordResetService, createRecoveryRouter, createMailAdminRouter, passwordPolicyError } = require('./src/password-reset');
+const { createBackupService, createBackupRouter } = require('./src/backup');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -68,6 +69,9 @@ async function createApp(options = {}) {
     .catch((error) => console.error('No se pudo limpiar la bitácora:', error.message));
   await purge();
   if (!options.skipPurgeTimer) setInterval(purge, 24 * 60 * 60 * 1000).unref();
+  // Respaldo automático diario (2:00 a.m. de Cancún) con copia por correo.
+  const backupService = createBackupService({ dataStore, mailer });
+  if (!options.skipPurgeTimer && !options.skipBackupTimer) backupService.start();
   const loginFlow = createLoginFlow({ dataStore, mailer, env: process.env, publicUser, passwordStamp, isProduction });
 
   if (isProduction) {
@@ -245,6 +249,7 @@ async function createApp(options = {}) {
   app.post('/api/users/:id/reset-2fa', requireRole('admin'), loginFlow.adminReset);
   app.use('/api', createMailAdminRouter(dataStore, mailer, resetService, { requireRole }, process.env));
   app.use('/api/users', createUserRouter(dataStore, { requireRole, destroyUserSessions: async () => {} }));
+  app.use('/api', createBackupRouter(dataStore, backupService, { requireRole }));
   app.use('/api', createCrmRouter(dataStore, { requireRole }));
   app.use(express.static(publicDirectory, { index: false, dotfiles: 'ignore' }));
 
@@ -263,6 +268,7 @@ async function createApp(options = {}) {
 
   app.locals.dataStore = dataStore;
   app.locals.mailer = mailer;
+  app.locals.backupService = backupService;
   return app;
 }
 
