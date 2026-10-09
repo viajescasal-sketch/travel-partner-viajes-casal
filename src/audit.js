@@ -10,7 +10,8 @@ const FIELD_LABELS = {
   stage: 'Etapa', priority: 'Prioridad', source: 'Origen',
   hotel: 'Hotel / paquete', price: 'Precio', mode: 'Modalidad', valid_until: 'Vigencia', status: 'Estado', services: 'Servicios',
   type: 'Tipo', title: 'Actividad', details: 'Detalles', due_at: 'Fecha y hora', done: 'Hecho',
-  owner_id: 'Vendedor'
+  owner_id: 'Vendedor',
+  details: 'Cotizador', confirmation: 'Confirmación de servicios', qualification: 'Calificación'
 };
 
 const MAX_TEXT = 120;
@@ -37,6 +38,7 @@ function displayValue(entityName, field, value, find) {
     case 'money': return money(value);
     case 'bool': return value ? 'Sí' : 'No';
     case 'datetime': return String(value).slice(0, 16);
+    case 'json': return 'Con datos';
     default: return clip(String(value));
   }
 }
@@ -62,6 +64,17 @@ function diffChanges(entityName, before, after, find) {
     if (!(field in FIELD_LABELS)) continue;
     const a = before?.[field] ?? null;
     const b = after?.[field] ?? null;
+    if (ENTITIES[entityName].fields[field].type === 'json') {
+      if (JSON.stringify(a) === JSON.stringify(b)) continue;
+      if (field === 'qualification') {
+        const text = (q) => (q && q.score != null ? `${q.score}% · ${q.level}` : null);
+        if (text(a) !== text(b)) changes.push({ field, label: FIELD_LABELS[field], from: text(a), to: text(b) });
+        else changes.push({ field, label: FIELD_LABELS[field], from: null, to: 'Respuestas actualizadas' });
+        continue;
+      }
+      changes.push({ field, label: FIELD_LABELS[field], from: a ? 'Versión anterior' : null, to: b ? 'Actualizado' : null });
+      continue;
+    }
     const same = (typeof a === 'number' || typeof b === 'number') ? Number(a) === Number(b) && (a == null) === (b == null) : String(a ?? '') === String(b ?? '');
     if (same) continue;
     changes.push({ field, label: FIELD_LABELS[field], from: displayValue(entityName, field, a, find), to: displayValue(entityName, field, b, find) });

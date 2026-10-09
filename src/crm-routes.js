@@ -11,6 +11,12 @@ const {
 } = require('./crm-schema');
 const { ROLE_LABELS, SELLER_ROLES, canWrite, buildScope, isVisible, filterData } = require('./access');
 const { summaryFor, diffChanges } = require('./audit');
+const QRCode = require('qrcode');
+const {
+  DEFAULT_DOCUMENTS, DEFAULT_LEAD_QUESTIONS, sanitizeDocuments, sanitizeQuestions, normalizeQuestions, scoreQualification,
+  checkImage, MAX_IMAGE_BYTES, sellerInfo
+} = require('./documents');
+const { PROFILE_FIELDS } = require('./data-store');
 
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
 const AGENCY_FIELDS = { name: 120, whatsapp: 40, email: 254, website: 200 };
@@ -164,6 +170,15 @@ function createCrmRouter(dataStore, { requireRole }) {
     if (lead && lead.client_id !== clientId) throw new ValidationError('El lead no pertenece a ese cliente');
   }
 
+  async function allSettings() {
+    const questions = await dataStore.getSetting('lead_questions');
+    return {
+      agency: { ...DEFAULT_AGENCY, ...(await dataStore.getSetting('agency') || {}) },
+      documents: { ...DEFAULT_DOCUMENTS, ...(await dataStore.getSetting('documents') || {}) },
+      leadQuestions: normalizeQuestions(Array.isArray(questions) ? questions : DEFAULT_LEAD_QUESTIONS)
+    };
+  }
+
   // Datos visibles para el usuario en una sola respuesta.
   router.get('/crm', wrap(async (req, res) => {
     const ctx = await context(req);
@@ -176,7 +191,8 @@ function createCrmRouter(dataStore, { requireRole }) {
       ...visible,
       users,
       roles: ROLE_LABELS,
-      settings: { agency: { ...DEFAULT_AGENCY, ...(await dataStore.getSetting('agency') || {}) } },
+      settings: await allSettings(),
+      me: sellerInfo(await dataStore.findUserById(ctx.user.id)),
       serverTime: nowCancun()
     });
   }));
@@ -218,6 +234,7 @@ function createCrmRouter(dataStore, { requireRole }) {
     }
     const data = sanitize('leads', { ...body, client_id: client.id });
     checkDateRange(data);
+    if (data.qualification) data.qualification = scoreQualification(data.qualification, (await allSettings()).leadQuestions);
     if (CLOSED_STAGES.includes(data.stage)) data.closed_at = nowCancun();
     const lead = await dataStore.insertRecord('leads', data, ownerId);
     await audit(req, 'create', 'leads', null, lead, ownerId !== ctx.user.id ? { note: `Asignado a ${(await dataStore.findUserById(ownerId))?.name || 'otro vendedor'}` } : {});
@@ -245,6 +262,7 @@ function createCrmRouter(dataStore, { requireRole }) {
     const current = ctx.mustSee('leads', id);
     const body = req.body || {};
     const data = sanitize('leads', body, { partial: true });
+    if (data.qualification) data.qualification = scoreQualification(data.qualification, (await allSettings()).leadQuestions);
     if (data.client_id && data.client_id !== current.client_id) ctx.checkRef('clients', data.client_id);
     checkDateRange({ ...current, ...data });
     if (data.stage) {
@@ -421,6 +439,138 @@ function createCrmRouter(dataStore, { requireRole }) {
     await dataStore.setSetting('agency', agency);
     await log(req, 'crm_settings_update', { key: 'agency' });
     res.json({ ok: true, agency });
+  }));
+
+  // ---- Plantilla PDF y preguntas de calificación ----
+  router.put('/settings/documents', adminOnly, wrap(async (req, res) => {
+    const documents = sanitizeDocuments(req.body);
+    await dataStore.setSetting('documents', documents);
+    await log(req, 'crm_settings_update', { key: 'documents', note: 'Plantilla PDF' });
+    res.json({ ok: true, documents });
+  }));
+
+  router.put('/settings/lead-questions', adminOnly, wrap(async (req, res) => {
+    const questions = sanitizeQuestions(req.body);
+    await dataStore.setSetting('lead_questions', questions);
+    await log(req, 'crm_settings_update', { key: 'lead_questions', note: `Preguntas de calificación (${questions.length})` });
+    res.json({ ok: true, questions });
+  }));
+
+  // ---- Datos completos para generar los documentos ----
+  async function documentContext() {
+    const settings = await allSettings();
+    return { agency: settings.agency, documents: settings.documents };
+  }
+  const clientInfo = (c) => (c ? { id: c.id, name: c.name, phone: c.phone, email: c.email } : null);
+
+  router.get('/documents/quote/:id', wrap(async (req, res) => {
+    const ctx = await context(req);
+    const quote = ctx.mustSee('quotes', parseId(req.params.id));
+    const lead = quote.lead_id ? ctx.find('leads', quote.lead_id) : null;
+    const seller = await dataStore.findUserById(quote.owner_id || lead?.owner_id || ctx.user.id);
+    res.json({
+      ok: true,
+      quote,
+      client: clientInfo(ctx.find('clients', quote.client_id)),
+      lead: lead ? { id: lead.id, destination: lead.destination, start_date: lead.start_date, end_date: lead.end_date, travelers: lead.travelers } : null,
+      seller: sellerInfo(seller),
+      canEdit: canWrite(ctx.user, 'quotes'),
+      ...(await documentContext())
+    });
+  }));
+
+  router.get('/documents/trip/:id', wrap(async (req, res) => {
+    const ctx = await context(req);
+    const trip = ctx.mustSee('trips', parseId(req.params.id));
+    const quote = trip.quote_id ? ctx.find('quotes', trip.quote_id) : null;
+    const lead = quote?.lead_id ? ctx.find('leads', quote.lead_id)
+      : ctx.data.leads.filter((l) => l.client_id === trip.client_id).sort((a, b) => b.id - a.id)[0] || null;
+    let seller = null;
+    for (const id of [quote?.owner_id, lead?.owner_id, trip.owner_id, ctx.user.id]) {
+      if (!id) continue;
+      const user = await dataStore.findUserById(id);
+      if (user && SELLER_ROLES.includes(user.role)) { seller = user; break; }
+      if (!seller && user) seller = user;
+    }
+    res.json({
+      ok: true,
+      trip,
+      quote: quote ? { id: quote.id, folio: quote.folio, hotel: quote.hotel, price: quote.price, destination: quote.destination, details: quote.details } : null,
+      client: clientInfo(ctx.find('clients', trip.client_id)),
+      lead: lead ? { travelers: lead.travelers } : null,
+      seller: sellerInfo(seller),
+      canEdit: canWrite(ctx.user, 'trips'),
+      ...(await documentContext())
+    });
+  }));
+
+  // ---- Imágenes ----
+  const rawImage = express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_IMAGE_BYTES });
+  router.post('/media', (req, res, next) => {
+    if (req.session.user.role === 'consulta') return next(forbidden());
+    return rawImage(req, res, (error) => (error ? next(httpError(413, 'La imagen pesa más de 3 MB')) : next()));
+  }, wrap(async (req, res) => {
+    const mime = String(req.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    checkImage(mime, req.body);
+    const id = await dataStore.createMedia({ ownerId: req.session.user.id, mime, data: req.body });
+    res.status(201).json({ ok: true, id, url: `/api/media/${id}` });
+  }));
+
+  router.get('/media/:id', wrap(async (req, res) => {
+    const media = await dataStore.getMedia(parseId(req.params.id));
+    if (!media) throw notFound('archivo');
+    res.set('Cache-Control', 'private, max-age=31536000, immutable');
+    res.type(media.mime).send(media.data);
+  }));
+
+  // Código QR (WhatsApp, reseñas) generado en el servidor.
+  router.get('/qr', wrap(async (req, res) => {
+    const data = String(req.query.data || '');
+    if (!data || data.length > 500) throw new ValidationError('Texto inválido para el código QR');
+    const png = await QRCode.toBuffer(data, { width: 360, margin: 1, errorCorrectionLevel: 'M' });
+    res.set('Cache-Control', 'private, max-age=86400');
+    res.type('image/png').send(png);
+  }));
+
+  // ---- Perfil para documentos (teléfono, foto y presentación del vendedor) ----
+  async function saveProfile(req, userId) {
+    const body = req.body || {};
+    const fields = {};
+    for (const [name, max] of Object.entries(PROFILE_FIELDS)) {
+      if (body[name] === undefined) continue;
+      const value = String(body[name] ?? '').replace(/\r/g, '').trim();
+      if (value.length > max) throw new ValidationError(`El campo ${name} es demasiado largo`);
+      if (name === 'website' && value && !/^https?:\/\/\S+$/i.test(value)) throw new ValidationError('El enlace debe empezar con https://');
+      fields[name] = value || null;
+    }
+    if (body.photoMediaId !== undefined) {
+      if (body.photoMediaId === null || body.photoMediaId === '') fields.photo_media_id = null;
+      else {
+        const id = parseId(body.photoMediaId);
+        if (!(await dataStore.getMedia(id))) throw new ValidationError('La foto no existe');
+        fields.photo_media_id = id;
+      }
+    }
+    await dataStore.updateProfile(userId, fields);
+    const user = await dataStore.findUserById(userId);
+    await log(req, 'profile_update', { summary: user.name, note: userId === req.session.user.id ? null : 'Editado por el administrador' });
+    return sellerInfo(user);
+  }
+  router.get('/profile', wrap(async (req, res) => {
+    res.json({ ok: true, profile: sellerInfo(await dataStore.findUserById(req.session.user.id)) });
+  }));
+  router.put('/profile', wrap(async (req, res) => {
+    res.json({ ok: true, profile: await saveProfile(req, req.session.user.id) });
+  }));
+  router.get('/profile/:userId', adminOnly, wrap(async (req, res) => {
+    const user = await dataStore.findUserById(parseId(req.params.userId));
+    if (!user) throw notFound('usuario');
+    res.json({ ok: true, profile: sellerInfo(user) });
+  }));
+  router.put('/profile/:userId', adminOnly, wrap(async (req, res) => {
+    const user = await dataStore.findUserById(parseId(req.params.userId));
+    if (!user) throw notFound('usuario');
+    res.json({ ok: true, profile: await saveProfile(req, user.id) });
   }));
 
   return router;

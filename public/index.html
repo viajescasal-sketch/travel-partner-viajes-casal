@@ -10,12 +10,14 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=tp005" />
+    <link rel="stylesheet" href="/styles.css?v=tp006" />
+    <link rel="stylesheet" href="/tp006.css?v=tp006" />
+    <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
     <section id="login" class="login">
       <div class="login-art">
-        <div class="logo big">VB</div>
+        <div class="logo big"><img src="/brand/logo-mark.png" alt="Viajes Bumeran Casal" /></div>
         <p class="eyebrow">VIAJES BUMERAN CASAL</p>
         <h1>Convierte cada consulta en una experiencia bien vendida.</h1>
         <p>
@@ -31,7 +33,7 @@
       <div class="login-box">
         <form id="loginForm">
           <div class="brand">
-            <div class="logo">VB</div>
+            <div class="logo"><img src="/brand/logo-mark.png" alt="" /></div>
             <div><b>Travel Partner</b><small>Viajes Casal</small></div>
           </div>
           <h2>Bienvenido</h2>
@@ -62,7 +64,7 @@
         </form>
         <form id="twofaForm" class="hidden">
           <div class="brand">
-            <div class="logo">VB</div>
+            <div class="logo"><img src="/brand/logo-mark.png" alt="" /></div>
             <div><b>Travel Partner</b><small>Viajes Casal</small></div>
           </div>
           <h2>Verifica que eres tú</h2>
@@ -80,7 +82,7 @@
         </form>
         <form id="forgotForm" class="hidden" novalidate>
           <div class="brand">
-            <div class="logo">VB</div>
+            <div class="logo"><img src="/brand/logo-mark.png" alt="" /></div>
             <div><b>Travel Partner</b><small>Viajes Casal</small></div>
           </div>
           <h2>Recupera tu acceso</h2>
@@ -93,7 +95,7 @@
         </form>
         <form id="resetForm" class="hidden">
           <div class="brand">
-            <div class="logo">VB</div>
+            <div class="logo"><img src="/brand/logo-mark.png" alt="" /></div>
             <div><b>Travel Partner</b><small>Viajes Casal</small></div>
           </div>
           <h2>Crea tu nueva contraseña</h2>
@@ -109,7 +111,7 @@
     <section id="platform" class="platform hidden">
       <aside id="sidebar">
         <div class="brand side">
-          <div class="logo">VB</div>
+          <div class="logo"><img src="/brand/logo-mark.png" alt="" /></div>
           <div><b>Travel Partner</b><small>Viajes Casal</small></div>
         </div>
         <nav id="nav">
@@ -307,11 +309,12 @@
               <div>
                 <p class="eyebrow">PROPUESTAS</p>
                 <h2>Cotizaciones</h2>
-                <p>Un PDF por propuesta, listo para compartir.</p>
+                <p>Paquetes con hasta 4 propuestas y circuitos por ciudades, listos en PDF.</p>
               </div>
-              <button class="btn primary" data-action="quote" data-hide-ops>
-                + Nueva cotización
-              </button>
+              <div data-hide-ops>
+                <button class="btn secondary" data-action="circuit">+ Nuevo circuito</button>
+                <button class="btn primary" data-action="quote">+ Nueva cotización</button>
+              </div>
             </div>
             <div class="mini">
               <div>En elaboración <b id="qDraft">0</b></div>
@@ -502,6 +505,7 @@
                 <button class="active" data-settings-tab="agencyPanel">Perfil de agencia</button
                 ><button data-settings-tab="usersPanel">Usuarios</button
                 ><button data-settings-tab="pdfPanel">Plantilla PDF</button
+                ><button data-settings-tab="questionsPanel">Preguntas de calificación</button
                 ><button data-settings-tab="integrationsPanel">Integraciones</button>
               </nav>
               <article class="panel settings-panel" id="usersPanel" hidden>
@@ -527,8 +531,32 @@
                 </div>
               </article>
               <article class="panel settings-panel" id="pdfPanel" hidden>
-                <h3>Plantilla PDF</h3>
-                <p class="empty-note">Próximamente: logo, colores y textos legales de la cotización.</p>
+                <div class="panel-head">
+                  <div>
+                    <h3>Plantilla PDF</h3>
+                    <p>Textos, enlaces y redes que aparecen en la Cotización y en la Confirmación de servicios.</p>
+                  </div>
+                  <img class="pdf-logo" src="/brand/logo-viajes-bumeran-casal.png" alt="Logo Viajes Bumeran Casal" />
+                </div>
+                <div id="docSettingsForm" class="doc-settings"></div>
+                <div class="actions">
+                  <button id="cancelDocSettings" class="btn secondary">Cancelar</button
+                  ><button id="saveDocSettings" class="btn primary">Guardar plantilla</button>
+                </div>
+              </article>
+              <article class="panel settings-panel" id="questionsPanel" hidden>
+                <div class="panel-head">
+                  <div>
+                    <h3>Preguntas de calificación</h3>
+                    <p>Hasta 5 preguntas que el vendedor responde con un toque. Cada respuesta suma puntos y el lead queda Caliente, Tibio o Frío.</p>
+                  </div>
+                  <button class="btn secondary small" id="addQuestion">+ Agregar pregunta</button>
+                </div>
+                <div id="questionRows" class="question-rows"></div>
+                <div class="actions">
+                  <button id="cancelQuestions" class="btn secondary">Cancelar</button
+                  ><button id="saveQuestions" class="btn primary">Guardar preguntas</button>
+                </div>
               </article>
               <article class="panel settings-panel" id="integrationsPanel" hidden>
                 <h3>Integraciones</h3>
@@ -540,7 +568,7 @@
                   </div>
                   <button id="testMail" class="btn secondary small" disabled>Enviar correo de prueba</button>
                 </div>
-                <p class="empty-note">Próximamente: bot de WhatsApp, formulario web y Google Drive.</p>
+                <div id="integrationCards"></div>
               </article>
               <article class="panel settings-panel" id="agencyPanel">
                 <h3>Perfil de agencia</h3>
@@ -705,6 +733,7 @@
         cursor: wait;
       }
     </style>
-    <script src="/app.js?v=tp005"></script>
+    <script src="/docs/documents.js?v=tp006"></script>
+    <script src="/app.js?v=tp006"></script>
   </body>
 </html>

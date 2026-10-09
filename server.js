@@ -111,7 +111,7 @@ async function createApp(options = {}) {
     },
     crossOriginEmbedderPolicy: false
   }));
-  app.use(express.json({ limit: '100kb' }));
+  app.use(express.json({ limit: '200kb' }));
   app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 
   const sessionOptions = {
@@ -279,6 +279,7 @@ async function start() {
   bootstrapApp.use((req, res, next) => {
     if (ready) return next();
     res.set('Retry-After', '10');
+    res.set('Cache-Control', 'no-store');
     if (req.path.startsWith('/api/')) return res.status(503).json({ ok: false, error: 'La plataforma se está actualizando. Intenta de nuevo en un minuto.' });
     return res.status(503).type('html').send(STARTING_PAGE);
   });

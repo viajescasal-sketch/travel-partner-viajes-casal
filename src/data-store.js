@@ -2,7 +2,7 @@
 
 const bcrypt = require('bcryptjs');
 const mysql = require('mysql2/promise');
-const { ENTITIES, ENTITY_ORDER, createTableSql, nowCancun } = require('./crm-schema');
+const { ENTITIES, ENTITY_ORDER, createTableSql, columnSql, nowCancun } = require('./crm-schema');
 
 const phoneKey = (value) => String(value || '').replace(/\D/g, '').slice(-10);
 
@@ -39,11 +39,28 @@ function normalizeRow(entityName, row) {
   for (const [name, spec] of Object.entries(ENTITIES[entityName].fields)) {
     if (spec.type === 'bool') out[name] = Boolean(out[name]);
     if ((spec.type === 'money' || spec.type === 'int' || spec.type === 'ref') && out[name] !== null && out[name] !== undefined) out[name] = Number(out[name]);
+    if (spec.type === 'json') {
+      let value = out[name];
+      if (typeof value === 'string') { try { value = JSON.parse(value); } catch { value = null; } }
+      out[name] = value && typeof value === 'object' ? JSON.parse(JSON.stringify(value)) : null;
+    }
   }
   out.id = Number(out.id);
   if (out.owner_id !== null && out.owner_id !== undefined) out.owner_id = Number(out.owner_id);
   return out;
 }
+
+// Los campos JSON se guardan como texto en MySQL.
+function serializeRow(entityName, record) {
+  const out = { ...record };
+  for (const [name, spec] of Object.entries(ENTITIES[entityName].fields)) {
+    if (spec.type === 'json' && out[name] != null && typeof out[name] === 'object') out[name] = JSON.stringify(out[name]);
+  }
+  return out;
+}
+
+// Datos públicos del perfil de un usuario para documentos.
+const PROFILE_FIELDS = { phone: 40, bio: 1500, website: 200 };
 
 function databaseConfigFromEnv(env) {
   return {
@@ -107,6 +124,16 @@ class MySQLDataStore {
     for (const entityName of ENTITY_ORDER) {
       await this.pool.query(createTableSql(entityName));
     }
+    await this.migrateEntities();
+    await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_media (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      owner_id BIGINT UNSIGNED NULL,
+      mime VARCHAR(40) NOT NULL,
+      size INT UNSIGNED NOT NULL,
+      data MEDIUMBLOB NOT NULL,
+      created_at DATETIME NOT NULL,
+      CONSTRAINT fk_media_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
     await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_settings (
       setting_key VARCHAR(60) NOT NULL PRIMARY KEY,
       setting_value TEXT NOT NULL,
@@ -134,6 +161,12 @@ class MySQLDataStore {
       totp_secret: 'TEXT NULL',
       backup_codes: 'TEXT NULL'
     };
+    Object.assign(twofaColumns, {
+      phone: 'VARCHAR(40) NULL',
+      photo_media_id: 'BIGINT UNSIGNED NULL',
+      bio: 'TEXT NULL',
+      website: 'VARCHAR(200) NULL'
+    });
     for (const [name, definition] of Object.entries(twofaColumns)) {
       if (!columns.some((c) => c.COLUMN_NAME === name)) await this.pool.query(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
     }
@@ -159,6 +192,38 @@ class MySQLDataStore {
       INDEX idx_trusted_user (user_id),
       CONSTRAINT fk_trusted_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+  }
+
+  // Agrega columnas nuevas de las entidades del CRM (por ejemplo, datos del cotizador).
+  async migrateEntities() {
+    for (const entityName of ENTITY_ORDER) {
+      const { table, fields } = ENTITIES[entityName];
+      const [columns] = await this.pool.query(
+        'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?', [table]
+      );
+      const existing = new Set(columns.map((c) => c.COLUMN_NAME));
+      for (const [name, spec] of Object.entries(fields)) {
+        if (existing.has(name) || spec.type === 'ref') continue;
+        await this.pool.query(`ALTER TABLE \`${table}\` ADD COLUMN ${columnSql(name, { ...spec, required: false, unique: false })}`);
+      }
+    }
+  }
+
+  // ---- Imágenes (fotos de hotel, portada, vendedor) ----
+  async createMedia({ ownerId, mime, data }) {
+    const [result] = await this.pool.execute('INSERT INTO crm_media (owner_id, mime, size, data, created_at) VALUES (?, ?, ?, ?, ?)', [ownerId ?? null, mime, data.length, data, nowCancun()]);
+    return Number(result.insertId);
+  }
+
+  async getMedia(id) {
+    const [rows] = await this.pool.execute('SELECT mime, data FROM crm_media WHERE id = ? LIMIT 1', [id]);
+    return rows[0] ? { mime: rows[0].mime, data: rows[0].data } : null;
+  }
+
+  async updateProfile(id, fields) {
+    const columns = Object.keys(fields).filter((key) => key in PROFILE_FIELDS || key === 'photo_media_id');
+    if (!columns.length) return;
+    await this.pool.execute(`UPDATE users SET ${columns.map((c) => `\`${c}\` = ?`).join(', ')} WHERE id = ?`, [...columns.map((c) => fields[c]), id]);
   }
 
   async migrateActivity() {
@@ -287,7 +352,7 @@ class MySQLDataStore {
   async insertRecord(entityName, data, ownerId) {
     const { table } = ENTITIES[entityName];
     const now = nowCancun();
-    const record = { ...data, owner_id: ownerId ?? null, created_at: now, updated_at: now };
+    const record = serializeRow(entityName, { ...data, owner_id: ownerId ?? null, created_at: now, updated_at: now });
     const columns = Object.keys(record);
     const [result] = await this.pool.execute(
       `INSERT INTO \`${table}\` (${columns.map((c) => `\`${c}\``).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
@@ -298,7 +363,7 @@ class MySQLDataStore {
 
   async updateRecord(entityName, id, data) {
     const { table } = ENTITIES[entityName];
-    const record = { ...data, updated_at: nowCancun() };
+    const record = serializeRow(entityName, { ...data, updated_at: nowCancun() });
     const columns = Object.keys(record);
     const [result] = await this.pool.execute(
       `UPDATE \`${table}\` SET ${columns.map((c) => `\`${c}\` = ?`).join(', ')} WHERE id = ?`,
@@ -372,8 +437,8 @@ class MySQLDataStore {
   }
 
   async listUsers() {
-    const [rows] = await this.pool.execute('SELECT id, email, name, role, active, must_change_password, last_login_at, twofa_enabled, totp_enabled, created_at FROM users ORDER BY created_at');
-    return rows.map((row) => ({ ...row, id: Number(row.id), active: Boolean(row.active), must_change_password: Boolean(row.must_change_password), twofa_enabled: Boolean(row.twofa_enabled), totp_enabled: Boolean(row.totp_enabled) }));
+    const [rows] = await this.pool.execute('SELECT id, email, name, role, active, must_change_password, last_login_at, twofa_enabled, totp_enabled, phone, photo_media_id, bio, website, created_at FROM users ORDER BY created_at');
+    return rows.map((row) => ({ ...row, id: Number(row.id), photo_media_id: row.photo_media_id == null ? null : Number(row.photo_media_id), active: Boolean(row.active), must_change_password: Boolean(row.must_change_password), twofa_enabled: Boolean(row.twofa_enabled), totp_enabled: Boolean(row.totp_enabled) }));
   }
 
   // Consulta con filtros: usuario, tipo (crm/seguridad), entidad, registro, fechas (ms) y paginación por id.
@@ -506,8 +571,18 @@ class MemoryDataStore {
     return before - this.activity.length;
   }
 
-  async listRecords(entityName) { return [...this.records[entityName]].sort((a, b) => b.id - a.id).map((row) => ({ ...row })); }
-  async getRecord(entityName, id) { const row = this.records[entityName].find((item) => item.id === Number(id)); return row ? { ...row } : null; }
+  async listRecords(entityName) { return [...this.records[entityName]].sort((a, b) => b.id - a.id).map((row) => normalizeRow(entityName, row)); }
+  async getRecord(entityName, id) { const row = this.records[entityName].find((item) => item.id === Number(id)); return row ? normalizeRow(entityName, row) : null; }
+  async createMedia({ ownerId, mime, data }) {
+    this.media = this.media || [];
+    this.media.push({ id: this.media.length + 1, owner_id: ownerId ?? null, mime, data: Buffer.from(data) });
+    return this.media.length;
+  }
+  async getMedia(id) { const row = (this.media || []).find((m) => m.id === Number(id)); return row ? { mime: row.mime, data: row.data } : null; }
+  async updateProfile(id, fields) {
+    const user = this.users.find((u) => u.id === Number(id));
+    for (const key of [...Object.keys(PROFILE_FIELDS), 'photo_media_id']) if (fields[key] !== undefined) user[key] = fields[key];
+  }
 
   async insertRecord(entityName, data, ownerId) {
     const spec = ENTITIES[entityName].fields;
@@ -517,7 +592,7 @@ class MemoryDataStore {
     Object.assign(row, { owner_id: ownerId ?? null, created_at: now, updated_at: now });
     this.assertReferences(entityName, row);
     this.records[entityName].push(row);
-    return { ...row };
+    return normalizeRow(entityName, row);
   }
 
   async updateRecord(entityName, id, data) {
@@ -526,7 +601,7 @@ class MemoryDataStore {
     const next = { ...row, ...data, updated_at: nowCancun() };
     this.assertReferences(entityName, next);
     Object.assign(row, next);
-    return { ...row };
+    return normalizeRow(entityName, row);
   }
 
   assertReferences(entityName, row) {
@@ -577,4 +652,4 @@ function createDataStore(env) {
   return new MemoryDataStore(env);
 }
 
-module.exports = { createDataStore, databaseConfigFromEnv, MySQLDataStore, MemoryDataStore, requiredProductionVariables, phoneKey };
+module.exports = { PROFILE_FIELDS, createDataStore, databaseConfigFromEnv, MySQLDataStore, MemoryDataStore, requiredProductionVariables, phoneKey };

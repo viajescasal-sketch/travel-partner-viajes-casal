@@ -1,0 +1,169 @@
+/* Cotización de circuito · diseño de Viajes Casal (Cotizador de circuitos) adaptado al CRM */
+:root{
+  --teal:#1F4E4A;
+  --turq:#4FA8A0;
+  --coral:#E2794F;
+  --sand:#F4E9D8;
+  --ink:#173733;
+  --line:#dfe6e2;
+  --bg:#eef2ef;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif}
+h1,h2,h3{font-family:Georgia,'Times New Roman',serif}
+[hidden]{display:none !important}
+
+/* ---------- Sheet (matches validated design) ---------- */
+.sheet{width:100%;max-width:1000px;margin:0 auto 26px;background:#fff;box-shadow:0 4px 22px #0001;overflow:hidden;border-radius:6px}
+.hero{min-height:340px;position:relative;color:#fff;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(100deg,#1F4E4Ae6,#4FA8A0cc),var(--heroimg,linear-gradient(135deg,#1F4E4A,#4FA8A0)) center/cover;padding:30px 44px 26px}
+.heroTop{display:flex;align-items:center;justify-content:space-between}
+.brandmark{font-family:Georgia,serif;font-size:15px;letter-spacing:.4px;opacity:.95}
+.brandmark .wave{color:var(--sand)}
+.hero .greeting{font-size:14px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;opacity:.95;margin-bottom:10px}
+.hero h1{font:42px/1.08 Georgia,serif;margin:0 0 12px;max-width:640px}
+.hero .partnerMsg{font-size:15px;line-height:1.5;margin:0 0 6px;opacity:.97;max-width:560px}
+.routeStrip{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;opacity:.95;margin-top:6px;flex-wrap:wrap}
+.routeStrip .dot{opacity:.6}
+.heroBottom{display:flex;justify-content:flex-end;margin-top:22px}
+.quotebox{background:#f7fbfaf2;color:var(--teal);border-radius:18px;padding:14px 22px;text-align:center;min-width:220px}
+.quotebox small{font-weight:800;letter-spacing:.5px;font-size:11px}
+.quotebox strong{display:block;font-size:20px;margin:4px 0}
+.quotebox span{font-size:11.5px}
+
+.content{padding:0 36px 30px}
+.card{border:1px solid var(--line);border-radius:18px;padding:22px;margin:14px 0;background:#fff}
+.cardtitle{font-size:16px;font-weight:800;color:var(--turq);margin-bottom:16px}
+.iconLabel{display:inline-flex;align-items:center;gap:7px}
+.iconLabel svg{width:18px;height:18px;color:var(--turq);flex-shrink:0}
+
+.trip{margin-top:-40px;position:relative}
+.tripgrid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1.1fr;gap:16px}
+.lbl{font-size:11px;font-weight:800;color:var(--teal);text-transform:uppercase}
+.val{font-size:13.5px;margin-top:4px;line-height:1.4}
+.support{border-left:1px solid var(--line);padding-left:18px}
+.support b{color:var(--turq);font-size:11px}
+.wabtn{display:inline-flex;align-items:center;gap:6px;margin-top:8px;background:#25D366;color:#fff;padding:7px 12px;border-radius:16px;font-size:12px;font-weight:700;text-decoration:none}
+.linkbtn{display:inline-flex;align-items:center;gap:6px;margin-top:8px;margin-left:6px;background:var(--teal);color:#fff;padding:7px 12px;border-radius:16px;font-size:12px;font-weight:700;text-decoration:none}
+.linkbtn svg{width:13px;height:13px}
+
+.factsRow{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.factBox{background:var(--sand);border-radius:14px;padding:14px;text-align:center}
+.factBox .ico{width:44px;height:44px;border-radius:50%;background:#fff;display:grid;place-items:center;margin:0 auto 8px;color:var(--teal)}
+.factBox .ico svg{width:22px;height:22px}
+.factBox b{display:block;font-size:13px;color:var(--teal)}
+.factBox span{font-size:11px;color:#6b8580}
+
+.services{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;gap:10px}
+.ico{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;margin:auto;background:var(--sand);color:var(--teal)}
+.ico svg{width:24px;height:24px}
+.services b{display:block;font-size:10.5px;margin-top:8px}
+
+.timeline{position:relative;padding-left:6px}
+.dayItem{position:relative;padding:0 0 26px 38px;border-left:2px solid var(--sand)}
+.dayItem:last-child{border-left:2px solid transparent;padding-bottom:0}
+.dayItem .dayNum{position:absolute;left:-19px;top:0;width:38px;height:38px;border-radius:50%;background:var(--turq);color:#fff;display:grid;place-items:center;font-weight:800;font-size:13px;border:4px solid #fff}
+.dayItem h4{margin:0 0 4px;color:var(--teal);font-size:15px}
+.dayItem p{margin:4px 0;font-size:13px;line-height:1.5;color:var(--ink)}
+.mealTags{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.mealTag{background:var(--sand);color:var(--teal);font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:12px}
+
+.hotelCats{display:grid;gap:14px}
+.hotelCat{border:1px solid var(--line);border-radius:14px;padding:16px;background:#fbfdfc}
+.hotelCat .stars{color:var(--coral);letter-spacing:2px;font-size:13px;margin-bottom:6px}
+.hotelCat h4{margin:0 0 10px;color:var(--teal);font-size:14px}
+.hotelCat ul{margin:0;padding:0;list-style:none}
+.hotelCat li{font-size:12.5px;padding:6px 0;border-bottom:1px dashed var(--line);display:flex;justify-content:space-between;gap:8px}
+.hotelCat li:last-child{border-bottom:0}
+.hotelCat li span:first-child{color:#6b8580}
+.hotelCat li span:last-child{font-weight:700;color:var(--teal);text-align:right}
+
+.priceTable{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+.priceTable th{background:var(--teal);color:#fff;padding:12px 10px;font-size:11.5px;text-transform:uppercase;letter-spacing:.3px}
+.priceTable th:first-child{border-radius:12px 0 0 0;text-align:left}
+.priceTable th:last-child{border-radius:0 12px 0 0}
+.priceTable td{padding:12px 10px;border-bottom:1px solid var(--line);text-align:center}
+.priceTable td:first-child{text-align:left;font-weight:700;color:var(--teal)}
+.priceTable tr:nth-child(even) td{background:#f8fbfa}
+.priceTable td.highlight{background:var(--sand);font-weight:800;color:var(--coral)}
+.priceTable th.highlight{background:var(--coral)}
+.priceNote{font-size:11.5px;color:#6b8580;margin-top:10px}
+
+.incGrid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.incCol h4{margin:0 0 12px;font-size:13px;color:var(--teal)}
+.incCol ul{list-style:none;margin:0;padding:0}
+.incCol li{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.5;padding:5px 0}
+.incCol svg{width:16px;height:16px;flex-shrink:0;margin-top:2px}
+.incYes svg{color:var(--turq)}
+.incNo svg{color:var(--coral)}
+
+.price{background:linear-gradient(120deg,var(--sand),#fffaf1);border:1px solid #ead9bd;border-radius:20px;padding:26px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:18px}
+.price h2{margin:0;color:#8b5d34;font-size:15px}
+.total{font-size:34px;font-weight:800;color:var(--teal);margin:6px 0}
+.per{font-size:13px;color:#6b5a3f}
+.cta{display:inline-flex;align-items:center;gap:6px;background:var(--coral);color:#fff;padding:10px 18px;border-radius:18px;font-weight:800;font-size:13px;text-decoration:none;border:0;cursor:pointer}
+
+.legal{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.legal>div{padding:15px;border-radius:14px;background:var(--sand);font-size:11.5px;line-height:1.5;color:var(--teal)}
+
+.tagline{text-align:center;font-family:Georgia,serif;font-style:italic;color:var(--teal);font-size:14px;padding:14px 0 4px}
+
+.footer{background:linear-gradient(100deg,var(--teal),var(--turq));color:#fff;padding:22px 40px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.footer h2{font:italic 20px Georgia,serif;margin:0 0 4px}
+.footer small{opacity:.9}
+.socialIcons{display:flex;gap:8px;margin-top:8px}
+.socialIcons a{width:32px;height:32px;border-radius:50%;background:#ffffff2b;display:grid;place-items:center;color:#fff}
+.socialIcons a svg{width:16px;height:16px}
+.reviews{text-align:right}
+.reviews a{color:#fff;text-decoration:none}
+.gold{color:#f5d98b}
+
+
+.partnerIntro .partnerIntroBody{display:grid;grid-template-columns:140px 1fr;gap:22px;align-items:start}
+.partnerPhoto{width:140px;height:140px;border-radius:50%;background:var(--partnerimg,linear-gradient(135deg,#4FA8A0,#1F4E4A)) center/cover;background-color:var(--sand);flex-shrink:0}
+.partnerText h3{margin:0 0 8px;color:var(--teal);font-size:17px}
+.partnerText p{font-size:13px;line-height:1.55;margin:0 0 14px;color:var(--ink)}
+.partnerBenefits{list-style:none;margin:0 0 16px;padding:0}
+.partnerBenefits li{font-size:12.5px;line-height:1.5;margin-bottom:7px;padding-left:22px;position:relative;color:var(--ink)}
+.partnerBenefits li:before{content:'✓';position:absolute;left:0;color:var(--turq);font-weight:800}
+
+.partnerText .partnerLinks{display:flex;gap:10px;flex-wrap:wrap;margin-top:2px}
+.partnerText .partnerLinks .linkbtn{margin:0}
+.partnerText .blogHint{font-size:12.5px;color:var(--turq);font-weight:700;margin:2px 0 12px}
+
+@media screen and (max-width:900px){
+  .grid,.grid.g2,.grid.g4{grid-template-columns:1fr 1fr}
+  .tripgrid{grid-template-columns:1fr 1fr}
+  .factsRow{grid-template-columns:1fr 1fr}
+  .services{grid-template-columns:repeat(3,1fr)}
+  .incGrid,.legal{grid-template-columns:1fr 1fr}
+  .hero{padding:24px 22px}
+  .hero h1{font-size:30px}
+  .content{padding:0 20px 24px}
+  .price{flex-direction:column;align-items:flex-start}
+  .partnerIntro .partnerIntroBody{grid-template-columns:1fr;justify-items:center}
+  .partnerIntro .partnerText{text-align:left;max-width:420px}
+  .partnerIntro .partnerText h3{text-align:center}
+}
+@media print{*{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  body{background:#fff}
+  .topbar,.previewToolbar{display:none !important}
+  .wrap{padding:0;max-width:none}
+  .sheet{box-shadow:none;margin:0;border-radius:0}
+  @page{size:A4;margin:0}
+}
+/* ---------- Ajustes CRM ---------- */
+.brandmark{display:flex;align-items:center;gap:10px}
+.brandmark .logoBadge{width:46px;height:46px;border-radius:50%;overflow:hidden;background:#fff;display:grid;place-items:center;box-shadow:0 2px 8px #0002;flex-shrink:0}
+.brandmark .logoBadge img{width:42px;height:42px;object-fit:contain;display:block;border-radius:50%}
+.payInfo{margin-top:14px;padding:12px 14px;border-radius:12px;background:#fbfdfc;border:1px dashed var(--turq);font-size:12px;line-height:1.5;white-space:pre-line;color:var(--ink)}
+.partnerText p.bio{white-space:pre-line}
+.sheet[hidden]{display:none!important}
+@media print{
+  .card,.price,.legal,.footer{break-inside:avoid;page-break-inside:avoid}
+  .sheet.print-skip{display:none!important}
+}
+@media print{
+  .sheet{width:1000px!important;max-width:none!important;zoom:.785;margin:0 auto!important;border-radius:0;box-shadow:none}
+}
+
+.dayItem{break-inside:avoid;page-break-inside:avoid}

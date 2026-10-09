@@ -18,7 +18,7 @@ const MONTHS_LONG = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Jul
 const WEEKDAYS = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
 const SOURCE_COLORS = ['var(--teal)', '#0b4f7a', 'var(--coral)', 'var(--gold)', '#7a5bd0', '#8a99a6'];
 
-const db = { clients: [], leads: [], quotes: [], trips: [], followups: [], users: [], agency: {} };
+const db = { clients: [], leads: [], quotes: [], trips: [], followups: [], users: [], agency: {}, documents: {}, leadQuestions: [], me: null };
 const ui = { leadQuery: '', leadStage: '', leadOwner: '', settingsTab: 'agencyPanel', quoteQuery: '', clientQuery: '', funnelRange: 'month', calYear: 0, calMonth: 0, calDay: '' };
 const selectedQuoteIds = new Set();
 let currentUser = null;
@@ -112,6 +112,9 @@ async function loadAll() {
     const data = await api('/api/crm');
     for (const key of ['clients', 'leads', 'quotes', 'trips', 'followups', 'users']) db[key] = data[key] || [];
     db.agency = data.settings?.agency || {};
+    db.documents = data.settings?.documents || {};
+    db.leadQuestions = data.settings?.leadQuestions || [];
+    db.me = data.me || null;
     loaded = true;
     renderAll();
   } catch (error) {
@@ -255,7 +258,7 @@ function renderLeads() {
   const cols = admin ? 7 : 6;
   $('#leadRows').innerHTML = list.length ? list.map((l) => {
     const badge = shared.has(l.client_id) ? '<span class="badge-shared" title="Este cliente tiene leads con más de un vendedor">Cliente compartido</span>' : '';
-    return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
+    return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}${qualChip(l)}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
   }).join('') : emptyRow(cols, db.leads.length ? 'Ningún lead coincide con la búsqueda.' : 'Aún no hay leads registrados.');
 }
 function exportLeads() {
@@ -279,7 +282,7 @@ function renderQuotes() {
   const editable = canWrite('quotes');
   $('#multiSend').classList.toggle('hidden', !editable);
   $('#quoteGrid').innerHTML = list.length ? list.map((x) =>
-    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span><h3>${escapeHtml(x.folio)}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Vista para PDF</button>${editable ? `<button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
+    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span><h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Ver PDF</button>${editable ? `<button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
     : `<p class="empty-note">${db.quotes.length ? 'Ninguna cotización coincide con la búsqueda.' : 'Aún no hay cotizaciones. Crea la primera con “+ Nueva cotización”.'}</p>`;
 }
 
@@ -293,30 +296,25 @@ function toggleQuote(id, checked) {
   selectedQuoteIds.add(quote.id);
 }
 
-function openPrintableQuote(id) {
-  const q = quoteById(id);
-  if (!q) return;
-  const popup = window.open('', '_blank');
-  if (!popup) { toast('Permite ventanas emergentes para abrir la vista PDF'); return; }
-  popup.opener = null;
-  const agency = db.agency || {};
-  const lead = q.lead_id ? leadById(q.lead_id) : null;
-  const rows = [
-    ['Cliente', clientName(q.client_id)], ['Destino', q.destination],
-    ...(lead && (lead.start_date || lead.end_date) ? [['Fechas', fmtRange(lead.start_date, lead.end_date)]] : []),
-    ...(lead?.travelers ? [['Viajeros', String(lead.travelers)]] : []),
-    ['Hotel / paquete', q.hotel], ['Modalidad', q.mode], ['Vigencia', q.valid_until ? fmtDate(q.valid_until) : 'Por definir']
-  ];
-  popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(q.folio)}</title><style>body{font:16px Arial;color:#203342;padding:48px;max-width:800px;margin:auto}header{border-bottom:4px solid #00b8c8;padding-bottom:20px}h1{color:#073b66}dl{display:grid;grid-template-columns:180px 1fr;gap:12px}dt{font-weight:bold}.price{font-size:30px;color:#ff7959;font-weight:bold}.services{white-space:pre-line}footer{margin-top:32px;font-size:13px;color:#6c7b87}@media print{.hint{display:none}}</style></head><body><header><p>${escapeHtml((agency.name || 'Viajes Casal').toUpperCase())}</p><h1>Cotización ${escapeHtml(q.folio)}</h1></header><dl>${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}<dt>Precio</dt><dd class="price">${money(q.price)}</dd></dl>${q.services ? `<h3>Servicios incluidos</h3><p class="services">${escapeHtml(q.services)}</p>` : ''}<p>Propuesta informativa sujeta a disponibilidad y confirmación.</p><footer>${escapeHtml([agency.whatsapp, agency.email, agency.website].filter(Boolean).join(' · '))}</footer><p class="hint">Para guardar en PDF usa Ctrl+P (Cmd+P en Mac) y elige “Guardar como PDF”.</p></body></html>`);
-  popup.document.close();
+// Abre la cotización o la confirmación con el diseño de Viajes Casal en otra pestaña.
+function openDocument(kind, id, win) {
+  const url = `/documento.html?tipo=${kind}&id=${Number(id)}`;
+  if (win) { win.location.href = url; return; }
+  const opened = window.open(url, '_blank');
+  if (!opened) location.href = url;
 }
+const openPrintableQuote = (id) => openDocument('cotizacion', id);
 
 function prepareWhatsapp(ids) {
   const chosen = ids.map(quoteById).filter(Boolean);
   if (!chosen.length) { toast('Selecciona al menos una cotización'); return; }
   if (chosen.length > 3 || new Set(chosen.map((q) => q.client_id)).size !== 1) { toast('Selecciona hasta 3 cotizaciones del mismo cliente'); return; }
   const client = clientById(chosen[0].client_id);
-  const lines = [
+  const single = chosen.length === 1 && chosen[0].details ? chosen[0] : null;
+  const lines = single ? [TPDocs.buildQuoteMessage(TPDocs.quoteModel({
+    quote: single, client, lead: single.lead_id ? leadById(single.lead_id) : null,
+    seller: { name: userName(single.owner_id) }, documents: db.documents, agency: db.agency
+  }))] : [
     `Hola ${client?.name || ''}, preparamos estas propuestas para tu viaje:`, '',
     ...chosen.flatMap((q, i) => [`${i + 1}. ${q.destination} — ${q.hotel}`, `${q.folio} · ${money(q.price)} (${q.mode.toLowerCase()})`, '']),
     'Quedo atenta a tus comentarios.'
@@ -351,7 +349,7 @@ function renderClients() {
 /* ---------- viajes ---------- */
 function renderTrips() {
   const today = todayStr();
-  const card = (t, label) => `<article class="trip-card clickable" data-trip="${t.id}"><small>${escapeHtml(label)}</small><h4>${escapeHtml(t.destination)}</h4><p>${escapeHtml(clientName(t.client_id))}</p><p>${escapeHtml(t.status)}</p></article>`;
+  const card = (t, label) => `<article class="trip-card clickable" data-trip="${t.id}"><small>${escapeHtml(label)}</small><h4>${escapeHtml(t.destination)}</h4><p>${escapeHtml(clientName(t.client_id))}</p><p>${escapeHtml(t.status)}${t.confirmation ? ' · ✓ Confirmación' : ''}</p></article>`;
   const open = db.trips.filter((t) => t.status !== 'Cerrado');
   const upcoming = open.filter((t) => t.start_date > today).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const active = open.filter((t) => t.start_date <= today && t.end_date >= today);
@@ -440,7 +438,10 @@ function renderSettings() {
 }
 
 /* ---------- modales y formularios ---------- */
-function openModal(eyebrow, title, html) {
+function openModal(eyebrow, title, html, opts = {}) {
+  const body = $('#modalBody');
+  body.oninput = null; body.onchange = null; body.onclick = null;
+  $('#modalBg .modal').classList.toggle('wide', Boolean(opts.wide));
   $('#modalEyebrow').textContent = eyebrow;
   $('#modalTitle').textContent = title;
   $('#modalBody').innerHTML = html;
@@ -493,16 +494,19 @@ function leadModal(id, presetClientId) {
     ${field('Prioridad', `<select name="priority">${options(PRIORITIES, lead?.priority || 'Media')}</select>`)}
     ${isAdmin() ? field('Vendedor asignado', `<select name="owner_id">${options(sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`]), lead?.owner_id ?? currentUser.id)}</select>`) : ''}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
+    ${qualHtml(lead)}
     ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Programar seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
     ${lead ? historyButton('leads', lead.id) : ''}
     ${deleteBlock('lead', lead?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${lead ? 'Guardar cambios' : 'Guardar lead'}</button></div></form>`;
   openModal('REGISTRO COMERCIAL', lead ? `Lead de ${client?.name || ''}` : 'Nuevo lead', html);
-  bindForm(async (v) => {
+  bindQualification();
+  bindForm(async (v, form) => {
     const body = clean({
       destination: v.destination, source: v.source, start_date: v.start_date || null, end_date: v.end_date || null,
       travelers: v.travelers || null, budget: v.budget || null, priority: v.priority, notes: v.notes || null
     });
+    if (db.leadQuestions.length) body.qualification = readQualification();
     if (v.owner_id) body.owner_id = Number(v.owner_id);
     if (lead) {
       const reassigned = body.owner_id && body.owner_id !== lead.owner_id;
@@ -518,36 +522,374 @@ function leadModal(id, presetClientId) {
   if (lead) bindDelete(`/api/leads/${lead.id}`, 'Lead eliminado');
 }
 
+/* ---------- utilidades de los editores (cotizador, confirmación, perfil) ---------- */
+const getPath = (obj, path) => path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+function setPath(obj, path, value) {
+  const keys = path.split('.');
+  let o = obj;
+  keys.slice(0, -1).forEach((k, i) => {
+    if (o[k] == null || typeof o[k] !== 'object') o[k] = /^\d+$/.test(keys[i + 1]) ? [] : {};
+    o = o[k];
+  });
+  o[keys.at(-1)] = value;
+}
+// Reduce la foto (máximo 1600 px) y la sube; devuelve el id de la imagen guardada.
+async function uploadImage(file, maxSide = 1600) {
+  if (!file) throw new Error('Elige una imagen');
+  let blob = file;
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (bitmap) {
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const canvas = Object.assign(document.createElement('canvas'), { width: Math.round(bitmap.width * scale), height: Math.round(bitmap.height * scale) });
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.84));
+  } else if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
+    throw new Error('Formato no compatible. Usa una foto JPG, PNG o WebP');
+  }
+  const response = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': blob.type || 'image/jpeg' }, body: blob });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'No se pudo subir la imagen');
+  return payload.id;
+}
+const mediaUrl = (id) => (Number(id) > 0 ? `/api/media/${Number(id)}` : '');
+const imgField = (key, id, label, opts = {}) => `<div class="lbl ${opts.cls || ''}">${label}<div class="img-up" data-img="${key}"><span class="thumb${opts.round ? ' round' : ''}"${id ? ` style="background-image:url('${mediaUrl(id)}')"` : ''}></span><span class="img-actions"><input type="file" accept="image/*"><button type="button" class="link" data-img-clear${id ? '' : ' hidden'}>Quitar</button><span class="busy hidden">Subiendo…</span></span></div></div>`;
+// Conecta los campos de imagen: sube al elegir y avisa el id (o null al quitar).
+function bindImages(root, onChange) {
+  root.querySelectorAll('.img-up').forEach((box) => {
+    const thumb = box.querySelector('.thumb'), clear = box.querySelector('[data-img-clear]'), busy = box.querySelector('.busy');
+    const input = box.querySelector('input[type=file]');
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+      busy.classList.remove('hidden');
+      try {
+        const id = await uploadImage(file);
+        thumb.style.backgroundImage = `url('${mediaUrl(id)}')`;
+        clear.hidden = false;
+        onChange(box.dataset.img, id);
+      } catch (error) { toast(error.message, 6000); }
+      finally { busy.classList.add('hidden'); input.value = ''; }
+    };
+    clear.onclick = () => { thumb.style.backgroundImage = ''; clear.hidden = true; onChange(box.dataset.img, null); };
+  });
+}
+// Campos enlazados a una ruta del estado (data-k).
+const czInput = (state, k, label, attrs = '', cls = '') => `<label class="${cls}">${label}<input data-k="${k}" value="${escapeHtml(getPath(state, k) ?? '')}" ${attrs}></label>`;
+const czArea = (state, k, label, attrs = '', cls = '') => `<label class="${cls}">${label}<textarea data-k="${k}" ${attrs}>${escapeHtml(getPath(state, k) ?? '')}</textarea></label>`;
+const czSelect = (state, k, label, list, opts = {}) => `<label class="${opts.cls || ''}">${label}<select data-k="${k}"${opts.struct ? ' data-struct' : ''}>${options(list, getPath(state, k) ?? opts.fallback ?? '')}</select></label>`;
+function bindState(state, root, { onStruct, onCore } = {}) {
+  const handler = (e) => {
+    const el = e.target;
+    if (el.dataset.k) {
+      const value = el.type === 'checkbox' ? el.checked : el.value;
+      setPath(state, el.dataset.k, value);
+      if (el.hasAttribute('data-struct') && e.type === 'change' && onStruct) onStruct(el);
+    } else if (el.dataset.core && onCore) onCore(el, e.type);
+  };
+  root.oninput = handler;
+  root.onchange = handler;
+}
+
+/* ---------- Cotizador (diseño de Viajes Casal dentro del CRM) ---------- */
+const CZ_SERVICES = [['vuelo', 'Vuelo'], ['hotel', 'Hotel'], ['traslados', 'Traslados'], ['tours', 'Tours'], ['seguro', 'Seguro']];
+const czLabel = (key) => CZ_SERVICES.find(([k]) => k === key)?.[1] || key;
+
+function serviceFields(det, svc, prefix) {
+  const i = (k, label, attrs, cls) => czInput(det, `${prefix}.${k}`, label, attrs, cls);
+  switch (svc) {
+    case 'vuelo': return `<div class="cz-grid">
+      ${i('aerolinea', 'Aerolínea', 'placeholder="Volaris" maxlength="80"')}${i('origen', 'Origen', 'placeholder="CDMX" maxlength="80"')}
+      ${i('equipaje', 'Equipaje', 'placeholder="artículo personal + equipaje de mano" maxlength="160"', 'span2')}
+      ${i('hsIda', 'Hora salida ida', 'placeholder="08:35" maxlength="20"')}${i('hlIda', 'Hora llegada ida', 'placeholder="11:02" maxlength="20"')}
+      ${i('hsReg', 'Hora salida regreso', 'placeholder="17:45" maxlength="20"')}${i('hlReg', 'Hora llegada regreso', 'placeholder="19:55" maxlength="20"')}</div>`;
+    case 'traslados': return `<div class="cz-grid g2">
+      ${czSelect(det, `${prefix}.tipo`, 'Tipo', ['Redondo', 'Solo llegada', 'Solo regreso'], { fallback: 'Redondo' })}
+      ${i('desc', 'Descripción', 'placeholder="Aeropuerto ↔ Hotel" maxlength="200"')}</div>`;
+    case 'seguro': return `<div class="cz-grid g2">${czArea(det, `${prefix}.cobertura`, 'Cobertura', 'placeholder="Seguro de viaje con cobertura médica y cancelación" maxlength="600"', 'full')}</div>`;
+    case 'tours': return `<div class="cz-grid g2">${i('promo', 'Mensaje promocional (opcional)', 'placeholder="Ej. Tours gratis: elige 1 de las siguientes 3 opciones" maxlength="160"', 'full')}</div>
+      ${[0, 1, 2].map((n) => `<div class="cz-block"><b>Tour ${n + 1}${n ? ' (opcional)' : ''}</b><div class="cz-grid">
+        ${i(`items.${n}.nombre`, 'Nombre del tour', 'placeholder="Xcaret México — día completo" maxlength="120"', 'span2')}
+        ${i(`items.${n}.precio`, 'Precio adicional', 'placeholder="$450 MXN por persona" maxlength="80"')}
+        ${imgField(`${prefix}.items.${n}.mediaId`, getPath(det, `${prefix}.items.${n}.mediaId`), 'Foto (opcional)')}
+        ${i(`items.${n}.desc`, 'Descripción breve', 'placeholder="Snorkel, tirolesas y río subterráneo" maxlength="200"', 'full')}</div></div>`).join('')}`;
+    default: return `<div class="cz-grid">
+      ${i('hotel', 'Hotel', 'placeholder="Hyatt Ziva Cancún" maxlength="120"', 'span2')}
+      ${imgField(`${prefix}.mediaId`, getPath(det, `${prefix}.mediaId`), 'Foto del hotel', { cls: 'span2' })}
+      ${czSelect(det, `${prefix}.stars`, 'Estrellas', ['5', '4', '3'], { fallback: '5' })}
+      ${i('room', 'Habitación', 'placeholder="Junior Suite Ocean View" maxlength="120"')}${i('plan', 'Plan', 'placeholder="Todo Incluido" maxlength="80"', 'span2')}
+      ${czArea(det, `${prefix}.desc`, 'Descripción breve', 'placeholder="Un resort frente al Caribe, ideal para…" maxlength="600"', 'full')}</div>`;
+  }
+}
+
+function proposalHtml(det, p, i) {
+  const pre = `proposals.${i}`;
+  const plan = p.pay?.esquema === 'plan';
+  return `<div class="cz-prop">
+    <div class="cz-prop-head"><b>Propuesta ${i + 1} · ${escapeHtml(czLabel(det.varying))} que varía</b>
+      <span class="cz-top">${det.proposals.length > 1 ? `<label class="principal"><input type="radio" name="czPrincipal" data-core="principal" value="${i}" ${det.principal === i ? 'checked' : ''}> Principal (se usa en el CRM)</label><button type="button" class="link" data-remove-prop="${i}">Eliminar propuesta</button>` : ''}</span></div>
+    ${serviceFields(det, det.varying, `${pre}.${det.varying}`)}
+    <div class="cz-grid" style="margin-top:10px">
+      ${czInput(det, `${pre}.price.total`, 'Precio total (MXN)*', 'inputmode="decimal" placeholder="32850" maxlength="20"')}
+      ${czInput(det, `${pre}.price.pp`, 'Precio por persona (MXN)', 'inputmode="decimal" placeholder="10950" maxlength="20"')}
+      ${czInput(det, `${pre}.price.base`, 'Base pasajeros', 'placeholder="3 pasajeros" maxlength="40"')}
+      ${czSelect(det, `${pre}.pay.esquema`, 'Esquema de pago', [['anticipo', 'Anticipo + saldo'], ['plan', 'Plan de pagos (varias fechas)']], { struct: true, fallback: 'anticipo' })}
+    </div>
+    <div class="cz-block">${plan
+      ? `<b>Plan de pagos</b><div class="cz-grid g3">${[0, 1, 2].map((n) => `<div>${czInput(det, `${pre}.pay.pagos.${n}.fecha`, n === 2 ? 'Pago 3 (liquidación)' : `Pago ${n + 1}`, 'type="date"')}${czInput(det, `${pre}.pay.pagos.${n}.monto`, 'Monto', 'inputmode="decimal" placeholder="$ monto" maxlength="20"')}</div>`).join('')}</div>`
+      : `<b>Anticipo</b><div class="cz-grid g2">${czInput(det, `${pre}.pay.anticipo`, 'Anticipo (MXN)', 'inputmode="decimal" placeholder="8213" maxlength="20"')}${czInput(det, `${pre}.pay.anticipoFecha`, 'Fecha límite de anticipo', 'type="date"')}</div>`}
+    </div></div>`;
+}
+
 function quoteModal(id, preset = {}) {
-  if (!canWrite('quotes')) { if (id) openPrintableQuote(id); return; }
+  if (!canWrite('quotes')) { if (id) openDocument('cotizacion', id); return; }
   const quote = id ? quoteById(id) : null;
   if (!quote && !db.clients.length) { toast('Primero registra un lead o un cliente'); return; }
-  const clientId = quote?.client_id ?? preset.clientId ?? db.clients[0]?.id;
-  const leadOptions = (cid) => options(db.leads.filter((l) => l.client_id === Number(cid)).map((l) => [l.id, `${l.destination} · ${fmtRange(l.start_date, l.end_date)} · ${l.stage}`]), quote?.lead_id ?? preset.leadId, { blank: 'Sin lead' });
   const presetLead = preset.leadId ? leadById(preset.leadId) : null;
-  const html = `<form class="modal-form">
-    ${field('Cliente*', `<select name="client_id" required>${options(db.clients.map((c) => [c.id, c.name]), clientId)}</select>`)}
-    ${field('Lead', `<select name="lead_id">${leadOptions(clientId)}</select>`)}
-    ${field('Destino*', `<input name="destination" required maxlength="120" value="${escapeHtml(quote?.destination ?? presetLead?.destination)}">`)}
-    ${field('Vigencia', `<input name="valid_until" type="date" value="${escapeHtml(quote?.valid_until)}">`)}
-    ${field('Hotel / paquete*', `<input name="hotel" required maxlength="200" value="${escapeHtml(quote?.hotel)}">`, true)}
-    ${field('Precio final*', `<input name="price" type="number" min="0" step="1" required value="${escapeHtml(quote?.price)}">`)}
-    ${field('Modalidad', `<select name="mode">${options(QUOTE_MODES, quote?.mode || 'Total')}</select>`)}
-    ${quote ? field('Estado', `<select name="status">${options(QUOTE_STATUSES, quote.status)}</select>`) : ''}
-    ${field('Servicios incluidos', `<textarea name="services" rows="3" maxlength="4000">${escapeHtml(quote?.services)}</textarea>`, true)}
-    ${quote?.status === 'Aceptada' ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-trip-from-quote="${quote.id}">Crear viaje con esta cotización</button></div>` : ''}
-    ${quote ? historyButton('quotes', quote.id) : ''}
-    ${deleteBlock('cotización', quote?.id)}
-    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${quote ? 'Guardar cambios' : 'Guardar cotización'}</button></div></form>`;
-  openModal('PROPUESTA', quote ? `Cotización ${quote.folio}` : 'Nueva cotización', html);
-  const form = bindForm(async (v) => {
-    const body = clean({ client_id: Number(v.client_id), lead_id: v.lead_id ? Number(v.lead_id) : null, destination: v.destination, hotel: v.hotel, price: v.price, mode: v.mode, valid_until: v.valid_until || null, services: v.services || null });
-    if (quote) return mutate(() => send('PATCH', `/api/quotes/${quote.id}`, { ...body, status: v.status }), 'Cotización actualizada');
-    return mutate(() => send('POST', '/api/quotes', body), 'Cotización creada');
-  });
-  form.client_id.onchange = () => { form.lead_id.innerHTML = leadOptions(form.client_id.value); };
-  form.lead_id.onchange = () => { const l = leadById(form.lead_id.value); if (l && !form.destination.value) form.destination.value = l.destination; };
-  if (quote) bindDelete(`/api/quotes/${quote.id}`, 'Cotización eliminada');
+  const core = {
+    client_id: quote?.client_id ?? preset.clientId ?? presetLead?.client_id ?? db.clients[0]?.id,
+    lead_id: quote?.lead_id ?? preset.leadId ?? '',
+    destination: quote?.destination ?? presetLead?.destination ?? '',
+    valid_until: quote?.valid_until ?? '',
+    status: quote?.status ?? 'Borrador'
+  };
+  let det = TPDocs.normalizeDetails(quote, leadById(core.lead_id));
+  if (!quote) {
+    det.services = { vuelo: true, hotel: true, traslados: true, tours: false, seguro: false };
+    det.proposals = [{ hotel: { stars: '5' }, price: {}, pay: { esquema: 'anticipo' } }];
+    if (preset.kind === 'circuito') det = TPDocs.newCircuitDetails(presetLead);
+  }
+  // Se conservan ambos formatos mientras se edita, por si el vendedor cambia de tipo.
+  const drafts = { [det.kind === 'circuito' ? 'circuito' : 'paquete']: det };
+  const leadChoices = () => db.leads.filter((l) => l.client_id === Number(core.client_id)).map((l) => [l.id, `${l.destination} · ${fmtRange(l.start_date, l.end_date)} · ${l.stage}`]);
+
+  function render() {
+    const scroller = $('#modalBg .modal');
+    const top = scroller.scrollTop;
+    const svc = det.services || {};
+    const fixed = CZ_SERVICES.filter(([k]) => svc[k] && k !== det.varying);
+    const checked = CZ_SERVICES.filter(([k]) => svc[k]);
+    const isCircuit = det.kind === 'circuito';
+    const range = isCircuit ? (det.startDate ? `${circuitDays(det)} · sale ${TPDocs.formatSingleDate(det.startDate)}` : circuitDays(det)) : TPDocs.formatDateRange(det.startDate, det.endDate);
+    const html = `<form class="cz" novalidate>
+      <div class="cz-kind"><span>Tipo de cotización</span><button type="button" data-kind="paquete" class="${isCircuit ? '' : 'on'}">Paquete (hotel, vuelo y traslados)</button><button type="button" data-kind="circuito" class="${isCircuit ? 'on' : ''}">Circuito (varias ciudades)</button></div>
+      <section class="cz-card"><h4>Datos generales</h4><p class="cz-hint">${isCircuit ? 'Datos del circuito y del cliente.' : 'Aplican a toda la cotización, aunque incluyas varias propuestas.'}</p>
+        <div class="cz-grid">
+          <label>Cliente*<select data-core="client_id">${options(db.clients.map((c) => [c.id, c.name]), core.client_id)}</select></label>
+          <label>Lead<select data-core="lead_id">${options(leadChoices(), core.lead_id, { blank: 'Sin lead' })}</select></label>
+          <label>${isCircuit ? 'Destino o región*' : 'Destino principal*'}<input data-core="destination" maxlength="120" placeholder="${isCircuit ? 'Península de Yucatán' : 'Cancún, Quintana Roo'}" value="${escapeHtml(core.destination)}"></label>
+          <label>Vigencia de la cotización<input data-core="valid_until" type="date" value="${escapeHtml(core.valid_until)}"></label>
+          ${czInput(det, 'pax', 'Pasajeros', 'placeholder="2 adultos + 1 menor" maxlength="80"')}
+          ${isCircuit ? czInput(det, 'circuit.nombre', 'Nombre del circuito*', 'placeholder="Ruta Maya Clásica" maxlength="120"') : ''}
+          ${czInput(det, 'startDate', 'Fecha de salida', 'type="date" data-struct')}
+          ${isCircuit ? '' : czInput(det, 'endDate', 'Fecha de regreso', 'type="date" data-struct')}
+          ${quote ? `<label>Estado<select data-core="status">${options(QUOTE_STATUSES, core.status)}</select></label>` : '<span></span>'}
+          <span class="cz-duration full">${range ? `📅 ${escapeHtml(range)}` : ''}</span>
+          ${czInput(det, 'linkOnline', 'Link para ver la cotización en línea (opcional)', 'placeholder="https://…" maxlength="300"', 'span2')}
+          ${isCircuit ? czInput(det, 'circuit.tipoTraslado', 'Tipo de traslado', 'placeholder="Terrestre en van" maxlength="80"') + czInput(det, 'circuit.idiomaGuia', 'Idioma del guía', 'placeholder="Español" maxlength="40"') : ''}
+          ${imgField('heroMediaId', det.heroMediaId, 'Imagen de portada (foto del destino)', { cls: 'span2' })}
+        </div>
+      </section>
+      ${isCircuit ? circuitSections(det) : `<section class="cz-card"><h4>Servicios incluidos</h4><p class="cz-hint">Marca lo que incluye. El servicio que varía se captura en cada propuesta (hasta 4); los demás, una sola vez.</p>
+        <div class="cz-svc">${CZ_SERVICES.map(([k, label]) => `<label><input type="checkbox" data-k="services.${k}" data-struct ${det.services[k] ? 'checked' : ''}> ${label}</label>`).join('')}</div>
+        <div class="cz-grid g2">${checked.length ? czSelect(det, 'varying', '¿Qué servicio varía entre las propuestas?', checked, { struct: true }) : '<p class="note-warn full">Marca al menos un servicio.</p>'}</div>
+      </section>
+      <section class="cz-card"><h4>Servicios fijos</h4><p class="cz-hint">Iguales en todas las propuestas.</p>
+        ${fixed.length ? fixed.map(([k, label]) => `<div class="cz-block"><b>${label} (fijo)${k === 'tours' ? ' · complemento con costo adicional' : ''}</b>${serviceFields(det, k, `fixed.${k}`)}</div>`).join('') : '<p class="cz-hint">No hay servicios fijos: solo capturas el servicio que varía en cada propuesta.</p>'}
+      </section>
+      <section class="cz-card"><h4>Propuestas</h4><p class="cz-hint">La propuesta principal define el precio y el hotel que ves en el CRM y en los reportes.</p>
+        ${det.proposals.map((p, i) => proposalHtml(det, p, i)).join('')}
+        ${det.proposals.length < 4 ? '<div class="cz-add"><button type="button" class="btn secondary small" data-add-prop>+ Agregar otra propuesta (hasta 4)</button></div>' : ''}
+      </section>`}
+      ${quote?.status === 'Aceptada' ? `<div class="quick-actions"><button type="button" class="btn secondary small" data-trip-from-quote="${quote.id}">Crear viaje con esta cotización</button></div>` : ''}
+      ${quote ? historyButton('quotes', quote.id) : ''}
+      ${deleteBlock('cotización', quote?.id)}
+      <div class="cz-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="button" class="btn secondary" data-save="0">${quote ? 'Guardar cambios' : 'Guardar cotización'}</button><button type="button" class="btn coral-btn" data-save="1">Guardar y ver PDF</button></div>
+    </form>`;
+    openModal('COTIZADOR', quote ? `Cotización ${quote.folio}` : 'Nueva cotización', html, { wide: true });
+    scroller.scrollTop = top;
+    const body = $('#modalBody');
+    body.querySelector('form').onsubmit = (e) => e.preventDefault();
+    bindImages(body, (key, mediaId) => setPath(det, key, mediaId));
+    bindState(det, body, {
+      onStruct: (el) => {
+        if (el.dataset.k?.startsWith('services.')) {
+          const on = CZ_SERVICES.filter(([k]) => det.services[k]).map(([k]) => k);
+          if (!on.includes(det.varying)) det.varying = on.includes('hotel') ? 'hotel' : on[0] || 'hotel';
+        }
+        render();
+      },
+      onCore: (el, type) => {
+        if (el.dataset.core === 'principal') { det.principal = Number(el.value); return; }
+        core[el.dataset.core] = el.value;
+        if (type !== 'change') return;
+        if (el.dataset.core === 'client_id') { core.lead_id = ''; render(); }
+        if (el.dataset.core === 'lead_id') {
+          const l = leadById(core.lead_id);
+          if (l) {
+            if (!core.destination) core.destination = l.destination;
+            if (!det.startDate && l.start_date) det.startDate = l.start_date;
+            if (!det.endDate && l.end_date) det.endDate = l.end_date;
+            if (!det.pax && l.travelers) det.pax = `${l.travelers} ${l.travelers === 1 ? 'pasajero' : 'pasajeros'}`;
+            render();
+          }
+        }
+      }
+    });
+    body.onclick = (e) => {
+      const add = e.target.closest('[data-add-prop]');
+      const remove = e.target.closest('[data-remove-prop]');
+      const saveBtn = e.target.closest('[data-save]');
+      const kindBtn = e.target.closest('[data-kind]');
+      const cAdd = e.target.closest('[data-cadd]');
+      const cDel = e.target.closest('[data-cdel]');
+      if (kindBtn) {
+        const kind = kindBtn.dataset.kind;
+        if ((det.kind === 'circuito') === (kind === 'circuito')) return;
+        drafts[det.kind === 'circuito' ? 'circuito' : 'paquete'] = det;
+        const next = drafts[kind] || (kind === 'circuito' ? TPDocs.newCircuitDetails(leadById(core.lead_id)) : TPDocs.normalizeDetails(null, leadById(core.lead_id)));
+        if (kind !== 'circuito' && !drafts[kind]) { next.services = { vuelo: true, hotel: true, traslados: true, tours: false, seguro: false }; next.proposals = [{ hotel: { stars: '5' }, price: {}, pay: { esquema: 'anticipo' } }]; }
+        next.pax = next.pax || det.pax; next.startDate = next.startDate || det.startDate; next.heroMediaId = next.heroMediaId || det.heroMediaId;
+        det = next;
+        render();
+        return;
+      }
+      if (cAdd) { circuitAdd(det.circuit, cAdd.dataset.cadd); render(); return; }
+      if (cDel) { circuitDel(det.circuit, cDel.dataset.cdel); render(); return; }
+      if (add) { det.proposals.push({ [det.varying]: det.varying === 'hotel' ? { stars: '5' } : {}, price: {}, pay: { esquema: 'anticipo' } }); render(); }
+      else if (remove) {
+        const idx = Number(remove.dataset.removeProp);
+        det.proposals.splice(idx, 1);
+        det.principal = det.principal === idx ? 0 : det.principal > idx ? det.principal - 1 : det.principal;
+        render();
+      } else if (saveBtn) save(saveBtn.dataset.save === '1', saveBtn);
+    };
+    if (quote) bindDelete(`/api/quotes/${quote.id}`, 'Cotización eliminada');
+  }
+
+  // Deja solo lo que corresponde a los servicios marcados.
+  function cleanDetails() {
+    const out = { version: 1, pax: str(det.pax), startDate: det.startDate || '', endDate: det.endDate || '', linkOnline: str(det.linkOnline), heroMediaId: det.heroMediaId || null, services: { ...det.services }, varying: det.varying, principal: det.principal || 0, fixed: {}, proposals: [] };
+    CZ_SERVICES.forEach(([k]) => { if (det.services[k] && k !== det.varying && det.fixed?.[k]) out.fixed[k] = det.fixed[k]; });
+    out.proposals = det.proposals.map((p) => ({ [det.varying]: p[det.varying] || {}, price: p.price || {}, pay: p.pay || { esquema: 'anticipo' } }));
+    if (out.fixed.tours?.items) out.fixed.tours.items = out.fixed.tours.items.filter(Boolean);
+    out.proposals.forEach((p) => { if (p.tours?.items) p.tours.items = p.tours.items.filter(Boolean); if (p.pay.pagos) p.pay.pagos = p.pay.pagos.map((x) => x || {}); });
+    return out;
+  }
+
+  async function save(openPdf, button) {
+    if (!core.client_id) { toast('Elige el cliente'); return; }
+    if (!str(core.destination)) { toast('Escribe el destino principal'); return; }
+    if (det.kind === 'circuito') { saveCircuit(openPdf, button); return; }
+    if (!CZ_SERVICES.some(([k]) => det.services[k])) { toast('Marca al menos un servicio'); return; }
+    if (det.startDate && det.endDate && det.endDate < det.startDate) { toast('La fecha de regreso no puede ser anterior a la de salida'); return; }
+    const details = cleanDetails();
+    const principal = details.proposals[details.principal] || details.proposals[0];
+    const total = TPDocs.num(principal.price.total);
+    if (!total) { toast(`Escribe el precio total de la propuesta ${details.principal + 1}`); return; }
+    const merged = { ...details.fixed, [details.varying]: principal[details.varying] };
+    const hotel = (merged.hotel?.hotel ? `${merged.hotel.hotel}${merged.hotel.plan ? ` — ${merged.hotel.plan}` : ''}` : TPDocs.optionLabel(details.varying, merged)) || `Paquete a ${core.destination}`;
+    const body = {
+      client_id: Number(core.client_id), lead_id: core.lead_id ? Number(core.lead_id) : null,
+      destination: str(core.destination), valid_until: core.valid_until || null,
+      hotel: hotel.slice(0, 200), price: total, mode: 'Total',
+      services: CZ_SERVICES.filter(([k]) => details.services[k]).map(([, l]) => l).join(', '),
+      details
+    };
+    const win = openPdf ? window.open('', '_blank') : null;
+    button.disabled = true;
+    const result = await mutate(() => (quote ? send('PATCH', `/api/quotes/${quote.id}`, { ...body, status: core.status }) : send('POST', '/api/quotes', body)), quote ? 'Cotización actualizada' : 'Cotización creada');
+    button.disabled = false;
+    if (!result) { win?.close(); return; }
+    close();
+    if (openPdf) openDocument('cotizacion', result.record.id, win);
+  }
+  async function saveCircuit(openPdf, button) {
+    const c = det.circuit;
+    if (!str(c.nombre)) { toast('Escribe el nombre del circuito'); return; }
+    const desde = TPDocs.circuitDesde(c);
+    if (!desde) { toast('Captura al menos una tarifa por persona'); return; }
+    const details = {
+      version: 1, kind: 'circuito', pax: str(det.pax), startDate: det.startDate || '', linkOnline: str(det.linkOnline), heroMediaId: det.heroMediaId || null,
+      circuit: { ...c, ruta: c.ruta.map(str).filter(Boolean), incluye: c.incluye.map(str).filter(Boolean), excluye: c.excluye.map(str).filter(Boolean),
+        categories: c.categories.map((cat) => ({ ...cat, hoteles: cat.hoteles.filter((h) => h && (h.ciudad || h.hotel)), precios: c.occupancies.map((_, i) => str(cat.precios[i])) })) }
+    };
+    const body = {
+      client_id: Number(core.client_id), lead_id: core.lead_id ? Number(core.lead_id) : null,
+      destination: str(core.destination), valid_until: core.valid_until || null,
+      hotel: `Circuito ${str(c.nombre)}`.slice(0, 200), price: desde.min, mode: 'Por persona',
+      services: TPDocs.CIRCUIT_SERVICES.filter((s) => c.services[s.key]).map((s) => s.label).join(', '),
+      details
+    };
+    const win = openPdf ? window.open('', '_blank') : null;
+    button.disabled = true;
+    const result = await mutate(() => (quote ? send('PATCH', `/api/quotes/${quote.id}`, { ...body, status: core.status }) : send('POST', '/api/quotes', body)), quote ? 'Cotización actualizada' : 'Cotización de circuito creada');
+    button.disabled = false;
+    if (!result) { win?.close(); return; }
+    close();
+    if (openPdf) openDocument('cotizacion', result.record.id, win);
+  }
+  render();
+}
+const str = (v) => String(v ?? '').trim();
+
+/* ---------- Circuito: secciones del cotizador ---------- */
+const CIRCUIT_LIMITS = { ruta: 8, days: 12, categories: 5, occupancies: 6, incluye: 8, excluye: 8, hoteles: 8 };
+const circuitDays = (d) => { const dias = d.circuit.days.length || 1, n = Math.max(dias - 1, 0); return `${dias} día${dias > 1 ? 's' : ''} / ${n} noche${n !== 1 ? 's' : ''}`; };
+function circuitAdd(c, what) {
+  if (what.startsWith('categories.')) {
+    const cat = c.categories[Number(what.split('.')[1])];
+    if (cat && cat.hoteles.length < CIRCUIT_LIMITS.hoteles) cat.hoteles.push({ ciudad: '', hotel: '' });
+    return;
+  }
+  const list = c[what];
+  if (!list || list.length >= CIRCUIT_LIMITS[what]) return;
+  if (what === 'days') list.push({ titulo: '', descripcion: '', desayuno: true, comida: false, cena: false });
+  else if (what === 'categories') list.push({ nombre: '', estrellas: '4', hoteles: [{ ciudad: '', hotel: '' }], precios: [] });
+  else list.push('');
+}
+function circuitDel(c, path) {
+  const parts = path.split('.');
+  const index = Number(parts.pop());
+  const list = getPath(c, parts.join('.'));
+  if (!Array.isArray(list)) return;
+  list.splice(index, 1);
+  if (parts.join('.') === 'occupancies') c.categories.forEach((cat) => cat.precios.splice(index, 1));
+}
+function circuitSections(det) {
+  const c = det.circuit;
+  const del = (path, show = true) => (show ? `<button type="button" class="cz-x" data-cdel="${path}" title="Quitar">✕</button>` : '');
+  const addBtn = (what, label, list) => (list.length < CIRCUIT_LIMITS[what] ? `<div class="cz-add"><button type="button" class="btn secondary small" data-cadd="${what}">${label}</button></div>` : '');
+  const listRows = (what, ph) => c[what].map((v, i) => `<div class="cz-row"><input data-k="circuit.${what}.${i}" value="${escapeHtml(v)}" maxlength="160" placeholder="${ph}">${del(`${what}.${i}`)}</div>`).join('');
+  const stars = (n) => '★'.repeat(Number(n) || 3);
+  return `
+    <section class="cz-card"><h4>Ruta / ciudades</h4><p class="cz-hint">El orden en que las agregues es el orden en que aparecen en la portada (hasta 8).</p>
+      ${listRows('ruta', 'Ej. Cancún')}${addBtn('ruta', '+ Agregar ciudad', c.ruta)}</section>
+    <section class="cz-card"><h4>Servicios incluidos en el circuito</h4>
+      <div class="cz-svc">${TPDocs.CIRCUIT_SERVICES.map((s) => `<label><input type="checkbox" data-k="circuit.services.${s.key}" ${c.services[s.key] ? 'checked' : ''}> ${s.label}</label>`).join('')}</div></section>
+    <section class="cz-card"><h4>Itinerario día por día</h4><p class="cz-hint">${escapeHtml(circuitDays(det))}. Hasta 12 días.</p>
+      ${c.days.map((d, i) => `<div class="cz-block"><div class="cz-prop-head"><b>Día ${i + 1}</b>${del(`days.${i}`, c.days.length > 1)}</div>
+        <div class="cz-grid g2">${czInput(det, `circuit.days.${i}.titulo`, 'Título / ruta del día', 'placeholder="Cancún — Llegada" maxlength="120"', 'full')}
+        ${czArea(det, `circuit.days.${i}.descripcion`, 'Descripción', 'placeholder="Recepción en el aeropuerto y traslado al hotel…" maxlength="1200"', 'full')}</div>
+        <div class="cz-meals">${[['desayuno', 'Desayuno'], ['comida', 'Comida'], ['cena', 'Cena']].map(([k, l]) => `<label><input type="checkbox" data-k="circuit.days.${i}.${k}" ${d[k] ? 'checked' : ''}> ${l}</label>`).join('')}</div></div>`).join('')}
+      ${addBtn('days', '+ Agregar día', c.days)}</section>
+    <section class="cz-card"><h4>Hospedaje por categoría</h4><p class="cz-hint">Cada categoría es una fila en la tabla de tarifas (hasta 5).</p>
+      ${c.categories.map((cat, ci) => `<div class="cz-block"><div class="cz-prop-head"><b>Categoría ${ci + 1}</b>${del(`categories.${ci}`, c.categories.length > 1)}</div>
+        <div class="cz-grid g2">${czInput(det, `circuit.categories.${ci}.nombre`, 'Nombre de categoría', 'placeholder="Estándar" maxlength="60" data-struct')}${czSelect(det, `circuit.categories.${ci}.estrellas`, 'Estrellas', ['5', '4', '3', '2'], { struct: true })}</div>
+        <p class="cz-hint" style="margin:8px 0 4px">Hoteles por ciudad:</p>
+        ${cat.hoteles.map((h, hi) => `<div class="cz-row"><input data-k="circuit.categories.${ci}.hoteles.${hi}.ciudad" value="${escapeHtml(h.ciudad)}" maxlength="80" placeholder="Ciudad (ej. Mérida)" class="cz-city"><input data-k="circuit.categories.${ci}.hoteles.${hi}.hotel" value="${escapeHtml(h.hotel)}" maxlength="120" placeholder="Nombre del hotel">${del(`categories.${ci}.hoteles.${hi}`, cat.hoteles.length > 1)}</div>`).join('')}
+        ${cat.hoteles.length < CIRCUIT_LIMITS.hoteles ? `<button type="button" class="link" data-cadd="categories.${ci}">+ Agregar ciudad/hotel</button>` : ''}</div>`).join('')}
+      ${addBtn('categories', '+ Agregar categoría de hotel', c.categories)}</section>
+    <section class="cz-card"><h4>Ocupaciones y tarifas por persona (MXN)</h4><p class="cz-hint">La tarifa más baja se muestra como “Desde” y es el precio que ves en el CRM.</p>
+      <div class="cz-occ">${c.occupancies.map((o, i) => `<span class="cz-row"><input data-k="circuit.occupancies.${i}" value="${escapeHtml(o)}" maxlength="30" placeholder="Doble" data-struct>${del(`occupancies.${i}`, c.occupancies.length > 1)}</span>`).join('')}
+        ${c.occupancies.length < CIRCUIT_LIMITS.occupancies ? '<button type="button" class="link" data-cadd="occupancies">+ Ocupación</button>' : ''}</div>
+      <div class="table"><table class="cz-prices"><thead><tr><th>Categoría</th>${c.occupancies.map((o) => `<th>${escapeHtml(o || 'Ocupación')}</th>`).join('')}</tr></thead>
+        <tbody>${c.categories.map((cat, ci) => `<tr><td>${escapeHtml(cat.nombre || `Categoría ${ci + 1}`)} ${stars(cat.estrellas)}</td>${c.occupancies.map((_, oi) => `<td><input data-k="circuit.categories.${ci}.precios.${oi}" value="${escapeHtml(cat.precios[oi] ?? '')}" inputmode="decimal" maxlength="20" placeholder="$0"></td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
+    <section class="cz-card"><h4>¿Qué incluye y qué no?</h4><div class="cz-grid g2">
+      <div><span class="lbl">Incluye</span>${listRows('incluye', 'Ej. Vuelo redondo México–Cancún')}${addBtn('incluye', '+ Agregar línea', c.incluye)}</div>
+      <div><span class="lbl">No incluye</span>${listRows('excluye', 'Ej. Propinas y gastos personales')}${addBtn('excluye', '+ Agregar línea', c.excluye)}</div></div></section>`;
 }
 
 function clientModal(id) {
@@ -601,6 +943,7 @@ function tripModal(id, preset = {}) {
     ${field('Regreso*', `<input name="end_date" type="date" required value="${escapeHtml(t?.end_date ?? fromLead?.end_date)}">`)}
     ${field('Estado', `<select name="status">${options(TRIP_STATUSES, t?.status || 'Confirmado')}</select>`, true)}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(t?.notes)}</textarea>`, true)}
+    ${t ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-confirmation="${t.id}">${t.confirmation ? 'Editar confirmación de servicios' : 'Preparar confirmación de servicios'}</button><button type="button" class="btn secondary small" data-res-pdf="${t.id}">Ver PDF de confirmación</button>${t.confirmation ? '<small>✓ Confirmación lista</small>' : ''}</div>` : ''}
     ${t ? historyButton('trips', t.id) : ''}
     ${deleteBlock('viaje', t?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${t ? 'Guardar cambios' : 'Guardar viaje'}</button></div></form>`;
@@ -640,6 +983,270 @@ function followupModal(id, preset = {}) {
   if (f) bindDelete(`/api/followups/${f.id}`, 'Seguimiento eliminado');
 }
 
+/* ---------- Confirmación de servicios (diseño V8 de Viajes Casal) ---------- */
+const PAY_STATUSES = ['Pendiente de pago', 'Pago parcial', 'Pagado por completo'];
+async function confirmationModal(tripId) {
+  let payload;
+  try { payload = await api(`/api/documents/trip/${tripId}`); } catch (error) { toast(error.message); return; }
+  const defaults = TPDocs.confirmationDefaults(payload);
+  let c = TPDocs.mergeConfirmation(payload.trip.confirmation, defaults);
+  const editable = payload.canEdit;
+  const S = [['flight', 'Vuelo'], ['hotel', 'Hotel'], ['transfer', 'Traslados'], ['activities', 'Actividades'], ['insurance', 'Seguro'], ['partner', 'Travel Partner']];
+  function render() {
+    const i = (k, label, attrs = '', cls = '') => czInput(c, k, label, `maxlength="300" ${attrs}`, cls);
+    const a = (k, label, attrs = '', cls = 'full') => czArea(c, k, label, `maxlength="1500" ${attrs}`, cls);
+    const html = `<form class="cz" novalidate><fieldset class="readonly"${editable ? '' : ' disabled'}>
+      <section class="cz-card"><h4>Portada y reserva</h4><p class="cz-hint">Se llenó con el viaje${payload.quote ? ` y la cotización ${escapeHtml(payload.quote.folio)}` : ''}. Revisa y completa lo que falte.</p>
+        <div class="cz-grid">
+          ${i('reservation', 'Número de reserva')}${i('holder', 'Titular')}${i('destination', 'Destino')}${i('travelers', 'Número de pasajeros', 'type="number" min="1" max="500"')}
+          ${a('passengers', 'Pasajeros (uno por línea)', 'rows="3"', 'span2')}
+          ${imgField('coverMediaId', c.coverMediaId, 'Imagen de portada', { cls: 'span2' })}
+          <label class="cz-check full"><input type="checkbox" data-k="showSanitation" ${c.showSanitation ? 'checked' : ''}> Mostrar la cuota de saneamiento ambiental de Quintana Roo</label>
+        </div></section>
+      <section class="cz-card"><h4>Servicios incluidos</h4>
+        <div class="cz-svc">${S.map(([k, label]) => `<label><input type="checkbox" data-k="services.${k}" ${c.services[k] ? 'checked' : ''}> ${label}</label>`).join('')}</div></section>
+      <section class="cz-card"><h4>Vuelo</h4><div class="cz-grid">
+        ${i('airline', 'Aerolínea')}${i('flightBooking', 'Reserva de vuelo')}${i('outboundFlight', 'Vuelo de ida', 'placeholder="Y4 123 CDMX → CUN"')}${i('returnFlight', 'Vuelo de regreso', 'placeholder="Y4 124 CUN → CDMX"')}
+        ${i('outboundDeparture', 'Salida ida', 'placeholder="15 Ago 2026 | 08:35"')}${i('outboundArrival', 'Llegada ida')}${i('returnDeparture', 'Salida regreso')}${i('returnArrival', 'Llegada regreso')}
+        ${a('baggage', 'Equipaje permitido', 'rows="2"', 'span2')}${a('flightTips', 'Tips de vuelo (uno por línea)', 'rows="2"', 'span2')}
+        ${i('airlinePhone', 'Teléfono de la aerolínea')}</div></section>
+      <section class="cz-card"><h4>Hotel</h4><div class="cz-grid">
+        ${i('hotelName', 'Nombre del hotel', '', 'span2')}${imgField('hotelMediaId', c.hotelMediaId, 'Imagen del hotel', { cls: 'span2' })}
+        ${czSelect(c, 'hotelStars', 'Estrellas', ['5', '4', '3'])}${i('room', 'Habitación')}${i('mealPlan', 'Plan alimenticio')}${i('hotelPhone', 'Teléfono del hotel')}
+        ${i('checkin', 'Check-in', 'placeholder="15 Ago 2026 | 15:00 hrs"')}${i('checkout', 'Check-out')}
+        ${a('hotelHighlights', 'Datos destacables (uno por línea)', 'rows="3"', 'span2')}</div></section>
+      <section class="cz-card"><h4>Traslados</h4><div class="cz-grid">
+        ${i('operator', 'Operador')}${i('transferContact', 'Contacto')}<span></span><span></span>
+        ${i('transferOutOrigin', 'Ida: origen')}${i('transferOutDestination', 'Ida: destino')}${i('transferOutDate', 'Fecha ida')}${i('transferOutTime', 'Horario ida')}
+        ${i('transferBackOrigin', 'Regreso: origen')}${i('transferBackDestination', 'Regreso: destino')}${i('transferBackDate', 'Fecha regreso')}${i('transferBackTime', 'Horario regreso')}</div></section>
+      <section class="cz-card"><h4>Actividades y seguro</h4><div class="cz-grid">
+        ${a('activitiesDetail', 'Actividades y tours (fecha, horario, punto de encuentro)', 'rows="3"', 'span2')}
+        <div class="span2 cz-grid g2">${i('insuranceProvider', 'Aseguradora')}${i('insurancePolicy', 'Número de póliza')}${a('insuranceDetail', 'Cobertura y contacto', 'rows="2"')}</div></div></section>
+      <section class="cz-card"><h4>Travel Partner y contactos</h4><div class="cz-grid">
+        ${i('partnerName', 'Travel Partner')}${i('partnerPhone', 'WhatsApp del Travel Partner')}${i('emergencyPhone', 'Teléfono de emergencias')}<span></span>
+        ${a('partnerDetail', 'Información de atención', 'rows="3"')}</div></section>
+      <section class="cz-card"><h4>Información de pagos</h4><div class="cz-grid">
+        ${czSelect(c, 'paymentStatus', 'Estado del pago', PAY_STATUSES)}${i('paymentTotal', 'Total de la reserva', 'placeholder="$0.00 MXN"')}${i('paymentPaid', 'Monto pagado', 'placeholder="$0.00 MXN"')}<span></span>
+        ${a('paymentSchedule', 'Pagos programados (fecha — monto — concepto, uno por línea)', 'rows="2"')}</div></section>
+      </fieldset>
+      <div class="cz-actions">${editable ? '<button type="button" class="btn secondary" data-reset-conf>Volver a llenar con la cotización</button>' : ''}<button type="button" class="btn secondary close">${editable ? 'Cancelar' : 'Cerrar'}</button>${editable ? '<button type="button" class="btn secondary" data-save="0">Guardar</button>' : ''}<button type="button" class="btn coral-btn" data-save="1">${editable ? 'Guardar y ver PDF' : 'Ver PDF'}</button></div>
+    </form>`;
+    openModal('CONFIRMACIÓN DE SERVICIOS', `${payload.client?.name || 'Viaje'} · ${payload.trip.destination}`, html, { wide: true });
+    const body = $('#modalBody');
+    body.querySelector('form').onsubmit = (e) => e.preventDefault();
+    bindImages(body, (key, id) => setPath(c, key, id));
+    bindState(c, body);
+    body.onclick = async (e) => {
+      if (e.target.closest('[data-reset-conf]')) { c = { ...defaults, services: { ...defaults.services } }; render(); toast('Datos tomados del viaje y la cotización. Guarda para conservarlos.'); return; }
+      const btn = e.target.closest('[data-save]');
+      if (!btn) return;
+      const pdf = btn.dataset.save === '1';
+      if (!editable) { openDocument('reserva', tripId); return; }
+      const win = pdf ? window.open('', '_blank') : null;
+      btn.disabled = true;
+      const ok = await mutate(() => send('PATCH', `/api/trips/${tripId}`, { confirmation: c }), 'Confirmación guardada');
+      btn.disabled = false;
+      if (!ok) { win?.close(); return; }
+      close();
+      if (pdf) openDocument('reserva', tripId, win);
+    };
+  }
+  render();
+}
+
+/* ---------- Calificación del lead (respuestas con botones y ponderación) ---------- */
+const LEVEL_CLASS = { Caliente: 'hot', Tibio: 'warm', 'Frío': 'cold' };
+const maxPoints = (q) => Math.max(0, ...q.options.map((o) => Number(o.points) || 0));
+function scoreAnswers(answers) {
+  const qs = db.leadQuestions;
+  let points = 0, max = 0, answeredCount = 0;
+  qs.forEach((q) => {
+    max += maxPoints(q);
+    const o = q.options.find((x) => x.label === answers[q.id]);
+    if (o) { points += Number(o.points) || 0; answeredCount += 1; }
+  });
+  const score = answeredCount && max ? Math.round((points / max) * 100) : null;
+  return { score, answered: answeredCount, total: qs.length, level: score == null ? null : score >= 70 ? 'Caliente' : score >= 40 ? 'Tibio' : 'Frío' };
+}
+function qualChip(lead) {
+  if (!db.leadQuestions.length) return '';
+  const q = lead?.qualification;
+  if (!q || q.score == null) return '<span class="qual-chip none" title="Responde las preguntas de calificación">Sin calificar</span>';
+  return `<span class="qual-chip ${LEVEL_CLASS[q.level] || 'none'}" title="${q.answered} de ${q.total} preguntas respondidas">${q.level === 'Caliente' ? '🔥 ' : ''}${q.score}% ${escapeHtml(q.level)}</span>`;
+}
+let qualDraft = {};
+function qualSummary() {
+  const r = scoreAnswers(qualDraft);
+  const cls = LEVEL_CLASS[r.level] || '';
+  return { r, html: r.score == null ? '<span class="muted">Sin calificar · toca una respuesta</span>' : `<span class="lvl-${cls}">${r.score}% · ${r.level}</span> <small class="muted">(${r.answered}/${r.total})</small>`, cls };
+}
+function qualHtml(lead) {
+  const qs = db.leadQuestions;
+  if (!qs.length) return '';
+  qualDraft = { ...(lead?.qualification?.answers || {}) };
+  const totalMax = qs.reduce((sum, q) => sum + maxPoints(q), 0) || 1;
+  const { r, html, cls } = qualSummary();
+  return `<div class="qual full" id="qualBox"><div class="qual-head"><b>Calificación del lead</b><span class="qual-score" id="qualScore">${html}</span></div>
+    <div class="qual-bar"><i id="qualBar" class="bar-${cls}" style="width:${r.score || 0}%"></i></div>
+    ${qs.map((q) => `<div class="qual-q"><span class="qual-label">${escapeHtml(q.label)}<small>peso ${Math.round((maxPoints(q) / totalMax) * 100)}%</small></span>
+      <div class="qual-btns">${q.options.map((o) => `<button type="button" data-qa="${escapeHtml(q.id)}" data-val="${escapeHtml(o.label)}" class="${qualDraft[q.id] === o.label ? 'on' : ''}">${escapeHtml(o.label)}</button>`).join('')}</div></div>`).join('')}
+  </div>`;
+}
+// Tocar una respuesta la marca (o la quita si ya estaba) y recalcula al instante.
+function bindQualification() {
+  const box = $('#qualBox');
+  if (!box) return;
+  box.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-qa]');
+    if (!btn) return;
+    const id = btn.dataset.qa;
+    qualDraft[id] = qualDraft[id] === btn.dataset.val ? undefined : btn.dataset.val;
+    if (!qualDraft[id]) delete qualDraft[id];
+    box.querySelectorAll(`[data-qa="${CSS.escape(id)}"]`).forEach((b) => b.classList.toggle('on', b.dataset.val === qualDraft[id]));
+    const { r, html, cls } = qualSummary();
+    $('#qualScore').innerHTML = html;
+    $('#qualBar').style.width = `${r.score || 0}%`;
+    $('#qualBar').className = `bar-${cls}`;
+  });
+}
+function readQualification() { return { answers: { ...qualDraft } }; }
+
+/* ---------- Perfil para documentos (foto, WhatsApp y presentación del vendedor) ---------- */
+async function profileModal(userId) {
+  const self = !userId || userId === currentUser.id;
+  let profile;
+  try { profile = (await api(self ? '/api/profile' : `/api/profile/${userId}`)).profile; } catch (error) { toast(error.message); return; }
+  const state = { photoMediaId: profile.photoMediaId ?? (profile.photoUrl ? Number(profile.photoUrl.split('/').pop()) : null) };
+  const defaultBio = `Soy ${profile.name.split(' ')[0]}, tu Travel Partner en Viajes Casal. Te acompaño desde el primer mensaje hasta que regresas a casa, cuidando cada detalle de tu viaje para que tú solo pienses en disfrutarlo.`;
+  openModal('PERFIL PARA DOCUMENTOS', self ? 'Mi perfil' : `Perfil de ${profile.name}`, `<form class="modal-form">
+    <p class="full muted">Así apareces en la sección “Conoce a tu Travel Partner” de la cotización y en la confirmación de servicios. Tu nombre se cambia en Configuración → Usuarios.</p>
+    <div class="full cz">${imgField('photoMediaId', state.photoMediaId, 'Foto (cuadrada, de frente)', { round: true })}</div>
+    ${field('WhatsApp', `<input name="phone" maxlength="40" placeholder="+52 998 123 4567" value="${escapeHtml(profile.phone)}">`)}
+    ${field('Página personal (opcional)', `<input name="website" maxlength="200" placeholder="https://paulina.viajescasal.com" value="${escapeHtml(profile.website)}">`)}
+    ${field('Presentación', `<textarea name="bio" rows="4" maxlength="1500" placeholder="${escapeHtml(defaultBio)}">${escapeHtml(profile.bio)}</textarea>`, true)}
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">Guardar perfil</button></div></form>`);
+  bindImages($('#modalBody'), (_key, id) => { state.photoMediaId = id; });
+  bindForm(async (v) => {
+    try {
+      await send('PUT', self ? '/api/profile' : `/api/profile/${userId}`, { phone: v.phone, website: v.website, bio: v.bio, photoMediaId: state.photoMediaId });
+      toast('Perfil guardado');
+      if (self) loadAll();
+      return true;
+    } catch (error) { toast(error.message, 6000); return false; }
+  });
+}
+
+/* ---------- Configuración: Plantilla PDF ---------- */
+const DOC_SETTINGS = [
+  ['Marca y contacto', [
+    ['brandName', 'Nombre en los documentos', 'input', 'Aparece junto al logo'], ['tagline', 'Frase de cierre', 'input'],
+    ['supportWhatsapp', 'WhatsApp de soporte 24/7', 'input', 'Se usa si el vendedor no tiene WhatsApp en su perfil'], ['emergencyPhone', 'Teléfono de emergencias', 'input']
+  ]],
+  ['Sitio, redes y reseñas', [
+    ['website', 'Sitio web', 'url'], ['reviewsUrl', 'Reseñas de Google', 'url'], ['facebook', 'Facebook', 'url'], ['instagram', 'Instagram', 'url'],
+    ['tiktok', 'TikTok', 'url'], ['youtube', 'YouTube', 'url'], ['blogUrl', 'Blog / guías de viaje', 'url']
+  ]],
+  ['Cotización', [
+    ['quoteImportant', 'Información importante', 'area'], ['quotePolicies', 'Políticas', 'area'], ['quoteNote', 'Esta cotización', 'area', 'También aparece en los circuitos'],
+    ['circImportant', 'Información importante (circuitos)', 'area'], ['circPolicies', 'Políticas (circuitos)', 'area'],
+    ['partnerBenefits', 'Beneficios del Travel Partner', 'area', 'Uno por línea'], ['paymentInstructions', 'Datos para pago (opcional)', 'area', 'Banco, beneficiario, CLABE o liga de pago. Aparece en “Formas de pago”.']
+  ]],
+  ['Confirmación de servicios', [
+    ['resSanitation', 'Cuota de saneamiento (Quintana Roo)', 'area'], ['resConsiderations', 'Consideraciones (otros destinos)', 'area'],
+    ['resPolicies', 'Políticas principales', 'area', 'Una por línea'], ['resTerms', 'Términos y condiciones', 'area'],
+    ['resTermsUrl', 'Enlace a términos completos', 'url'], ['resDocuments', 'Documentos recomendados', 'area', 'Uno por línea'],
+    ['resFlightTips', 'Tips de vuelo', 'area', 'Uno por línea'], ['resPartnerDetail', 'Atención del Travel Partner', 'area']
+  ]]
+];
+function renderDocSettings() {
+  const d = db.documents || {};
+  $('#docSettingsForm').innerHTML = DOC_SETTINGS.map(([legend, fields]) => `<fieldset><legend>${legend}</legend>${fields.map(([k, label, type, hint]) => {
+    const help = hint ? `<small>${escapeHtml(hint)}</small>` : '';
+    if (type === 'area') return `<label class="full">${escapeHtml(label)}${help}<textarea data-doc="${k}" rows="3">${escapeHtml(d[k])}</textarea></label>`;
+    return `<label>${escapeHtml(label)}${help}<input data-doc="${k}" ${type === 'url' ? 'type="url" placeholder="https://…"' : ''} value="${escapeHtml(d[k])}"></label>`;
+  }).join('')}</fieldset>`).join('');
+}
+async function saveDocSettings() {
+  const body = Object.fromEntries($$('#docSettingsForm [data-doc]').map((el) => [el.dataset.doc, el.value]));
+  const ok = await mutate(() => send('PUT', '/api/settings/documents', body), 'Plantilla guardada');
+  if (ok) renderDocSettings();
+}
+
+/* ---------- Configuración: preguntas de calificación (máximo 5, respuestas con puntos) ---------- */
+let questionDraft = [];
+const MAX_QUESTIONS = 5, MAX_OPTIONS = 6;
+function renderQuestionsEditor(fromDb = false) {
+  if (fromDb) questionDraft = JSON.parse(JSON.stringify(db.leadQuestions || []));
+  const totalMax = questionDraft.reduce((sum, q) => sum + maxPoints(q), 0) || 1;
+  $('#questionRows').innerHTML = (questionDraft.length ? questionDraft.map((q, i) => `<div class="q-card" data-q="${i}">
+    <div class="q-card-head"><input data-qf="label" maxlength="120" placeholder="Pregunta" value="${escapeHtml(q.label)}"><span class="q-weight" title="Peso de la pregunta en la calificación">peso ${Math.round((maxPoints(q) / totalMax) * 100)}%</span>
+      <span class="q-btns"><button type="button" data-qmove="-1" title="Subir">↑</button><button type="button" data-qmove="1" title="Bajar">↓</button><button type="button" data-qdel title="Eliminar pregunta">✕</button></span></div>
+    <div class="q-opts">${q.options.map((o, j) => `<div class="q-opt" data-o="${j}"><input data-of="label" maxlength="60" placeholder="Respuesta (botón)" value="${escapeHtml(o.label)}"><span class="pts"><input data-of="points" type="number" min="0" max="100" value="${escapeHtml(o.points)}"> pts</span><button type="button" class="cz-x" data-odel title="Quitar respuesta">✕</button></div>`).join('')}
+      ${q.options.length < MAX_OPTIONS ? '<button type="button" class="link" data-oadd>+ Agregar respuesta</button>' : ''}</div>
+  </div>`).join('') : '<p class="empty-note">Sin preguntas. Agrega la primera.</p>')
+  + `<div class="q-legend"><b>¿Cómo se califica?</b> Cada respuesta suma sus puntos. La calificación es el % de puntos obtenidos sobre el máximo posible, así que el peso de cada pregunta es su respuesta con más puntos. <b>Caliente</b> 70% o más · <b>Tibio</b> 40 a 69% · <b>Frío</b> menos de 40%. Máximo ${MAX_QUESTIONS} preguntas para que el cuestionario tome menos de un minuto.</div>`;
+  $('#addQuestion').disabled = questionDraft.length >= MAX_QUESTIONS;
+}
+$('#questionRows').addEventListener('input', (e) => {
+  const card = e.target.closest('[data-q]'); if (!card) return;
+  const q = questionDraft[Number(card.dataset.q)];
+  if (e.target.dataset.qf === 'label') q.label = e.target.value;
+  const row = e.target.closest('[data-o]');
+  if (row && e.target.dataset.of) {
+    const o = q.options[Number(row.dataset.o)];
+    if (e.target.dataset.of === 'points') o.points = Number(e.target.value);
+    else o.label = e.target.value;
+  }
+});
+$('#questionRows').addEventListener('change', (e) => { if (e.target.dataset.of === 'points') renderQuestionsEditor(); });
+$('#questionRows').addEventListener('click', (e) => {
+  const card = e.target.closest('[data-q]'); if (!card) return;
+  const i = Number(card.dataset.q);
+  const q = questionDraft[i];
+  if (e.target.closest('[data-qdel]')) questionDraft.splice(i, 1);
+  else if (e.target.closest('[data-qmove]')) {
+    const j = i + Number(e.target.closest('[data-qmove]').dataset.qmove);
+    if (j < 0 || j >= questionDraft.length) return;
+    [questionDraft[i], questionDraft[j]] = [questionDraft[j], questionDraft[i]];
+  } else if (e.target.closest('[data-oadd]')) q.options.push({ label: '', points: 0 });
+  else if (e.target.closest('[data-odel]')) q.options.splice(Number(e.target.closest('[data-o]').dataset.o), 1);
+  else return;
+  renderQuestionsEditor();
+});
+$('#addQuestion').onclick = () => {
+  if (questionDraft.length >= MAX_QUESTIONS) return;
+  questionDraft.push({ label: '', options: [{ label: '', points: 10 }, { label: '', points: 0 }] });
+  renderQuestionsEditor();
+  $('#questionRows .q-card:last-of-type input')?.focus();
+};
+$('#cancelQuestions').onclick = () => renderQuestionsEditor(true);
+$('#saveQuestions').onclick = async () => {
+  const ok = await mutate(() => send('PUT', '/api/settings/lead-questions', { questions: questionDraft }), 'Preguntas guardadas');
+  if (ok) renderQuestionsEditor(true);
+};
+$('#saveDocSettings').onclick = saveDocSettings;
+$('#cancelDocSettings').onclick = renderDocSettings;
+
+/* ---------- Configuración: integraciones ---------- */
+function renderIntegrations() {
+  const d = db.documents || {};
+  const waNumber = d.supportWhatsapp || db.agency.whatsapp;
+  const wa = TPDocs.waLink(waNumber);
+  const reviews = TPDocs.safeUrl(d.reviewsUrl);
+  const card = (title, text, link, qr, extra = '') => `<div class="integration"><div class="int-main"><b>${title}</b><small>${text}</small>${link ? `<p><a href="${escapeHtml(link)}" target="_blank" rel="noopener">${escapeHtml(link)}</a></p>` : ''}${extra}</div>
+    <div class="int-side">${qr ? `<img class="qr-mini" src="/api/qr?data=${encodeURIComponent(qr)}" alt="Código QR">` : ''}${link ? `<button class="btn secondary small" data-copy="${escapeHtml(link)}">Copiar enlace</button>` : ''}</div></div>`;
+  $('#integrationCards').innerHTML =
+    card('Documentos para clientes <span class="tag-ok">Activo</span>', 'Cotización (hasta 4 propuestas) y Confirmación de servicios con el diseño de Viajes Casal, listas para guardar en PDF y enviar por WhatsApp.', '', '', '<p><button class="link" data-settings-tab="pdfPanel">Editar textos y redes de la plantilla</button></p>')
+    + card(`WhatsApp de la agencia ${wa ? '<span class="tag-ok">Listo</span>' : '<span class="tag-soon">Sin número</span>'}`, wa ? `Enlace directo y código QR para ${escapeHtml(waNumber)}. Úsalo en tu sitio, redes o material impreso.` : 'Agrega el WhatsApp en Perfil de agencia o en Plantilla PDF.', wa, wa)
+    + card(`Reseñas de Google ${reviews ? '<span class="tag-ok">Listo</span>' : '<span class="tag-soon">Sin enlace</span>'}`, reviews ? 'Aparece al pie de la cotización y la confirmación. Comparte el QR al terminar cada viaje.' : 'Agrega el enlace en Plantilla PDF.', reviews, reviews)
+    + `<div class="int-soon"><div><b>Bot de WhatsApp → CRM</b>Que el bot cree el lead con sus respuestas. Próximamente (TP-101).</div><div><b>Formulario web</b>Solicitudes de tu sitio directo a Leads. Próximamente (TP-102).</div><div><b>Respaldos y exportación</b>Copia diaria y descarga a Excel. Próximamente (TP-007).</div></div>`;
+}
+$('#integrationCards').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-copy]');
+  if (!btn) return;
+  try { await navigator.clipboard.writeText(btn.dataset.copy); toast('Enlace copiado'); } catch { toast(btn.dataset.copy, 6000); }
+});
+
 /* ---------- bitácora ---------- */
 const ENTITY_LABELS = { clients: 'Cliente', leads: 'Lead', quotes: 'Cotización', trips: 'Viaje', followups: 'Seguimiento' };
 const SECURITY_LABELS = {
@@ -653,7 +1260,7 @@ const SECURITY_LABELS = {
   backup_codes_regenerated: 'Generó códigos de respaldo', twofa_backup_code_used: 'Entró con código de respaldo',
   twofa_failed: 'Bloqueado por códigos incorrectos', twofa_reset_by_admin: 'Quitó la app de un usuario',
   trusted_devices_cleared: 'Olvidó sus equipos recordados', twofa_skipped_no_mail: 'Entró sin segundo paso (correo no configurado)',
-  crm_settings_update: 'Cambió el perfil de la agencia', crm_shared_client: 'Registró un cliente que ya atiende otro vendedor'
+  crm_settings_update: 'Cambió la configuración', profile_update: 'Actualizó el perfil para documentos', crm_shared_client: 'Registró un cliente que ya atiende otro vendedor'
 };
 const VERB = { create: 'Creó', update: 'Editó', delete: 'Eliminó', duplicate: 'Duplicó', reassign: 'Reasignó' };
 function describeAction(item) {
@@ -781,6 +1388,7 @@ function userModal(id) {
     ${u ? field('Estado', `<select name="active" ${self ? 'disabled' : ''}>${options([['1', 'Activo'], ['0', 'Desactivado']], u.active ? '1' : '0')}</select>`) : ''}
     ${self ? '<p class="full note-warn">No puedes cambiar tu propio rol ni desactivar tu cuenta.</p>' : ''}
     ${u ? '' : '<p class="full muted">Al guardar se genera una contraseña temporal para compartir con el usuario.</p>'}
+    ${u && u.role !== 'consulta' ? `<div class="full"><button type="button" class="link" data-user-profile="${u.id}">Foto, WhatsApp y presentación para documentos</button></div>` : ''}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${u ? 'Guardar cambios' : 'Crear usuario'}</button></div></form>`;
   openModal('USUARIOS', u ? `Editar a ${u.name}` : 'Nuevo usuario', html);
   bindForm(async (v) => {
@@ -831,7 +1439,9 @@ function showSettingsTab(tab) {
   $$('#settingsNav [data-settings-tab]').forEach((b) => b.classList.toggle('active', b.dataset.settingsTab === tab));
   $$('.settings-panel').forEach((p) => { p.hidden = p.id !== tab; });
   if (tab === 'usersPanel') loadUsers();
-  if (tab === 'integrationsPanel') loadMailStatus();
+  if (tab === 'integrationsPanel') { loadMailStatus(); renderIntegrations(); }
+  if (tab === 'pdfPanel') renderDocSettings();
+  if (tab === 'questionsPanel') renderQuestionsEditor(true);
 }
 async function loadMailStatus() {
   const el = $('#mailStatus'), button = $('#testMail');
@@ -1043,12 +1653,14 @@ async function accountModal(view = {}) {
         : '<p>Más seguro que el correo: el código lo genera tu celular, sin internet.</p><div class="row"><button class="btn secondary small" id="totpSetup">Configurar app de autenticación</button></div>';
   openModal('MI CUENTA', data.user.name, `<div class="acct">
     <section><h4>Mis datos</h4><p>${escapeHtml(data.user.email)} · ${escapeHtml(data.user.roleLabel)}</p><div class="row"><button class="btn secondary small" id="acctChangePass">Cambiar mi contraseña</button></div></section>
+    <section><h4>Mi perfil para documentos</h4><p>${db.me?.phone ? `WhatsApp ${escapeHtml(db.me.phone)}` : 'Sin WhatsApp'} · ${db.me?.photoUrl ? 'con foto' : 'sin foto'}. Aparece en tus cotizaciones y confirmaciones.</p><div class="row"><button class="btn secondary small" id="acctProfile">Editar mi foto, WhatsApp y presentación</button></div></section>
     <section><h4>Verificación en dos pasos ${pill(t.active, 'Activa', 'Desactivada')}</h4>${twofaSection}</section>
     <section><h4>App de autenticación</h4>${appSection}</section>
     <section><h4>Equipos recordados</h4><p>${t.trustedDevices ? `${t.trustedDevices} equipo(s) no piden código durante 30 días.` : 'Ningún equipo recordado.'}</p>${t.trustedDevices ? '<div class="row"><button class="btn secondary small" id="forgetDevices">Olvidar todos los equipos</button></div>' : ''}</section>
     <div class="modal-actions"><button type="button" class="btn secondary close">Cerrar</button></div></div>`);
   const on = (id, fn) => { const el = $(`#${id}`); if (el) el.onclick = async () => { el.disabled = true; try { await fn(); } catch (error) { toast(error.message, 6000); el.disabled = false; } }; };
   on('acctChangePass', async () => voluntaryPasswordChange());
+  on('acctProfile', async () => profileModal());
   on('twofaOn', async () => { await send('POST', '/api/account/twofa', { enabled: true }); toast('Verificación activada'); accountModal(); });
   on('twofaOff', async () => { await send('POST', '/api/account/twofa', { enabled: false, password: $('#acctPassOff').value }); toast('Verificación desactivada'); accountModal(); });
   on('totpSetup', async () => accountModal({ setup: await send('POST', '/api/account/totp/setup') }));
@@ -1143,6 +1755,7 @@ document.addEventListener('click', (e) => {
     const action = el.dataset.action;
     if (action === 'lead') leadModal();
     else if (action === 'quote') quoteModal();
+    else if (action === 'circuit') quoteModal(null, { kind: 'circuito' });
     else if (action === 'client') clientModal();
     else if (action === 'trip') tripModal();
     else if (action === 'followup') followupModal();
@@ -1164,6 +1777,9 @@ document.addEventListener('click', (e) => {
     send('POST', `/api/users/${id}/reset-2fa`).then((r) => { toast(r.message, 6000); loadUsers(); }).catch((error) => toast(error.message));
     return;
   }
+  if ((el = hit('[data-confirmation]'))) { confirmationModal(Number(el.dataset.confirmation)); return; }
+  if ((el = hit('[data-res-pdf]'))) { openDocument('reserva', el.dataset.resPdf); return; }
+  if ((el = hit('[data-user-profile]'))) { profileModal(Number(el.dataset.userProfile)); return; }
   if ((el = hit('[data-edit-quote]'))) { quoteModal(Number(el.dataset.editQuote)); return; }
   if ((el = hit('[data-lead]'))) { leadModal(Number(el.dataset.lead)); return; }
   if ((el = hit('[data-client]'))) { clientModal(Number(el.dataset.client)); return; }

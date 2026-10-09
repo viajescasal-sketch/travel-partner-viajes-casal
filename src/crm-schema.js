@@ -38,6 +38,7 @@ const ENTITIES = {
       priority: { type: 'enum', values: PRIORITIES, default: 'Media' },
       source: { type: 'enum', values: LEAD_SOURCES, default: 'WhatsApp' },
       notes: { type: 'text', max: 4000 },
+      qualification: { type: 'json', max: 20000 },
       closed_at: { type: 'datetime', internal: true }
     }
   },
@@ -55,6 +56,7 @@ const ENTITIES = {
       valid_until: { type: 'date' },
       status: { type: 'enum', values: QUOTE_STATUSES, default: 'Borrador' },
       services: { type: 'text', max: 4000 },
+      details: { type: 'json', max: 120000 },
       accepted_at: { type: 'datetime', internal: true }
     }
   },
@@ -68,7 +70,8 @@ const ENTITIES = {
       start_date: { type: 'date', required: true },
       end_date: { type: 'date', required: true },
       status: { type: 'enum', values: TRIP_STATUSES, default: 'Confirmado' },
-      notes: { type: 'text', max: 4000 }
+      notes: { type: 'text', max: 4000 },
+      confirmation: { type: 'json', max: 60000 }
     }
   },
   followups: {
@@ -157,6 +160,13 @@ function coerceField(name, spec, raw) {
     }
     case 'bool':
       return raw === true || raw === 1 || raw === '1' || raw === 'true';
+    case 'json': {
+      // Datos estructurados (cotizador, confirmación, calificación): objeto simple con tamaño máximo.
+      if (typeof raw !== 'object' || Array.isArray(raw)) throw new ValidationError(`El campo ${name} no es válido`);
+      const text = JSON.stringify(raw);
+      if (text.length > spec.max) throw new ValidationError(`El contenido de ${name} es demasiado grande`);
+      return JSON.parse(text);
+    }
     default:
       throw new ValidationError(`Campo desconocido ${name}`);
   }
@@ -214,6 +224,8 @@ function columnSql(name, spec) {
       return `\`${name}\` DATETIME${notNull}`;
     case 'bool':
       return `\`${name}\` BOOLEAN NOT NULL DEFAULT FALSE`;
+    case 'json':
+      return `\`${name}\` MEDIUMTEXT NULL`;
     default:
       throw new Error(`Tipo sin columna: ${spec.type}`);
   }
@@ -251,5 +263,6 @@ module.exports = {
   sanitize,
   checkDateRange,
   nowCancun,
+  columnSql,
   createTableSql
 };
