@@ -171,3 +171,11 @@ body.dark .doc-settings legend { color: #fff; }
 .exp-format input { width: auto !important; margin: 0 !important; }
 body.role-consulta #exportBtn { display: none; }
 @media (max-width: 860px) { .backup-status { grid-template-columns: 1fr 1fr; } }
+
+/* TP-101 · Bot de WhatsApp */
+.bot-row { margin-top: 8px; }
+.bot-row label { font-size: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bot-row select { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 8px; }
+.code-box { font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace !important; white-space: pre; background: #0f2a2a !important; color: #d8f3ee !important; }
+.bot-steps { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; }
+.bot-chip { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 10px; font-size: 9px; font-weight: 700; background: #e7f9ee; color: #128c4b; }

@@ -17,6 +17,7 @@ const { createMailer } = require('./src/mailer');
 const { createLoginFlow, requiresTwofa } = require('./src/login-flow');
 const { createPasswordResetService, createRecoveryRouter, createMailAdminRouter, passwordPolicyError } = require('./src/password-reset');
 const { createBackupService, createBackupRouter } = require('./src/backup');
+const { createBotRouter, createBotAdminRouter } = require('./src/bot-routes');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -238,7 +239,19 @@ async function createApp(options = {}) {
 
   app.use('/api/auth', loginFlow.router);
   app.use('/api/auth', createRecoveryRouter(dataStore, mailer, resetService, process.env));
+  // Bot de WhatsApp (Botpress): entra con su propia clave, no con sesión.
+  const bot = createBotRouter(dataStore);
+  app.use('/api', bot.router);
   app.use('/api', authenticate);
+  // Si el servidor estuvo dormido a la hora del respaldo, se revisa al primer uso (máximo cada 5 minutos).
+  let lastBackupCheck = 0;
+  app.use('/api', (req, res, next) => {
+    if (!options.skipPurgeTimer && Date.now() - lastBackupCheck > 5 * 60 * 1000) {
+      lastBackupCheck = Date.now();
+      backupService.runIfDue().catch((error) => console.error('Respaldo automático falló:', error.message));
+    }
+    next();
+  });
   app.use('/api', (req, res, next) => {
     if (req.session.user.mustChangePassword) {
       return res.status(403).json({ ok: false, error: 'Cambia tu contraseña temporal para continuar' });
@@ -250,6 +263,7 @@ async function createApp(options = {}) {
   app.use('/api', createMailAdminRouter(dataStore, mailer, resetService, { requireRole }, process.env));
   app.use('/api/users', createUserRouter(dataStore, { requireRole, destroyUserSessions: async () => {} }));
   app.use('/api', createBackupRouter(dataStore, backupService, { requireRole }));
+  app.use('/api', createBotAdminRouter(dataStore, bot, { requireRole }));
   app.use('/api', createCrmRouter(dataStore, { requireRole }));
   app.use(express.static(publicDirectory, { index: false, dotfiles: 'ignore' }));
 

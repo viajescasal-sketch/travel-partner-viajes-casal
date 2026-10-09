@@ -258,7 +258,7 @@ function renderLeads() {
   const cols = admin ? 7 : 6;
   $('#leadRows').innerHTML = list.length ? list.map((l) => {
     const badge = shared.has(l.client_id) ? '<span class="badge-shared" title="Este cliente tiene leads con más de un vendedor">Cliente compartido</span>' : '';
-    return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}${qualChip(l)}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
+    return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}${String(l.notes || '').includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip" title="Llegó por el bot de WhatsApp">🤖 Bot</span>' : ''}${qualChip(l)}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
   }).join('') : emptyRow(cols, db.leads.length ? 'Ningún lead coincide con la búsqueda.' : 'Aún no hay leads registrados.');
 }
 // Exportar a Excel o CSV: cada rol descarga solo lo que puede ver.
@@ -1308,6 +1308,68 @@ $('#backupRows').addEventListener('click', (e) => {
 });
 
 /* ---------- Configuración: integraciones ---------- */
+/* ---------- Bot de WhatsApp (Botpress) ---------- */
+const BOT_URL = () => `${location.origin}/api/integrations/botpress/lead`;
+function botpressCode(token) {
+  return `// Viajes Casal · envía la solicitud al CRM (pegar al final de Traspaso_TravelPartner)
+const w = workflow
+const tags = (event && event.tags && event.tags.conversation) || {}
+try {
+  await axios.post('${BOT_URL()}', {
+    telefono: tags['whatsapp:userPhone'] || '',
+    nombre: w.nombre,
+    producto: w.producto,
+    destino: w.destinoViaje,
+    ciudadSalida: w.ciudadSalida || w.svCiudadSalida,
+    fechaVuelo: w.svFechaViaje,
+    personas: w.numAdultos || w.personasTours,
+    presupuesto: w.presupuesto,
+    tipoHospedaje: w.tipoHospedaje,
+    tipoExperiencia: w.tipoExperiencia,
+    preferencias: w.preferenciasHotel || w.preferenciasVuelo,
+    traslado: w.trasladoRentaAuto,
+    etapa: w.etapaDecisin,
+    resumen: w.resumen
+  }, { headers: { 'X-TP-Token': '${token}' }, timeout: 8000 })
+} catch (e) {
+  console.log('El CRM no recibió el lead: ' + ((e.response && e.response.status) || e.message))
+}`;
+}
+async function renderBotCard() {
+  const card = $('#botCard');
+  if (!card) return;
+  try {
+    const st = await api('/api/integrations/botpress');
+    const owners = sellers();
+    card.innerHTML = `<div class="int-main"><b>Bot de WhatsApp → CRM ${st.enabled ? '<span class="tag-ok">Activo</span>' : '<span class="tag-soon">Inactivo</span>'}</b>
+      <small>Al terminar la calificación en Botpress, el bot crea el lead (o actualiza el que ya está abierto) con nombre, WhatsApp, destino, fechas, personas y presupuesto, y programa un seguimiento a 15 minutos.</small>
+      <p>${st.lastAt ? `Último lead recibido: <b>${escapeHtml(fmtLocal(st.lastAt))}</b> · ${escapeHtml(st.lastResult || '')}` : 'Aún no llega ningún lead del bot.'}${st.hasToken ? ` · Clave que termina en <b>…${escapeHtml(st.tokenHint)}</b>` : ''}</p>
+      <div class="bot-row"><label>Los leads del bot se asignan a <select id="botOwner">${options(owners.map((u) => [u.id, u.name]), st.ownerId ?? owners.find((u) => u.role === 'travel_partner')?.id ?? '', { blank: 'Primer vendedor activo' })}</select></label></div></div>
+      <div class="int-side">${st.hasToken ? `<button class="btn secondary small" id="botToggle">${st.enabled ? 'Desactivar' : 'Activar'}</button>` : ''}<button class="btn ${st.hasToken ? 'secondary' : 'primary'} small" id="botToken">${st.hasToken ? 'Generar clave nueva' : 'Conectar bot'}</button></div>`;
+    $('#botOwner').onchange = async (e) => { try { await send('PUT', '/api/integrations/botpress', { ownerId: e.target.value || null }); toast('Vendedor para los leads del bot guardado'); } catch (error) { toast(error.message); } };
+    if ($('#botToggle')) $('#botToggle').onclick = async () => { try { await send('PUT', '/api/integrations/botpress', { enabled: !st.enabled }); renderBotCard(); } catch (error) { toast(error.message); } };
+    $('#botToken').onclick = () => botTokenModal(st.hasToken);
+  } catch (error) { card.innerHTML = `<div class="int-main"><b>Bot de WhatsApp → CRM</b><small>${escapeHtml(error.message)}</small></div>`; }
+}
+function botTokenModal(replacing) {
+  openModal('BOT DE WHATSAPP', replacing ? 'Generar clave nueva' : 'Conectar el bot de Botpress', `<div class="modal-form">
+    <p class="full">${replacing ? 'La clave anterior <b>dejará de funcionar</b>: tendrás que pegar el código nuevo en Botpress.' : 'Se crea una clave secreta para que solo tu bot pueda crear leads en el CRM.'}</p>
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="button" class="btn primary" id="botGen">Generar clave y código</button></div></div>`);
+  $('#botGen').onclick = async () => {
+    try {
+      const r = await send('POST', '/api/integrations/botpress/token');
+      const code = botpressCode(r.token);
+      openModal('BOT DE WHATSAPP', 'Código para pegar en Botpress', `<div class="modal-form">
+        <p class="full note-warn">Este código incluye la clave secreta y <b>solo se muestra ahora</b>. Cópialo y pégalo en Botpress; no lo compartas por otro lado.</p>
+        <ol class="full bot-steps"><li>En Botpress abre el flujo y el nodo <b>Traspaso_TravelPartner</b>.</li><li>Abajo de la tarjeta “Ejecutar código” que arma el resumen, agrega otra tarjeta <b>Ejecutar código</b> (Execute code).</li><li>Pega este código y da clic en <b>Publicar</b>.</li><li>Haz una prueba desde WhatsApp: el lead aparece en Leads con un seguimiento a 15 minutos.</li></ol>
+        <textarea id="botCode" class="full code-box" rows="14" readonly>${escapeHtml(code)}</textarea>
+        <div class="modal-actions"><button type="button" class="btn secondary close">Listo</button><button type="button" class="btn primary" id="botCopy">Copiar código</button></div></div>`, { wide: true });
+      $('#botCopy').onclick = async () => { try { await navigator.clipboard.writeText($('#botCode').value); toast('Código copiado'); } catch { $('#botCode').select(); toast('Selecciona y copia con Ctrl+C'); } };
+      renderBotCard();
+    } catch (error) { toast(error.message, 6000); }
+  };
+}
+
 function renderIntegrations() {
   const d = db.documents || {};
   const waNumber = d.supportWhatsapp || db.agency.whatsapp;
@@ -1319,7 +1381,8 @@ function renderIntegrations() {
     card('Documentos para clientes <span class="tag-ok">Activo</span>', 'Cotización (hasta 4 propuestas) y Confirmación de servicios con el diseño de Viajes Casal, listas para guardar en PDF y enviar por WhatsApp.', '', '', '<p><button class="link" data-settings-tab="pdfPanel">Editar textos y redes de la plantilla</button></p>')
     + card(`WhatsApp de la agencia ${wa ? '<span class="tag-ok">Listo</span>' : '<span class="tag-soon">Sin número</span>'}`, wa ? `Enlace directo y código QR para ${escapeHtml(waNumber)}. Úsalo en tu sitio, redes o material impreso.` : 'Agrega el WhatsApp en Perfil de agencia o en Plantilla PDF.', wa, wa)
     + card(`Reseñas de Google ${reviews ? '<span class="tag-ok">Listo</span>' : '<span class="tag-soon">Sin enlace</span>'}`, reviews ? 'Aparece al pie de la cotización y la confirmación. Comparte el QR al terminar cada viaje.' : 'Agrega el enlace en Plantilla PDF.', reviews, reviews)
-    + `<div class="int-soon"><div><b>Bot de WhatsApp → CRM</b>Que el bot cree el lead con sus respuestas. Próximamente (TP-101).</div><div><b>Formulario web</b>Solicitudes de tu sitio directo a Leads. Próximamente (TP-102).</div><div><b>Respaldos y exportación <span class="tag-ok">Activo</span></b>Copia diaria a las 2:00 a.m. y descarga a Excel/CSV. <button class="link" data-settings-tab="backupsPanel">Ver respaldos</button></div></div>`;
+    + '<div id="botCard" class="integration"><div class="int-main"><b>Bot de WhatsApp → CRM</b><small>Cargando…</small></div></div>'
+    + `<div class="int-soon"><div><b>Formulario web</b>Solicitudes de tu sitio directo a Leads. Próximamente (TP-102).</div><div><b>Respaldos y exportación <span class="tag-ok">Activo</span></b>Copia diaria a las 2:00 a.m. y descarga a Excel/CSV. <button class="link" data-settings-tab="backupsPanel">Ver respaldos</button></div></div>`;
 }
 $('#integrationCards').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-copy]');
@@ -1520,7 +1583,7 @@ function showSettingsTab(tab) {
   $$('#settingsNav [data-settings-tab]').forEach((b) => b.classList.toggle('active', b.dataset.settingsTab === tab));
   $$('.settings-panel').forEach((p) => { p.hidden = p.id !== tab; });
   if (tab === 'usersPanel') loadUsers();
-  if (tab === 'integrationsPanel') { loadMailStatus(); renderIntegrations(); }
+  if (tab === 'integrationsPanel') { loadMailStatus(); renderIntegrations(); renderBotCard(); }
   if (tab === 'pdfPanel') renderDocSettings();
   if (tab === 'questionsPanel') renderQuestionsEditor(true);
   if (tab === 'backupsPanel') loadBackups();

@@ -114,7 +114,7 @@ function createBackupService({ dataStore, mailer, now = nowCancun }) {
   let timer = null;
   function start() {
     const tick = () => runIfDue().catch((error) => console.error('Respaldo automático falló:', error.message));
-    setTimeout(tick, 60 * 1000).unref();
+    setTimeout(tick, 20 * 1000).unref();
     timer = setInterval(tick, CHECK_EVERY_MS);
     timer.unref();
   }
