@@ -10,8 +10,8 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=tp103" />
-    <link rel="stylesheet" href="/tp006.css?v=tp103" />
+    <link rel="stylesheet" href="/styles.css?v=tp104" />
+    <link rel="stylesheet" href="/tp006.css?v=tp104" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -161,7 +161,11 @@
             />
           </div>
           <div class="header-actions">
-            <button id="theme" class="icon">☾</button
+            <div class="bell-wrap">
+              <button id="bellBtn" class="icon bell" title="Avisos" aria-label="Avisos" aria-haspopup="true" aria-expanded="false">🔔<em id="bellCount" class="hidden">0</em></button>
+              <div id="bellPanel" class="bell-panel hidden" role="dialog" aria-label="Avisos"></div>
+            </div
+            ><button id="theme" class="icon">☾</button
             ><button id="exportBtn" class="icon" title="Exportar a Excel o CSV" aria-label="Exportar a Excel o CSV">⤓</button
             ><button class="btn primary" data-action="lead" data-hide-ops>
               + Nuevo lead
@@ -287,6 +291,7 @@
                 <option>Vendido</option>
                 <option>Perdido</option></select
               ><select id="ownerFilter" class="hidden" aria-label="Filtrar por vendedor"></select
+              ><button id="reassignLeads" class="btn secondary hidden" data-admin-only>Reasignar varios</button
               ><button id="exportLeads" class="btn secondary">Exportar</button>
             </div>
             <div id="leadBoard" class="kanban hidden" aria-label="Tablero de oportunidades"></div>
@@ -510,6 +515,7 @@
                 ><button data-settings-tab="usersPanel">Usuarios</button
                 ><button data-settings-tab="pdfPanel">Plantilla PDF</button
                 ><button data-settings-tab="questionsPanel">Preguntas de calificación</button
+                ><button data-settings-tab="assignmentPanel">Asignación de leads</button
                 ><button data-settings-tab="integrationsPanel">Integraciones</button
                 ><button data-settings-tab="backupsPanel">Respaldos</button>
               </nav>
@@ -562,6 +568,15 @@
                   <button id="cancelQuestions" class="btn secondary">Cancelar</button
                   ><button id="saveQuestions" class="btn primary">Guardar preguntas</button>
                 </div>
+              </article>
+              <article class="panel settings-panel" id="assignmentPanel" hidden>
+                <div class="panel-head">
+                  <div>
+                    <h3>Asignación de leads</h3>
+                    <p>Cómo se reparten los leads que llegan solos (bot de WhatsApp y formulario web) y los que registras en “Automático”.</p>
+                  </div>
+                </div>
+                <div id="assignmentBody"><p class="muted">Cargando…</p></div>
               </article>
               <article class="panel settings-panel" id="integrationsPanel" hidden>
                 <h3>Integraciones</h3>
@@ -759,7 +774,7 @@
         cursor: wait;
       }
     </style>
-    <script src="/docs/documents.js?v=tp103"></script>
-    <script src="/app.js?v=tp103"></script>
+    <script src="/docs/documents.js?v=tp104"></script>
+    <script src="/app.js?v=tp104"></script>
   </body>
 </html>

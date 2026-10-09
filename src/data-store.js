@@ -88,6 +88,11 @@ function requiredProductionVariables(env) {
     .filter((name) => !env[name]);
 }
 
+function normalizeNotification(row) {
+  const stamp = (v) => (v instanceof Date ? nowCancun(new Date(v.getTime() + 5 * 3600000)) : v ? String(v) : null);
+  return { id: Number(row.id), kind: row.kind, title: row.title, body: row.body || '', leadId: row.lead_id == null ? null : Number(row.lead_id), read: Boolean(row.read_at), createdAt: stamp(row.created_at) };
+}
+
 class MySQLDataStore {
   constructor(env) {
     this.env = env;
@@ -155,6 +160,18 @@ class MySQLDataStore {
       json_gz MEDIUMBLOB NOT NULL,
       INDEX idx_backups_created (created_at),
       CONSTRAINT fk_backups_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+    await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_notifications (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      kind VARCHAR(30) NOT NULL,
+      title VARCHAR(200) NOT NULL,
+      body VARCHAR(500) NULL,
+      lead_id BIGINT UNSIGNED NULL,
+      read_at DATETIME NULL,
+      created_at DATETIME NOT NULL,
+      INDEX idx_notif_user (user_id, id),
+      CONSTRAINT fk_notif_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
     await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_settings (
       setting_key VARCHAR(60) NOT NULL PRIMARY KEY,
@@ -251,11 +268,34 @@ class MySQLDataStore {
     return Number(result.insertId);
   }
 
+  // Avisos para cada usuario (campanita).
+  async createNotification({ userId, kind, title, body, leadId }) {
+    const [result] = await this.pool.execute(
+      'INSERT INTO crm_notifications (user_id, kind, title, body, lead_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, String(kind).slice(0, 30), String(title).slice(0, 200), body ? String(body).slice(0, 500) : null, leadId ?? null, nowCancun()]
+    );
+    return Number(result.insertId);
+  }
+
+  async listNotifications(userId, limit = 30) {
+    const [rows] = await this.pool.execute(`SELECT id, kind, title, body, lead_id, read_at, created_at FROM crm_notifications WHERE user_id = ? ORDER BY id DESC LIMIT ${Math.min(Math.max(Number(limit) || 30, 1), 100)}`, [userId]);
+    const [[count]] = await this.pool.execute('SELECT COUNT(*) AS n FROM crm_notifications WHERE user_id = ? AND read_at IS NULL', [userId]);
+    return { items: rows.map(normalizeNotification), unread: Number(count.n) };
+  }
+
+  async markNotificationsRead(userId, ids) {
+    const list = Array.isArray(ids) ? ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 200) : null;
+    if (list && !list.length) return;
+    await this.pool.query(`UPDATE crm_notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL${list ? ` AND id IN (${list.map(() => '?').join(',')})` : ''}`, [nowCancun(), userId, ...(list || [])]);
+    // Se conservan los últimos 90 días.
+    await this.pool.query('DELETE FROM crm_notifications WHERE user_id = ? AND created_at < DATE_SUB(?, INTERVAL 90 DAY)', [userId, nowCancun()]);
+  }
+
   // Candado de MySQL: evita que dos procesos hagan el respaldo automático al mismo tiempo.
-  async withLock(name, fn) {
+  async withLock(name, fn, waitSeconds = 0) {
     const conn = await this.pool.getConnection();
     try {
-      const [rows] = await conn.query('SELECT GET_LOCK(?, 0) AS ok', [name]);
+      const [rows] = await conn.query('SELECT GET_LOCK(?, ?) AS ok', [name, waitSeconds]);
       if (Number(rows[0].ok) !== 1) return null;
       try { return await fn(); } finally { await conn.query('SELECT RELEASE_LOCK(?)', [name]); }
     } finally { conn.release(); }
@@ -657,6 +697,20 @@ class MemoryDataStore {
     return this.backupSeq;
   }
   async withLock(_name, fn) { return fn(); }
+  async createNotification({ userId, kind, title, body, leadId }) {
+    this.notifications = this.notifications || [];
+    const row = { id: this.notifications.length + 1, user_id: userId, kind, title: String(title).slice(0, 200), body: body ? String(body).slice(0, 500) : null, lead_id: leadId ?? null, read_at: null, created_at: nowCancun() };
+    this.notifications.push(row);
+    return row.id;
+  }
+  async listNotifications(userId, limit = 30) {
+    const mine = (this.notifications || []).filter((n) => n.user_id === Number(userId)).sort((a, b) => b.id - a.id);
+    return { items: mine.slice(0, limit).map(normalizeNotification), unread: mine.filter((n) => !n.read_at).length };
+  }
+  async markNotificationsRead(userId, ids) {
+    const list = Array.isArray(ids) ? ids.map(Number) : null;
+    (this.notifications || []).filter((n) => n.user_id === Number(userId) && !n.read_at && (!list || list.includes(n.id))).forEach((n) => { n.read_at = nowCancun(); });
+  }
   async updateBackupStatus(id, status) { const b = (this.backups || []).find((x) => x.id === Number(id)); if (b) b.email_status = status; }
   async listBackups() {
     return (this.backups || []).map((b) => normalizeBackup({ ...b, summary: JSON.stringify(b.summary), xlsx_size: b.xlsx.length, json_size: b.json_gz.length, created_by_name: this.users.find((u) => u.id === b.created_by)?.name }));

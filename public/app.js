@@ -304,7 +304,7 @@ function boardCard(l, admin) {
     ${chips ? `<div class="kb-chips">${chips}</div>` : ''}
     <div class="kb-foot"><span class="kb-days${late ? ' late' : ''}" title="${late ? `Lleva más de ${limit} ${limit === 1 ? 'día' : 'días'} en ${escapeHtml(l.stage)}` : 'Días en esta etapa'}">⏱ ${days === 0 ? 'Hoy' : `${days} ${days === 1 ? 'día' : 'días'}`}</span>
       ${next ? `<span class="kb-next${overdue ? ' late' : ''}" title="Próximo seguimiento">📅 ${escapeHtml(fmtDue(next.due_at))}</span>` : ''}
-      ${admin ? `<span class="kb-owner" title="${escapeHtml(userName(l.owner_id))}">${escapeHtml(initials(userName(l.owner_id)))}</span>` : ''}
+      ${admin ? `<button type="button" class="kb-owner" data-kb-owner="${l.id}" title="Vendedor: ${escapeHtml(userName(l.owner_id))} · clic para reasignar" aria-label="Reasignar (vendedor: ${escapeHtml(userName(l.owner_id))})">${escapeHtml(initials(userName(l.owner_id)))}</button>` : ''}
       ${canMove ? `<button type="button" class="kb-move" data-kb-move="${l.id}" title="Mover a otra etapa" aria-label="Mover a otra etapa">⇄</button>` : ''}</div>
   </div>`;
 }
@@ -421,6 +421,139 @@ function saleModal(lead) {
     moveLead(id, zone.dataset.stage);
   });
 })();
+
+/* ---------- asignación de leads y avisos (TP-104) ---------- */
+const bell = { latestId: 0, unread: 0, items: [], receivesLeads: false, available: true, timer: null, first: true };
+function fmtAgo(stamp) {
+  if (!stamp) return '';
+  const mins = Math.max(0, Math.round((nowLocal() - stampDate(stamp)) / 60000));
+  if (mins < 1) return 'ahora';
+  if (mins < 60) return `hace ${mins} min`;
+  if (mins < 24 * 60) return `hace ${Math.round(mins / 60)} h`;
+  return fmtDate(stamp.slice(0, 10));
+}
+async function refreshBell() {
+  if (!currentUser) return;
+  try {
+    const r = await api('/api/notifications');
+    const fresh = bell.first ? [] : r.items.filter((i) => i.id > bell.latestId && !i.read);
+    Object.assign(bell, { items: r.items, unread: r.unread, receivesLeads: r.receivesLeads, available: r.available, latestId: r.latestId, first: false });
+    const count = $('#bellCount');
+    count.textContent = bell.unread > 9 ? '9+' : String(bell.unread);
+    count.classList.toggle('hidden', !bell.unread);
+    if (!$('#bellPanel').classList.contains('hidden')) renderBellPanel();
+    if (fresh.length) { toast(`🔔 ${fresh[0].title}`, 7000); loadAll(); }
+  } catch { /* sin conexión: se reintenta en el siguiente ciclo */ }
+}
+function startBell() {
+  clearInterval(bell.timer);
+  Object.assign(bell, { first: true, latestId: 0 });
+  refreshBell();
+  bell.timer = setInterval(() => { if (!document.hidden) refreshBell(); }, 60000);
+}
+function renderBellPanel() {
+  const panel = $('#bellPanel');
+  panel.innerHTML = `<div class="bell-head"><b>Avisos</b>${bell.unread ? '<button type="button" class="link" id="bellReadAll">Marcar todo como leído</button>' : ''}</div>
+    ${bell.receivesLeads ? `<label class="bell-avail"><input type="checkbox" id="bellAvail" ${bell.available ? 'checked' : ''}> <span>Recibir leads nuevos <small>${bell.available ? 'Estás disponible en los turnos' : 'No disponible: tu turno se salta'}</small></span></label>` : ''}
+    <div class="bell-list">${bell.items.length ? bell.items.map((n) => `<button type="button" class="bell-item${n.read ? '' : ' unread'}" data-bell-id="${n.id}" data-bell-lead="${n.leadId || ''}"><b>${escapeHtml(n.title)}</b><small>${escapeHtml(n.body)}${n.body ? ' · ' : ''}${escapeHtml(fmtAgo(n.createdAt))}</small></button>`).join('') : '<p class="bell-empty">Sin avisos por ahora.</p>'}</div>`;
+  if ($('#bellReadAll')) $('#bellReadAll').onclick = async () => { await send('POST', '/api/notifications/read', { all: true }).catch(() => {}); refreshBell(); };
+  if ($('#bellAvail')) $('#bellAvail').onchange = async (e) => {
+    try { await send('PUT', '/api/assignment/availability', { available: e.target.checked }); toast(e.target.checked ? 'Estás disponible para recibir leads' : 'No recibirás leads nuevos hasta que te vuelvas a activar'); refreshBell(); } catch (error) { toast(error.message); e.target.checked = !e.target.checked; }
+  };
+}
+function toggleBell(open) {
+  const panel = $('#bellPanel');
+  const show = open ?? panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !show);
+  $('#bellBtn').setAttribute('aria-expanded', String(show));
+  if (show) { renderBellPanel(); refreshBell(); }
+}
+$('#bellBtn').addEventListener('click', (e) => { e.stopPropagation(); toggleBell(); });
+$('#bellPanel').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  const item = e.target.closest('[data-bell-id]');
+  if (!item) return;
+  const leadId = Number(item.dataset.bellLead);
+  send('POST', '/api/notifications/read', { ids: [Number(item.dataset.bellId)] }).then(refreshBell).catch(() => {});
+  toggleBell(false);
+  if (leadId) {
+    navigate('leads');
+    if (leadById(leadId)) leadModal(leadId); else { await loadAll(); if (leadById(leadId)) leadModal(leadId); else toast('Ese lead ya no está asignado a ti'); }
+  } else navigate('leads');
+});
+document.addEventListener('click', () => { if (!$('#bellPanel').classList.contains('hidden')) toggleBell(false); });
+
+// Configuración → Asignación de leads (administrador).
+async function renderAssignment() {
+  const box = $('#assignmentBody');
+  try {
+    const st = await api('/api/assignment');
+    const name = (id) => st.sellers.find((u) => u.id === id)?.name || '';
+    box.innerHTML = `<div class="as-modes">
+        <label class="as-mode"><input type="radio" name="asMode" value="turnos" ${st.mode === 'turnos' ? 'checked' : ''}><span><b>Por turnos</b><small>Uno y uno entre los vendedores marcados. Si alguien está “No disponible”, su turno se salta.</small></span></label>
+        <label class="as-mode"><input type="radio" name="asMode" value="fijo" ${st.mode === 'fijo' ? 'checked' : ''}><span><b>Vendedor fijo</b><small>Todos los leads a una sola persona (si no está disponible, entra el turno).</small></span></label>
+      </div>
+      <div class="table"><table><thead><tr><th>Vendedor</th><th>Participa en turnos</th><th>Disponibilidad</th></tr></thead><tbody>
+      ${st.sellers.map((u) => `<tr><td>${escapeHtml(u.name)} <small class="muted">${escapeHtml(ROLE_LABELS[u.role] || u.role)}</small></td>
+        <td><label class="as-check"><input type="checkbox" data-as-part="${u.id}" ${st.participants.includes(u.id) ? 'checked' : ''}> En turnos</label></td>
+        <td><button type="button" class="btn small ${st.away.includes(u.id) ? 'secondary' : 'as-on'}" data-as-avail="${u.id}" data-on="${st.away.includes(u.id) ? '0' : '1'}">${st.away.includes(u.id) ? '⏸ No disponible' : '● Disponible'}</button></td></tr>`).join('')}
+      </tbody></table></div>
+      <label class="as-fixed ${st.mode === 'fijo' ? '' : 'hidden'}">Vendedor fijo <select id="asFixed">${options(st.sellers.map((u) => [u.id, u.name]), st.fixedId, { blank: 'Elige…' })}</select></label>
+      <p class="as-next">${st.next ? `Siguiente lead automático: <b>${escapeHtml(st.next.name)}</b>` : '⚠ Nadie está disponible: los leads quedarán con el administrador.'}</p>
+      <ul class="as-rules"><li>Si escribe un cliente que ya existe, va con <b>su vendedor de siempre</b> (si está activo y disponible).</li><li>El vendedor recibe <b>correo</b> y un aviso en la <b>campanita 🔔</b>. Cada vendedor puede pausarse desde su campanita.</li><li>Para pasar leads a otra persona usa la ficha del lead, las iniciales en la tarjeta del tablero o <b>Reasignar varios</b> en Leads.</li></ul>
+      <div class="actions"><button class="btn primary" id="asSave">Guardar asignación</button></div>`;
+    box.querySelectorAll('[name=asMode]').forEach((r) => { r.onchange = () => box.querySelector('.as-fixed').classList.toggle('hidden', r.value !== 'fijo' || !r.checked); });
+    box.querySelectorAll('[data-as-avail]').forEach((b) => { b.onclick = async () => {
+      try { await send('PUT', '/api/assignment/availability', { userId: Number(b.dataset.asAvail), available: b.dataset.on !== '1' }); renderAssignment(); refreshBell(); } catch (error) { toast(error.message); }
+    }; });
+    $('#asSave').onclick = async () => {
+      const mode = box.querySelector('[name=asMode]:checked')?.value || 'turnos';
+      const participants = [...box.querySelectorAll('[data-as-part]:checked')].map((c) => Number(c.dataset.asPart));
+      const fixedId = $('#asFixed').value ? Number($('#asFixed').value) : null;
+      try {
+        const r = await send('PUT', '/api/assignment', { mode, participants, fixedId });
+        toast(`Asignación guardada${r.next ? ` · siguiente: ${r.next.name}` : ''}`);
+        renderAssignment();
+      } catch (error) { toast(error.message, 6000); }
+    };
+  } catch (error) { box.innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`; }
+}
+
+// Cambiar el vendedor de un lead (administrador) desde el tablero.
+function ownerModal(id) {
+  const lead = leadById(id);
+  if (!lead) return;
+  openModal('ASIGNAR LEAD', `${clientName(lead.client_id)} · ${lead.destination}`, `<form class="modal-form">
+    <p class="full">Vendedor actual: <b>${escapeHtml(userName(lead.owner_id))}</b>. El nuevo vendedor recibe un correo y un aviso en su campanita.</p>
+    ${field('Asignar a', `<select name="owner_id">${options(sellers().map((u) => [u.id, u.name]), lead.owner_id)}</select>`, true)}
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">Asignar</button></div></form>`);
+  bindForm((v) => (Number(v.owner_id) === lead.owner_id ? (close(), true) : mutate(() => send('PATCH', `/api/leads/${lead.id}`, { owner_id: Number(v.owner_id) }), `Lead asignado a ${userName(Number(v.owner_id))}`)));
+}
+// Reasignar varios leads abiertos a la vez.
+function reassignModal() {
+  const open = db.leads.filter((l) => !CLOSED.includes(l.stage));
+  if (!open.length) { toast('No hay leads abiertos'); return; }
+  openModal('REASIGNAR LEADS', 'Pasar varios leads a otro vendedor', `<form class="modal-form">
+    ${field('Leads de', `<select id="raFrom">${options(sellers().map((u) => [u.id, u.name]), '', { blank: 'Todos los vendedores' })}</select>`)}
+    ${field('Asignar a', `<select name="owner_id" required>${options(sellers().map((u) => [u.id, u.name]), '', { blank: 'Elige…' })}</select>`)}
+    <label class="full kb-check"><input type="checkbox" id="raAll"> Seleccionar todos</label>
+    <div class="full ra-list" id="raList"></div>
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary" id="raSubmit">Reasignar</button></div></form>`, { wide: true });
+  const paint = () => {
+    const from = $('#raFrom').value;
+    const list = open.filter((l) => !from || String(l.owner_id) === from);
+    $('#raList').innerHTML = list.length ? list.map((l) => `<label class="kb-reason"><input type="checkbox" name="ids" value="${l.id}"> <span><b>${escapeHtml(clientName(l.client_id))}</b> · ${escapeHtml(l.destination)} <small>${escapeHtml(l.stage)} · ${escapeHtml(userName(l.owner_id))}</small></span><b class="kb-val">${money(boardValue(l))}</b></label>`).join('') : '<p class="muted">Sin leads abiertos.</p>';
+    $('#raAll').checked = false;
+  };
+  $('#raFrom').onchange = paint;
+  $('#raAll').onchange = (e) => $('#raList').querySelectorAll('[name=ids]').forEach((c) => { c.checked = e.target.checked; });
+  paint();
+  bindForm((v, form) => {
+    const ids = [...form.querySelectorAll('[name=ids]:checked')].map((c) => Number(c.value));
+    if (!ids.length) { toast('Elige al menos un lead'); return null; }
+    return mutate(() => send('POST', '/api/leads/reassign', { ids, owner_id: Number(v.owner_id) }), `${ids.length} ${ids.length === 1 ? 'lead reasignado' : 'leads reasignados'} a ${userName(Number(v.owner_id))}`);
+  });
+}
 
 // Exportar a Excel o CSV: cada rol descarga solo lo que puede ver.
 const EXPORT_SECTIONS = [['clients', 'Clientes'], ['leads', 'Leads'], ['quotes', 'Cotizaciones'], ['sales', 'Ventas'], ['trips', 'Viajes'], ['followups', 'Seguimientos'], ['users', 'Usuarios']];
@@ -690,7 +823,7 @@ function leadModal(id, presetClientId) {
     ${lead ? field('Etapa', `<select name="stage">${options(STAGES, lead.stage)}</select>`) : field('Primer seguimiento', '<input name="first_followup_at" type="datetime-local">')}
     ${lead?.stage === 'Perdido' ? field('Motivo de pérdida', `<input name="lost_reason" maxlength="160" value="${escapeHtml(lead.lost_reason)}">`) : ''}
     ${field('Prioridad', `<select name="priority">${options(PRIORITIES, lead?.priority || 'Media')}</select>`)}
-    ${isAdmin() ? field('Vendedor asignado', `<select name="owner_id">${options(sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`]), lead?.owner_id ?? currentUser.id)}</select>`) : ''}
+    ${isAdmin() ? field('Vendedor asignado', `<select name="owner_id">${options([...(lead ? [] : [['auto', 'Automático (según la asignación)']]), ...sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`])], lead?.owner_id ?? currentUser.id)}</select>`) : ''}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
     ${qualHtml(lead)}
     ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Programar seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
@@ -705,7 +838,7 @@ function leadModal(id, presetClientId) {
       travelers: v.travelers || null, budget: v.budget || null, priority: v.priority, notes: v.notes || null
     });
     if (db.leadQuestions.length) body.qualification = readQualification();
-    if (v.owner_id) body.owner_id = Number(v.owner_id);
+    if (v.owner_id) body.owner_id = v.owner_id === 'auto' ? 'auto' : Number(v.owner_id);
     if (lead) {
       const reassigned = body.owner_id && body.owner_id !== lead.owner_id;
       if (v.lost_reason !== undefined) body.lost_reason = v.lost_reason || null;
@@ -1503,13 +1636,11 @@ async function renderBotCard() {
   if (!card) return;
   try {
     const st = await api('/api/integrations/botpress');
-    const owners = sellers();
     card.innerHTML = `<div class="int-main"><b>Bot de WhatsApp → CRM ${st.enabled ? '<span class="tag-ok">Activo</span>' : '<span class="tag-soon">Inactivo</span>'}</b>
       <small>Al terminar la calificación en Botpress, el bot crea el lead (o actualiza el que ya está abierto) con nombre, WhatsApp, destino, fechas, personas y presupuesto, y programa un seguimiento a 15 minutos.</small>
       <p>${st.lastAt ? `Último lead recibido: <b>${escapeHtml(fmtLocal(st.lastAt))}</b> · ${escapeHtml(st.lastResult || '')}` : 'Aún no llega ningún lead del bot.'}${st.hasToken ? ` · Clave que termina en <b>…${escapeHtml(st.tokenHint)}</b>` : ''}</p>
-      <div class="bot-row"><label>Los leads del bot se asignan a <select id="botOwner">${options(owners.map((u) => [u.id, u.name]), st.ownerId ?? owners.find((u) => u.role === 'travel_partner')?.id ?? '', { blank: 'Primer vendedor activo' })}</select></label></div></div>
+      <div class="bot-row">Los leads del bot se reparten según <button type="button" class="link" data-settings-tab="assignmentPanel">Asignación de leads</button>.</div></div>
       <div class="int-side">${st.hasToken ? `<button class="btn secondary small" id="botToggle">${st.enabled ? 'Desactivar' : 'Activar'}</button>` : ''}<button class="btn ${st.hasToken ? 'secondary' : 'primary'} small" id="botToken">${st.hasToken ? 'Generar clave nueva' : 'Conectar bot'}</button></div>`;
-    $('#botOwner').onchange = async (e) => { try { await send('PUT', '/api/integrations/botpress', { ownerId: e.target.value || null }); toast('Vendedor para los leads del bot guardado'); } catch (error) { toast(error.message); } };
     if ($('#botToggle')) $('#botToggle').onclick = async () => { try { await send('PUT', '/api/integrations/botpress', { enabled: !st.enabled }); renderBotCard(); } catch (error) { toast(error.message); } };
     $('#botToken').onclick = () => botTokenModal(st.hasToken);
   } catch (error) { card.innerHTML = `<div class="int-main"><b>Bot de WhatsApp → CRM</b><small>${escapeHtml(error.message)}</small></div>`; }
@@ -1549,19 +1680,17 @@ async function renderWebformCard() {
   if (!card) return;
   try {
     const st = await api('/api/integrations/webform');
-    const owners = sellers();
     const l = webformLinks('');
     card.innerHTML = `<div class="int-main"><b>Formulario web → CRM ${st.enabled ? '<span class="tag-ok">Activo</span>' : '<span class="tag-soon">Pausado</span>'}</b>
       <small>Reemplaza a Tally: el cliente contesta con botones (paquete, solo vuelo, solo hospedaje, tours o asesoría) y el lead entra a Leads ya calificado, con seguimiento a 15 minutos${st.notifyEmail ? ' y aviso por correo al vendedor' : ''}.</small>
       <p><a href="${escapeHtml(l.link)}" target="_blank" rel="noopener">${escapeHtml(l.link)}</a></p>
       <p>${st.lastAt ? `Último lead recibido: <b>${escapeHtml(fmtLocal(st.lastAt))}</b> · ${escapeHtml(st.lastResult || '')}` : 'Aún no llega ningún lead del formulario.'}</p>
       ${st.blockedCount ? `<p class="note-warn">Bloqueados como posible spam: <b>${st.blockedCount}</b> · último ${escapeHtml(fmtLocal(st.lastBlockedAt))} · ${escapeHtml(st.lastBlocked || '')}</p>` : ''}
-      <div class="bot-row"><label>Los leads del formulario se asignan a <select id="wfOwner">${options(owners.map((u) => [u.id, u.name]), st.ownerId ?? owners.find((u) => u.role === 'travel_partner')?.id ?? '', { blank: 'Primer vendedor activo' })}</select></label></div>
+      <div class="bot-row">Los leads del formulario se reparten según <button type="button" class="link" data-settings-tab="assignmentPanel">Asignación de leads</button>.</div>
       <div class="bot-row"><label><input type="checkbox" id="wfNotify" ${st.notifyEmail ? 'checked' : ''}> Avisar por correo al vendedor</label></div>
       <div class="bot-row"><label>WhatsApp del botón “Escríbenos” <input id="wfWa" class="wf-wa" value="${escapeHtml(st.whatsapp)}" placeholder="El de la agencia" maxlength="25"> <button class="btn secondary small" id="wfWaSave" type="button">Guardar</button></label></div></div>
       <div class="int-side"><img class="qr-mini" src="/api/qr?data=${encodeURIComponent(l.link)}" alt="Código QR del formulario"><button class="btn primary small" id="wfCode" type="button">Código para tu sitio</button><button class="btn secondary small" data-copy="${escapeHtml(l.link)}">Copiar enlace</button><button class="btn secondary small" id="wfToggle" type="button">${st.enabled ? 'Pausar' : 'Activar'}</button></div>`;
     const save = async (body, msg) => { try { await send('PUT', '/api/integrations/webform', body); toast(msg); renderWebformCard(); } catch (error) { toast(error.message); } };
-    $('#wfOwner').onchange = (e) => save({ ownerId: e.target.value || null }, 'Vendedor para los leads del formulario guardado');
     $('#wfNotify').onchange = (e) => save({ notifyEmail: e.target.checked }, e.target.checked ? 'Se avisará por correo' : 'Sin aviso por correo');
     $('#wfWaSave').onclick = () => save({ whatsapp: $('#wfWa').value }, 'WhatsApp del formulario guardado');
     $('#wfToggle').onclick = () => save({ enabled: !st.enabled }, st.enabled ? 'Formulario pausado: muestra solo el botón de WhatsApp' : 'Formulario activo');
@@ -1803,6 +1932,7 @@ function showSettingsTab(tab) {
   if (tab === 'pdfPanel') renderDocSettings();
   if (tab === 'questionsPanel') renderQuestionsEditor(true);
   if (tab === 'backupsPanel') loadBackups();
+  if (tab === 'assignmentPanel') renderAssignment();
 }
 async function loadMailStatus() {
   const el = $('#mailStatus'), button = $('#testMail');
@@ -1853,6 +1983,7 @@ async function handleResetLink() {
 /* ---------- sesión ---------- */
 function showLogin() {
   currentUser = null; loaded = false;
+  clearInterval(bell.timer);
   showAuthView('loginForm');
   $('#platform').classList.add('hidden');
   $('#login').classList.remove('hidden');
@@ -1870,7 +2001,7 @@ function applyUser(user) {
   $('#login').classList.add('hidden');
   $('#platform').classList.remove('hidden');
   if (user.mustChangePassword) showPasswordChange();
-  else loadAll();
+  else { loadAll(); startBell(); }
 }
 async function restoreSession() {
   if (await handleResetLink()) return;
@@ -2144,6 +2275,8 @@ document.addEventListener('click', (e) => {
   if ((el = hit('[data-edit-quote]'))) { quoteModal(Number(el.dataset.editQuote)); return; }
   if ((el = hit('[data-lead-view]'))) { setLeadView(el.dataset.leadView); renderLeads(); return; }
   if ((el = hit('[data-kb-move]'))) { moveMenu(Number(el.dataset.kbMove)); return; }
+  if ((el = hit('[data-kb-owner]'))) { ownerModal(Number(el.dataset.kbOwner)); return; }
+  if ((el = hit('#reassignLeads'))) { reassignModal(); return; }
   if ((el = hit('[data-lead]'))) { leadModal(Number(el.dataset.lead)); return; }
   if ((el = hit('[data-client]'))) { clientModal(Number(el.dataset.client)); return; }
   if ((el = hit('[data-trip]'))) { tripModal(Number(el.dataset.trip)); return; }

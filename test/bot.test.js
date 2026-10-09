@@ -126,7 +126,7 @@ test('el bot de WhatsApp crea y actualiza leads', async (context) => {
 
   // Vendedor por defecto configurable; desactivar corta el acceso
   const bruno = await admin('POST', '/api/users', { name: 'Bruno', email: 'bruno@example.test', role: 'travel_partner' });
-  assert.equal((await admin('PUT', '/api/integrations/botpress', { ownerId: bruno.body.user.id })).status, 200);
+  assert.equal((await admin('PUT', '/api/assignment', { mode: 'fijo', fixedId: bruno.body.user.id })).status, 200);
   const fromBruno = await bot('POST', '/api/integrations/botpress/lead', { ...payload, telefono: '5215512345678', nombre: 'Nuevo Cliente' }, headers);
   const brunoLead = (await admin('GET', '/api/crm')).body.leads.find((l) => l.id === fromBruno.body.leadId);
   assert.equal(brunoLead.owner_id, bruno.body.user.id);

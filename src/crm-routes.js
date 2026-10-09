@@ -52,7 +52,7 @@ function translateDbError(error) {
   return error;
 }
 
-function createCrmRouter(dataStore, { requireRole }) {
+function createCrmRouter(dataStore, { requireRole, assignment = null }) {
   const router = express.Router();
   const adminOnly = requireRole('admin');
 
@@ -210,7 +210,12 @@ function createCrmRouter(dataStore, { requireRole }) {
     if (body.first_followup_at) sanitize('followups', { title: 'x', due_at: body.first_followup_at, type: body.first_followup_type || 'WhatsApp' });
 
     let ownerId = ctx.user.id;
-    if (body.owner_id && ctx.user.role === 'admin') ownerId = (await assignableOwner(parseId(body.owner_id))).id;
+    let autoReason = null;
+    if (body.owner_id === 'auto' && ctx.user.role === 'admin' && assignment) {
+      // Automático: el mismo reparto que el bot y el formulario (turnos o fijo).
+      const pick = await assignment.pickOwner({ client: body.client_id ? ctx.find('clients', body.client_id) : null });
+      if (pick.user) { ownerId = pick.user.id; autoReason = pick.reason; }
+    } else if (body.owner_id && ctx.user.role === 'admin') ownerId = (await assignableOwner(parseId(body.owner_id))).id;
     else if (body.owner_id && Number(body.owner_id) !== ctx.user.id) throw forbidden('Solo el administrador puede asignar leads a otro vendedor');
 
     let client;
@@ -243,6 +248,10 @@ function createCrmRouter(dataStore, { requireRole }) {
     const lead = await dataStore.insertRecord('leads', data, ownerId);
     await audit(req, 'create', 'leads', null, lead, ownerId !== ctx.user.id ? { note: `Asignado a ${(await dataStore.findUserById(ownerId))?.name || 'otro vendedor'}` } : {});
     if (warning) await log(req, 'crm_shared_client', { entity: 'leads', entityId: lead.id, summary: `${client.name} · ${lead.destination}`, note: warning });
+    if (assignment && ownerId !== ctx.user.id) {
+      const seller = await dataStore.findUserById(ownerId);
+      await assignment.notifyAssigned(seller, [{ id: lead.id, client: client.name, destination: lead.destination, phone: client.phone }], { by: `${ctx.user.name}${autoReason ? ` (${autoReason.toLowerCase()})` : ''}`, req });
+    }
 
     let followup = null;
     if (body.first_followup_at) {
@@ -258,6 +267,29 @@ function createCrmRouter(dataStore, { requireRole }) {
       await audit(req, 'create', 'followups', null, followup);
     }
     res.status(201).json({ ok: true, record: lead, client, followup, warning });
+  }));
+
+  // Reasignar varios leads a la vez (administrador), con un solo aviso al vendedor.
+  router.post('/leads/reassign', requireRole('admin'), wrap(async (req, res) => {
+    const ctx = await context(req);
+    const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 200);
+    if (!ids.length) throw new ValidationError('Elige al menos un lead');
+    const owner = await assignableOwner(parseId(req.body?.owner_id));
+    const moved = [];
+    for (const id of ids) {
+      const lead = ctx.mustSee('leads', id);
+      if (lead.owner_id === owner.id) continue;
+      await dataStore.transferLeadOwnership(id, owner.id);
+      const previous = lead.owner_id ? await dataStore.findUserById(lead.owner_id) : null;
+      await log(req, 'crm_leads_reassign', {
+        entity: 'leads', entityId: id, summary: summaryFor('leads', lead, ctx.find),
+        changes: [{ field: 'owner_id', label: 'Vendedor', from: previous?.name || null, to: owner.name }], note: 'Reasignación de varios leads'
+      });
+      const client = ctx.find('clients', lead.client_id);
+      moved.push({ id, client: client?.name || 'Cliente', destination: lead.destination, phone: client?.phone });
+    }
+    if (assignment && moved.length && owner.id !== ctx.user.id) await assignment.notifyAssigned(owner, moved, { by: ctx.user.name, req });
+    res.json({ ok: true, moved: moved.length, owner: { id: owner.id, name: owner.name } });
   }));
 
   router.patch('/leads/:id', requireWrite('leads'), wrap(async (req, res) => {
@@ -288,6 +320,10 @@ function createCrmRouter(dataStore, { requireRole }) {
         changes: [{ field: 'owner_id', label: 'Vendedor', from: previous?.name || null, to: owner.name }]
       });
       record = await dataStore.getRecord('leads', id);
+      if (assignment && owner.id !== ctx.user.id) {
+        const client = ctx.find('clients', record.client_id);
+        await assignment.notifyAssigned(owner, [{ id, client: client?.name || 'Cliente', destination: record.destination, phone: client?.phone }], { by: ctx.user.name, req });
+      }
     }
     res.json({ ok: true, record });
   }));

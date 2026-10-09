@@ -152,8 +152,8 @@ function leadEmail({ f, lead, seller, appUrl, action, score }) {
   return { subject: `${action === 'created' ? 'Nuevo lead' : 'Lead actualizado'} del formulario web · ${f.nombre} · ${lead.destination}`.slice(0, 180), text: textBody, html };
 }
 
-function createWebform(dataStore, mailer, env = {}) {
-  const intake = createLeadIntake(dataStore);
+function createWebform(dataStore, mailer, env = {}, { assignment } = {}) {
+  const intake = createLeadIntake(dataStore, assignment);
   async function config() {
     return { ...DEFAULTS, ...(await dataStore.getSetting('webform') || {}) };
   }
@@ -225,6 +225,11 @@ function createWebform(dataStore, mailer, env = {}) {
           mail = 'No se pudo enviar el aviso por correo';
           console.error('Formulario web: no se pudo enviar el aviso:', error.message);
         }
+      }
+      if (assignment && result.seller) {
+        await assignment.notify(result.seller, result.action === 'created'
+          ? { kind: 'assigned', title: `Nuevo lead: ${result.client.name} · ${result.lead.destination}`, body: `Formulario web (${String(result.reason || '').toLowerCase()})`, leadId: result.lead.id }
+          : { kind: 'lead_update', title: `${result.client.name} volvió a llenar el formulario`, body: `Lead ${result.lead.destination} actualizado`, leadId: result.lead.id });
       }
       await dataStore.setSetting('webform', { ...cfg, lastAt: now, lastResult: `${result.action === 'created' ? 'Lead creado' : 'Lead actualizado'} · ${result.client.name} · ${mail}` });
       res.status(201).json({ ok: true, whatsapp: wa });

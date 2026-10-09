@@ -49,7 +49,7 @@ function notesFrom(data, stamp) {
   return `🤖 Bot de WhatsApp · ${stamp.slice(0, 16)}\n${rows.map(([k, v]) => `• ${k}: ${v}`).join('\n')}`;
 }
 
-function createBotRouter(dataStore) {
+function createBotRouter(dataStore, { assignment } = {}) {
   const router = express.Router();
   const limiter = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false, message: { ok: false, error: 'Demasiadas solicitudes' } });
 
@@ -72,12 +72,12 @@ function createBotRouter(dataStore) {
       const now = nowCancun();
       const data = interpret(body, now.slice(0, 10));
       if (!data.phone && !body.nombre) throw new ValidationError('Faltan el teléfono y el nombre del cliente');
-      const intake = createLeadIntake(dataStore);
+      const intake = createLeadIntake(dataStore, assignment);
       const qs = await intake.questions();
       const budgetQuestion = qs.find((q) => q.id === 'q_presupuesto');
       const option = budgetOption(data.perPerson, budgetQuestion, data.input.presupuesto);
       const destination = data.destination && data.destination !== 'Por definir' ? data.destination : null;
-      const { action, lead, client, followup } = await intake.intake({
+      const { action, lead, client, followup, seller, reason } = await intake.intake({
         channel: { label: 'bot de WhatsApp', source: 'WhatsApp', ownerId: cfg.ownerId },
         person: { name: data.name, phone: data.phone, email: null },
         lead: { destination, start: data.start, end: data.end, travelers: data.travelers, budget: data.budget },
@@ -85,7 +85,12 @@ function createBotRouter(dataStore) {
         notes: notesFrom(data, now),
         followupDetails: [data.destination, data.datesText && !data.start ? `Fechas: ${data.datesText}` : null, data.input.presupuesto ? `Presupuesto: ${data.input.presupuesto}` : null].filter(Boolean).join(' · ')
       });
-      await remember(cfg, `${action === 'created' ? 'Lead creado' : 'Lead actualizado'} · ${client.name}`);
+      if (assignment && seller) {
+        const info = { id: lead.id, client: client.name, destination: lead.destination, phone: client.phone, extra: data.input.presupuesto ? `Presupuesto: ${data.input.presupuesto}` : '' };
+        if (action === 'created') await assignment.notifyAssigned(seller, [info], { by: `Bot de WhatsApp (${String(reason || '').toLowerCase()})`, req });
+        else await assignment.notify(seller, { kind: 'lead_update', title: `${client.name} volvió a escribir al bot`, body: `Lead ${lead.destination} actualizado`, leadId: lead.id });
+      }
+      await remember(cfg, `${action === 'created' ? 'Lead creado' : 'Lead actualizado'} · ${client.name}${seller ? ` · ${seller.name}` : ''}`);
       res.status(action === 'created' ? 201 : 200).json({ ok: true, action, leadId: lead.id, clientId: client.id, followupId: followup?.id || null });
     } catch (error) {
       next(error);

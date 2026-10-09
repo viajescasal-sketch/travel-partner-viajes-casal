@@ -4,7 +4,6 @@
 // busca o crea al cliente, actualiza su lead abierto o crea uno nuevo y deja un seguimiento a 15 minutos.
 
 const { nowCancun, sanitize } = require('./crm-schema');
-const { SELLER_ROLES } = require('./access');
 const { summaryFor, diffChanges } = require('./audit');
 const { DEFAULT_LEAD_QUESTIONS, normalizeQuestions, scoreQualification } = require('./documents');
 
@@ -17,17 +16,18 @@ const addMinutes = (stamp, minutes) => {
   return d.toISOString().slice(0, 16).replace('T', ' ');
 };
 
-function createLeadIntake(dataStore) {
+function createLeadIntake(dataStore, assignment) {
   async function questions() {
     const saved = await dataStore.getSetting('lead_questions');
     return normalizeQuestions(Array.isArray(saved) ? saved : DEFAULT_LEAD_QUESTIONS);
   }
 
-  // Vendedor que recibe los leads: el configurado o el primer vendedor activo.
-  async function defaultOwner(ownerId) {
+  // Vendedor que recibe el lead: según Configuración → Asignación de leads (turnos o fijo).
+  async function pickOwner(client) {
+    if (assignment) return assignment.pickOwner({ client });
     const users = await dataStore.listUsers();
-    const chosen = users.find((u) => u.id === Number(ownerId) && u.active && SELLER_ROLES.includes(u.role));
-    return chosen || users.find((u) => u.active && u.role === 'travel_partner') || users.find((u) => u.active && u.role === 'admin');
+    const user = users.find((u) => u.active && u.role === 'travel_partner') || users.find((u) => u.active && u.role === 'admin');
+    return { user, reason: 'Primer vendedor activo' };
   }
 
   const log = (action, metadata) => dataStore.logActivity(null, action, null, metadata);
@@ -41,8 +41,8 @@ function createLeadIntake(dataStore) {
   async function intake({ channel, person, lead: data, answers = {}, notes, followupDetails = '' }) {
     const now = nowCancun();
     const qs = await questions();
-    const owner = await defaultOwner(channel.ownerId);
     const label = channel.label;
+    let pick = null;
 
     // Cliente: por WhatsApp y, si no, por correo.
     let client = person.phone ? await dataStore.findClientByPhone(person.phone) : null;
@@ -52,7 +52,8 @@ function createLeadIntake(dataStore) {
     }
     let createdClient = false;
     if (!client) {
-      client = await dataStore.insertRecord('clients', sanitize('clients', { name: person.name, phone: person.phone || null, email: person.email || null }), owner?.id ?? null);
+      pick = await pickOwner(null);
+      client = await dataStore.insertRecord('clients', sanitize('clients', { name: person.name, phone: person.phone || null, email: person.email || null }), pick.user?.id ?? null);
       createdClient = true;
       await log('crm_clients_create', { entity: 'clients', entityId: client.id, summary: client.name, note: capital(label) });
     } else {
@@ -92,10 +93,11 @@ function createLeadIntake(dataStore) {
         ...(hasAnswers ? { qualification: scoreQualification({ answers: validAnswers }, qs) } : {})
       });
       fields.stage_changed_at = now;
-      lead = await dataStore.insertRecord('leads', fields, client.owner_id && !createdClient ? client.owner_id : owner?.id ?? null);
+      if (!pick) pick = await pickOwner(client);
+      lead = await dataStore.insertRecord('leads', fields, pick.user?.id ?? null);
       action = 'created';
       all.leads = [lead];
-      await log('crm_leads_create', { entity: 'leads', entityId: lead.id, summary: summaryFor('leads', lead, find), note: `Creado por el ${label}${owner ? ` · asignado a ${owner.name}` : ''}` });
+      await log('crm_leads_create', { entity: 'leads', entityId: lead.id, summary: summaryFor('leads', lead, find), note: `Creado por el ${label}${pick.user ? ` · asignado a ${pick.user.name} (${pick.reason.toLowerCase()})` : ''}` });
     }
 
     // Aviso al vendedor: seguimiento para contactar en 15 minutos (si no tiene uno pendiente).
@@ -110,10 +112,10 @@ function createLeadIntake(dataStore) {
       await log('crm_followups_create', { entity: 'followups', entityId: followup.id, summary: followup.title, note: capital(label) });
     }
     const seller = lead.owner_id ? await dataStore.findUserById(lead.owner_id) : null;
-    return { action, lead, client, followup, seller };
+    return { action, lead, client, followup, seller, reason: pick?.reason || null };
   }
 
-  return { intake, questions, defaultOwner };
+  return { intake, questions };
 }
 
 const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);

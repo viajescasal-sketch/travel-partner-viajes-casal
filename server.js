@@ -19,6 +19,7 @@ const { createPasswordResetService, createRecoveryRouter, createMailAdminRouter,
 const { createBackupService, createBackupRouter } = require('./src/backup');
 const { createBotRouter, createBotAdminRouter } = require('./src/bot-routes');
 const { createWebform, createWebformAdminRouter } = require('./src/webform');
+const { createAssignment, createAssignmentRouter } = require('./src/assignment');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -241,10 +242,11 @@ async function createApp(options = {}) {
   app.use('/api/auth', loginFlow.router);
   app.use('/api/auth', createRecoveryRouter(dataStore, mailer, resetService, process.env));
   // Bot de WhatsApp (Botpress): entra con su propia clave, no con sesión.
-  const bot = createBotRouter(dataStore);
+  const assignment = createAssignment(dataStore, mailer, process.env);
+  const bot = createBotRouter(dataStore, { assignment });
   app.use('/api', bot.router);
   // Formulario web público (sitio y landings): crea el lead sin sesión.
-  const webform = createWebform(dataStore, mailer, process.env);
+  const webform = createWebform(dataStore, mailer, process.env, { assignment });
   app.use('/api', webform.router);
   app.use('/api', authenticate);
   // Si el servidor estuvo dormido a la hora del respaldo, se revisa al primer uso (máximo cada 5 minutos).
@@ -269,7 +271,8 @@ async function createApp(options = {}) {
   app.use('/api', createBackupRouter(dataStore, backupService, { requireRole }));
   app.use('/api', createBotAdminRouter(dataStore, bot, { requireRole }));
   app.use('/api', createWebformAdminRouter(dataStore, webform, { requireRole }));
-  app.use('/api', createCrmRouter(dataStore, { requireRole }));
+  app.use('/api', createAssignmentRouter(dataStore, assignment, { requireRole }));
+  app.use('/api', createCrmRouter(dataStore, { requireRole, assignment }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');
   app.get(['/formulario', '/formulario.html'], (req, res) => {
