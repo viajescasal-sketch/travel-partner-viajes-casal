@@ -158,9 +158,9 @@ function createCrmRouter(dataStore, { requireRole }) {
       if (lead) {
         let updated = null;
         if (quote.status === 'Aceptada' && lead.stage !== 'Vendido') {
-          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Vendido', closed_at: nowCancun() });
+          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Vendido', closed_at: nowCancun(), stage_changed_at: nowCancun(), lost_reason: null });
         } else if (['Nuevo', 'Calificado'].includes(lead.stage) && quote.status !== 'Rechazada') {
-          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Cotizado' });
+          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Cotizado', stage_changed_at: nowCancun() });
         }
         if (updated && req) await audit(req, 'update', 'leads', lead, updated, { note: `Automático por la cotización ${quote.folio}` });
       }
@@ -238,6 +238,8 @@ function createCrmRouter(dataStore, { requireRole }) {
     checkDateRange(data);
     if (data.qualification) data.qualification = scoreQualification(data.qualification, (await allSettings()).leadQuestions);
     if (CLOSED_STAGES.includes(data.stage)) data.closed_at = nowCancun();
+    if (data.stage !== 'Perdido') data.lost_reason = null;
+    data.stage_changed_at = nowCancun();
     const lead = await dataStore.insertRecord('leads', data, ownerId);
     await audit(req, 'create', 'leads', null, lead, ownerId !== ctx.user.id ? { note: `Asignado a ${(await dataStore.findUserById(ownerId))?.name || 'otro vendedor'}` } : {});
     if (warning) await log(req, 'crm_shared_client', { entity: 'leads', entityId: lead.id, summary: `${client.name} · ${lead.destination}`, note: warning });
@@ -270,6 +272,8 @@ function createCrmRouter(dataStore, { requireRole }) {
     if (data.stage) {
       if (CLOSED_STAGES.includes(data.stage) && !current.closed_at) data.closed_at = nowCancun();
       if (!CLOSED_STAGES.includes(data.stage)) data.closed_at = null;
+      if (data.stage !== current.stage) data.stage_changed_at = nowCancun();
+      if (data.stage !== 'Perdido') data.lost_reason = null;
     }
     let record = await dataStore.updateRecord('leads', id, data);
     await audit(req, 'update', 'leads', current, record);

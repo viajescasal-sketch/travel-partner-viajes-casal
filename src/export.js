@@ -58,13 +58,13 @@ function buildSheets(sectionList, data, { users = [], questions = [], range = nu
           col('Salida', 'date', 12), col('Regreso', 'date', 12), col('Viajeros', 'number', 9), col('Presupuesto', 'money', 14), col('Etapa', 'text', 13),
           col('Prioridad', 'text', 10), col('Origen', 'text', 12), col('Calificación %', 'number', 13), col('Nivel', 'text', 10),
           ...questions.map((q) => col(q.label, 'text', 22)),
-          col('Vendedor', 'text', 18), col('Creado', 'datetime', 17), col('Cerrado', 'datetime', 17), col('Notas', 'text', 40)],
+          col('Vendedor', 'text', 18), col('Creado', 'datetime', 17), col('Cerrado', 'datetime', 17), col('Motivo de pérdida', 'text', 22), col('Notas', 'text', 40)],
         rows: data.leads.filter((l) => inRange(l.created_at)).map((l) => {
           const c = client(l.client_id);
           const qa = l.qualification || {};
           return [l.id, c.name, c.phone, c.email, l.destination, l.start_date, l.end_date, l.travelers, l.budget, l.stage, l.priority, l.source,
             qa.score ?? '', qa.level || '', ...questions.map((q) => qa.answers?.[q.id] || ''),
-            userName(l.owner_id), l.created_at, l.closed_at, l.notes];
+            userName(l.owner_id), l.created_at, l.closed_at, l.lost_reason || '', l.notes];
         })
       });
     }

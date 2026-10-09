@@ -91,6 +91,7 @@ function createLeadIntake(dataStore) {
         travelers: data.travelers || null, budget: data.budget || null, source: channel.source, stage: 'Nuevo', priority: 'Media', notes,
         ...(hasAnswers ? { qualification: scoreQualification({ answers: validAnswers }, qs) } : {})
       });
+      fields.stage_changed_at = now;
       lead = await dataStore.insertRecord('leads', fields, client.owner_id && !createdClient ? client.owner_id : owner?.id ?? null);
       action = 'created';
       all.leads = [lead];

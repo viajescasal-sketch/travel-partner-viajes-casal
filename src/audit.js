@@ -7,7 +7,7 @@ const FIELD_LABELS = {
   name: 'Nombre', phone: 'WhatsApp', email: 'Correo', tags: 'Preferencias', notes: 'Notas',
   client_id: 'Cliente', lead_id: 'Lead', quote_id: 'Cotización',
   destination: 'Destino', start_date: 'Salida', end_date: 'Regreso', travelers: 'Viajeros', budget: 'Presupuesto',
-  stage: 'Etapa', priority: 'Prioridad', source: 'Origen',
+  stage: 'Etapa', priority: 'Prioridad', source: 'Origen', lost_reason: 'Motivo de pérdida',
   hotel: 'Hotel / paquete', price: 'Precio', mode: 'Modalidad', valid_until: 'Vigencia', status: 'Estado', services: 'Servicios',
   type: 'Tipo', title: 'Actividad', details: 'Detalles', due_at: 'Fecha y hora', done: 'Hecho',
   owner_id: 'Vendedor',

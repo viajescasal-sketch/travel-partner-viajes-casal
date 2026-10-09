@@ -237,10 +237,10 @@ function renderOpsDashboard(today) {
 }
 
 /* ---------- leads ---------- */
-function filteredLeads() {
+function filteredLeads(ignoreStage = false) {
   const q = ui.leadQuery.toLowerCase();
   return db.leads.filter((l) => {
-    if (ui.leadStage && l.stage !== ui.leadStage) return false;
+    if (!ignoreStage && ui.leadStage && l.stage !== ui.leadStage) return false;
     if (ui.leadOwner && String(l.owner_id) !== ui.leadOwner) return false;
     if (!q) return true;
     const c = clientById(l.client_id);
@@ -252,6 +252,12 @@ function renderLeads() {
   const filter = $('#ownerFilter');
   filter.classList.toggle('hidden', !admin);
   if (admin) filter.innerHTML = options(sellers().map((u) => [u.id, u.name]), ui.leadOwner, { blank: 'Todos los vendedores' });
+  const board = leadView() === 'board';
+  document.querySelectorAll('[data-lead-view]').forEach((b) => { b.classList.toggle('active', (b.dataset.leadView === 'board') === board); b.setAttribute('aria-selected', String((b.dataset.leadView === 'board') === board)); });
+  $('#leadBoard').classList.toggle('hidden', !board);
+  $('#leadListPanel').classList.toggle('hidden', board);
+  $('#stageFilter').classList.toggle('hidden', board);
+  if (board) { renderBoard(); return; }
   $('#leadHead').innerHTML = ['Lead', 'Destino', 'Fechas', 'Etapa', 'Prioridad', ...(admin ? ['Vendedor'] : []), 'Seguimiento'].map((h) => `<th>${h}</th>`).join('');
   const shared = admin ? sharedClientIds() : new Set();
   const list = filteredLeads();
@@ -261,6 +267,161 @@ function renderLeads() {
     return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}${String(l.notes || '').includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip" title="Llegó por el bot de WhatsApp">🤖 Bot</span>' : ''}${String(l.notes || '').includes('🌐 Formulario web') ? '<span class="bot-chip web" title="Llegó por el formulario web">🌐 Web</span>' : ''}${qualChip(l)}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
   }).join('') : emptyRow(cols, db.leads.length ? 'Ningún lead coincide con la búsqueda.' : 'Aún no hay leads registrados.');
 }
+/* ---------- tablero Kanban de oportunidades (TP-103) ---------- */
+const BOARD_STAGES = ['Nuevo', 'Calificado', 'Cotizado', 'Negociación', 'Vendido'];
+const STAGE_LIMIT_DAYS = { Nuevo: 1, Calificado: 3, Cotizado: 5, Negociación: 7 };
+const LOST_REASONS = ['Precio', 'Eligió otra agencia', 'No respondió', 'Pospuso o canceló el viaje', 'Sin disponibilidad en sus fechas', 'Otro'];
+const leadView = () => { try { return localStorage.getItem('tp.leadView') || 'board'; } catch { return 'board'; } };
+const setLeadView = (v) => { try { localStorage.setItem('tp.leadView', v); } catch { /* sin almacenamiento */ } };
+const stampDate = (s) => new Date(`${String(s).replace(' ', 'T').slice(0, 19)}Z`);
+// Días en la etapa actual (hora de Cancún).
+function daysInStage(l) {
+  const from = l.stage_changed_at || (CLOSED.includes(l.stage) ? l.closed_at : null) || l.created_at;
+  if (!from) return 0;
+  return Math.max(0, Math.floor((nowLocal() - stampDate(from)) / 86400000));
+}
+// Valor de la oportunidad: cotización aceptada, si no la cotización más reciente, si no el presupuesto.
+function boardValue(l) {
+  const quotes = db.quotes.filter((q) => q.lead_id === l.id && q.status !== 'Rechazada').sort((a, b) => b.id - a.id);
+  const accepted = quotes.find((q) => q.status === 'Aceptada');
+  return Number((accepted || quotes[0])?.price ?? l.budget ?? 0) || 0;
+}
+const thisMonth = (stamp) => String(stamp || '').slice(0, 7) === todayStr().slice(0, 7);
+function boardCard(l, admin) {
+  const c = clientById(l.client_id);
+  const days = daysInStage(l);
+  const limit = STAGE_LIMIT_DAYS[l.stage];
+  const late = limit !== undefined && days > limit;
+  const next = nextFollowupFor(l.id);
+  const overdue = next && next.due_at.slice(0, 16) < nowLocal().toISOString().slice(0, 16).replace('T', ' ');
+  const notes = String(l.notes || '');
+  const chips = `${notes.includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip">🤖 Bot</span>' : ''}${notes.includes('🌐 Formulario web') ? '<span class="bot-chip web">🌐 Web</span>' : ''}${qualChip(l)}`;
+  const value = boardValue(l);
+  const canMove = canWrite('leads');
+  return `<div class="kb-card${late ? ' late' : ''}" data-lead="${l.id}"${canMove ? ' draggable="true"' : ''} tabindex="0" aria-label="${escapeHtml(`${c?.name || ''}, ${l.destination}, ${l.stage}`)}">
+    <div class="kb-top"><b>${escapeHtml(c?.name || 'Sin cliente')}</b>${value ? `<span class="kb-val">${money(value)}</span>` : ''}</div>
+    <div class="kb-dest">${escapeHtml(l.destination)}${l.start_date ? ` · ${escapeHtml(fmtRange(l.start_date, l.end_date))}` : ''}</div>
+    ${chips ? `<div class="kb-chips">${chips}</div>` : ''}
+    <div class="kb-foot"><span class="kb-days${late ? ' late' : ''}" title="${late ? `Lleva más de ${limit} ${limit === 1 ? 'día' : 'días'} en ${escapeHtml(l.stage)}` : 'Días en esta etapa'}">⏱ ${days === 0 ? 'Hoy' : `${days} ${days === 1 ? 'día' : 'días'}`}</span>
+      ${next ? `<span class="kb-next${overdue ? ' late' : ''}" title="Próximo seguimiento">📅 ${escapeHtml(fmtDue(next.due_at))}</span>` : ''}
+      ${admin ? `<span class="kb-owner" title="${escapeHtml(userName(l.owner_id))}">${escapeHtml(initials(userName(l.owner_id)))}</span>` : ''}
+      ${canMove ? `<button type="button" class="kb-move" data-kb-move="${l.id}" title="Mover a otra etapa" aria-label="Mover a otra etapa">⇄</button>` : ''}</div>
+  </div>`;
+}
+function renderBoard() {
+  const admin = isAdmin();
+  const list = filteredLeads(true);
+  const cols = BOARD_STAGES.map((stage) => {
+    let items = list.filter((l) => l.stage === stage);
+    if (stage === 'Vendido') items = items.filter((l) => thisMonth(l.closed_at || l.stage_changed_at || l.updated_at));
+    items.sort((a, b) => daysInStage(b) - daysInStage(a) || b.id - a.id);
+    const total = items.reduce((s, l) => s + boardValue(l), 0);
+    return `<section class="kb-col${stage === 'Vendido' ? ' won' : ''}" data-stage="${escapeHtml(stage)}">
+      <div class="kb-head"><div><b>${escapeHtml(stage)}</b>${stage === 'Vendido' ? '<small>este mes</small>' : ''}<em>${items.length}</em></div><span class="kb-total">${money(total)}</span></div>
+      <div class="kb-list">${items.map((l) => boardCard(l, admin)).join('') || '<p class="kb-empty">Arrastra aquí</p>'}</div>
+    </section>`;
+  }).join('');
+  const lostMonth = list.filter((l) => l.stage === 'Perdido' && thisMonth(l.closed_at || l.stage_changed_at));
+  const active = list.filter((l) => !CLOSED.includes(l.stage));
+  $('#leadBoard').innerHTML = `<div class="kb-summary"><span>Oportunidades abiertas: <b>${active.length}</b> · <b>${money(active.reduce((s, l) => s + boardValue(l), 0))}</b></span><span class="muted-note">⏱ en rojo: Nuevo +1 día · Calificado +3 · Cotizado +5 · Negociación +7</span></div>
+    <div class="kb-cols">${cols}</div>
+    ${canWrite('leads') ? `<div class="kb-lost" data-stage="Perdido"><b>🗑 Perdido</b> Arrastra aquí un lead perdido · este mes: ${lostMonth.length} (${money(lostMonth.reduce((s, l) => s + boardValue(l), 0))})</div>` : ''}`;
+}
+// Cambio de etapa desde el tablero.
+function moveLead(id, stage) {
+  const lead = leadById(id);
+  if (!lead || lead.stage === stage) return;
+  if (stage === 'Vendido') { saleModal(lead); return; }
+  if (stage === 'Perdido') { lostModal(lead); return; }
+  mutate(() => send('PATCH', `/api/leads/${lead.id}`, { stage }), `${clientName(lead.client_id)} → ${stage}`);
+}
+function moveMenu(id) {
+  const lead = leadById(id);
+  if (!lead) return;
+  openModal('MOVER LEAD', `${clientName(lead.client_id)} · ${lead.destination}`, `<div class="modal-form"><p class="full">Etapa actual: <b>${escapeHtml(lead.stage)}</b></p>
+    <div class="full kb-move-opts">${[...BOARD_STAGES, 'Perdido'].map((s) => `<button type="button" class="btn ${s === lead.stage ? 'primary' : 'secondary'}" data-move-to="${escapeHtml(s)}"${s === lead.stage ? ' disabled' : ''}>${escapeHtml(s)}</button>`).join('')}</div>
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button></div></div>`);
+  $('#modalBody').querySelectorAll('[data-move-to]').forEach((b) => { b.onclick = () => { close(); moveLead(lead.id, b.dataset.moveTo); }; });
+}
+function lostModal(lead) {
+  openModal('LEAD PERDIDO', `${clientName(lead.client_id)} · ${lead.destination}`, `<form class="modal-form">
+    <p class="full">¿Por qué se perdió? Así podrás ver en qué estás perdiendo ventas.</p>
+    <div class="full kb-reasons">${LOST_REASONS.map((r) => `<label class="kb-reason"><input type="radio" name="reason" value="${escapeHtml(r)}" required> ${escapeHtml(r)}</label>`).join('')}</div>
+    ${field('Detalle (opcional)', '<input name="detail" maxlength="120" placeholder="Ej. encontró un paquete más barato en otra agencia">', true)}
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">Marcar como perdido</button></div></form>`);
+  bindForm((v) => {
+    const reason = [v.reason, v.detail].filter(Boolean).join(': ').slice(0, 160);
+    return mutate(() => send('PATCH', `/api/leads/${lead.id}`, { stage: 'Perdido', lost_reason: reason }), `${clientName(lead.client_id)} marcado como perdido`);
+  });
+}
+// Vendido: la venta se registra aceptando la cotización (así cuenta en Ventas y Reportes).
+function saleModal(lead) {
+  const quotes = db.quotes.filter((q) => q.lead_id === lead.id && q.status !== 'Rechazada').sort((a, b) => b.id - a.id);
+  if (!quotes.length) {
+    openModal('REGISTRAR VENTA', `${clientName(lead.client_id)} · ${lead.destination}`, `<div class="modal-form">
+      <p class="full">Este lead todavía no tiene cotización. Para que la venta cuente en <b>Ventas y Reportes</b>, crea la cotización con el monto vendido y márcala como <b>Aceptada</b>.</p>
+      <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="button" class="btn secondary" id="saleNoQuote">Solo marcar Vendido</button><button type="button" class="btn primary" id="saleNewQuote">Crear cotización</button></div></div>`);
+    $('#saleNewQuote').onclick = () => { close(); quoteModal(null, { clientId: lead.client_id, leadId: lead.id }); };
+    $('#saleNoQuote').onclick = () => { close(); mutate(() => send('PATCH', `/api/leads/${lead.id}`, { stage: 'Vendido' }), `${clientName(lead.client_id)} → Vendido (sin cotización)`); };
+    return;
+  }
+  openModal('REGISTRAR VENTA', `${clientName(lead.client_id)} · ${lead.destination}`, `<form class="modal-form">
+    <p class="full">Elige la cotización que compró el cliente. Se marcará como <b>Aceptada</b> y la venta aparecerá en Ventas y Reportes.</p>
+    <div class="full kb-reasons">${quotes.map((q, i) => `<label class="kb-reason kb-quote"><input type="radio" name="quote" value="${q.id}"${(q.status === 'Aceptada' || i === 0) && !quotes.some((x, j) => j < i && x.status === 'Aceptada') ? ' checked' : ''} required> <span><b>${escapeHtml(q.folio || `#${q.id}`)}</b> · ${escapeHtml(q.hotel || q.destination)} <small>${escapeHtml(q.status)}</small></span><b class="kb-val">${money(q.price)}</b></label>`).join('')}</div>
+    <label class="full kb-check"><input type="checkbox" name="trip" checked> Crear el viaje ahora (fechas y datos de la cotización)</label>
+    <small class="full">¿El monto final cambió? Primero edita la cotización y luego márcala como vendida.</small>
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">Registrar venta</button></div></form>`);
+  bindForm(async (v, form) => {
+    const quoteId = Number(v.quote);
+    const quote = quoteById(quoteId);
+    const createTrip = form.querySelector('[name=trip]').checked && !db.trips.some((t) => t.quote_id === quoteId);
+    const ok = await mutate(() => (quote.status === 'Aceptada' ? send('PATCH', `/api/leads/${lead.id}`, { stage: 'Vendido' }) : send('PATCH', `/api/quotes/${quoteId}`, { status: 'Aceptada' })), `Venta registrada: ${money(quote.price)}`);
+    if (ok && createTrip) setTimeout(() => tripModal(null, { quoteId }), 50);
+    return ok;
+  });
+}
+
+// Arrastrar y soltar (ratón). En celular se usa el botón ⇄.
+(function bindBoardDnD() {
+  const boardEl = $('#leadBoard');
+  if (!boardEl) return;
+  let dragId = null;
+  boardEl.addEventListener('dragstart', (e) => {
+    const card = e.target.closest('.kb-card');
+    if (!card) return;
+    dragId = Number(card.dataset.lead);
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', String(dragId)); } catch { /* algunos navegadores */ }
+  });
+  boardEl.addEventListener('dragend', (e) => {
+    e.target.closest?.('.kb-card')?.classList.remove('dragging');
+    boardEl.querySelectorAll('.drop-over').forEach((x) => x.classList.remove('drop-over'));
+    dragId = null;
+  });
+  boardEl.addEventListener('dragover', (e) => {
+    const zone = e.target.closest('[data-stage]');
+    if (!zone || dragId == null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    boardEl.querySelectorAll('.drop-over').forEach((x) => { if (x !== zone) x.classList.remove('drop-over'); });
+    zone.classList.add('drop-over');
+  });
+  boardEl.addEventListener('dragleave', (e) => {
+    const zone = e.target.closest('[data-stage]');
+    if (zone && !zone.contains(e.relatedTarget)) zone.classList.remove('drop-over');
+  });
+  boardEl.addEventListener('drop', (e) => {
+    const zone = e.target.closest('[data-stage]');
+    if (!zone || dragId == null) return;
+    e.preventDefault();
+    zone.classList.remove('drop-over');
+    const id = dragId;
+    dragId = null;
+    moveLead(id, zone.dataset.stage);
+  });
+})();
+
 // Exportar a Excel o CSV: cada rol descarga solo lo que puede ver.
 const EXPORT_SECTIONS = [['clients', 'Clientes'], ['leads', 'Leads'], ['quotes', 'Cotizaciones'], ['sales', 'Ventas'], ['trips', 'Viajes'], ['followups', 'Seguimientos'], ['users', 'Usuarios']];
 const EXPORT_BY_ROLE = { admin: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups', 'users'], travel_partner: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups'], operaciones: ['trips', 'followups'], consulta: [] };
@@ -527,6 +688,7 @@ function leadModal(id, presetClientId) {
     ${field('Viajeros', `<input name="travelers" type="number" min="1" max="500" value="${escapeHtml(lead?.travelers)}">`)}
     ${field('Presupuesto (MXN)', `<input name="budget" type="number" min="0" step="1" value="${escapeHtml(lead?.budget)}">`)}
     ${lead ? field('Etapa', `<select name="stage">${options(STAGES, lead.stage)}</select>`) : field('Primer seguimiento', '<input name="first_followup_at" type="datetime-local">')}
+    ${lead?.stage === 'Perdido' ? field('Motivo de pérdida', `<input name="lost_reason" maxlength="160" value="${escapeHtml(lead.lost_reason)}">`) : ''}
     ${field('Prioridad', `<select name="priority">${options(PRIORITIES, lead?.priority || 'Media')}</select>`)}
     ${isAdmin() ? field('Vendedor asignado', `<select name="owner_id">${options(sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`]), lead?.owner_id ?? currentUser.id)}</select>`) : ''}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
@@ -546,6 +708,7 @@ function leadModal(id, presetClientId) {
     if (v.owner_id) body.owner_id = Number(v.owner_id);
     if (lead) {
       const reassigned = body.owner_id && body.owner_id !== lead.owner_id;
+      if (v.lost_reason !== undefined) body.lost_reason = v.lost_reason || null;
       return mutate(() => send('PATCH', `/api/leads/${lead.id}`, { ...body, stage: v.stage }), reassigned ? `Lead reasignado a ${userName(body.owner_id)}` : 'Lead actualizado');
     }
     if (client) body.client_id = client.id;
@@ -1979,6 +2142,8 @@ document.addEventListener('click', (e) => {
   if ((el = hit('[data-res-pdf]'))) { openDocument('reserva', el.dataset.resPdf); return; }
   if ((el = hit('[data-user-profile]'))) { profileModal(Number(el.dataset.userProfile)); return; }
   if ((el = hit('[data-edit-quote]'))) { quoteModal(Number(el.dataset.editQuote)); return; }
+  if ((el = hit('[data-lead-view]'))) { setLeadView(el.dataset.leadView); renderLeads(); return; }
+  if ((el = hit('[data-kb-move]'))) { moveMenu(Number(el.dataset.kbMove)); return; }
   if ((el = hit('[data-lead]'))) { leadModal(Number(el.dataset.lead)); return; }
   if ((el = hit('[data-client]'))) { clientModal(Number(el.dataset.client)); return; }
   if ((el = hit('[data-trip]'))) { tripModal(Number(el.dataset.trip)); return; }

@@ -10,8 +10,8 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=tp102" />
-    <link rel="stylesheet" href="/tp006.css?v=tp102" />
+    <link rel="stylesheet" href="/styles.css?v=tp103" />
+    <link rel="stylesheet" href="/tp006.css?v=tp103" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -272,6 +272,9 @@
               </button>
             </div>
             <div class="toolbar">
+              <div class="view-switch" role="tablist" aria-label="Vista de leads">
+                <button type="button" data-lead-view="board" role="tab">▦ Tablero</button><button type="button" data-lead-view="list" role="tab">☰ Lista</button>
+              </div>
               <div class="search grow">
                 ⌕ <input id="leadSearch" placeholder="Buscar leads..." />
               </div>
@@ -286,7 +289,8 @@
               ><select id="ownerFilter" class="hidden" aria-label="Filtrar por vendedor"></select
               ><button id="exportLeads" class="btn secondary">Exportar</button>
             </div>
-            <article class="panel">
+            <div id="leadBoard" class="kanban hidden" aria-label="Tablero de oportunidades"></div>
+            <article class="panel" id="leadListPanel">
               <div class="table">
                 <table>
                   <thead>
@@ -755,7 +759,7 @@
         cursor: wait;
       }
     </style>
-    <script src="/docs/documents.js?v=tp102"></script>
-    <script src="/app.js?v=tp102"></script>
+    <script src="/docs/documents.js?v=tp103"></script>
+    <script src="/app.js?v=tp103"></script>
   </body>
 </html>

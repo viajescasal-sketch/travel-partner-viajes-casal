@@ -39,7 +39,9 @@ const ENTITIES = {
       source: { type: 'enum', values: LEAD_SOURCES, default: 'WhatsApp' },
       notes: { type: 'text', max: 4000 },
       qualification: { type: 'json', max: 20000 },
-      closed_at: { type: 'datetime', internal: true }
+      lost_reason: { type: 'string', max: 160 },
+      closed_at: { type: 'datetime', internal: true },
+      stage_changed_at: { type: 'datetime', internal: true }
     }
   },
   quotes: {
