@@ -100,9 +100,12 @@ test('el formulario web crea el lead calificado, avisa y se puede incrustar', as
   };
 
   // Robots: campo oculto o envío demasiado rápido → responde ok pero no guarda nada
-  assert.equal((await visitor('POST', '/api/public/lead', { ...payload, website: 'spam.com' })).status, 201);
+  assert.equal((await visitor('POST', '/api/public/lead', { ...payload, hp_check: 'spam.com', elapsed: 9000 })).status, 201);
   assert.equal((await visitor('POST', '/api/public/lead', { ...payload, elapsed: 900 })).status, 201);
   assert.equal((await admin('GET', '/api/crm')).body.leads.length, 0);
+  const blocked = (await admin('GET', '/api/integrations/webform')).body;
+  assert.equal(blocked.blockedCount, 2);
+  assert.match(blocked.lastBlocked, /Mariana Torres · envío en 0.9 s/);
   assert.equal((await visitor('POST', '/api/public/lead', { ...payload, destino: '' })).status, 400);
 
   const created = await visitor('POST', '/api/public/lead', payload);
@@ -135,13 +138,19 @@ test('el formulario web crea el lead calificado, avisa y se puede incrustar', as
   assert.equal(crm2.followups.filter((f) => f.lead_id === lead.id).length, 1);
   assert.equal(crm2.clients.length, 1);
 
+  // Persona real con el campo oculto autocompletado (más de 20 s): entra, marcado para revisar
+  const autofill = await visitor('POST', '/api/public/lead', { ...payload, nombre: 'Pedro Sol', whatsapp: '+52 998 000 1111', correo: '', comentarios: 'Soy Pedro Sol', hp_check: 'x', elapsed: 90000 });
+  assert.equal(autofill.status, 201);
+  const pedro = (await admin('GET', '/api/crm')).body.leads.find((l) => /Pedro Sol/.test(l.notes));
+  assert.match(pedro.notes, /⚠ Revisar/);
+
   // Configuración: solo el administrador; pausar bloquea el envío
   assert.equal((await paulina('GET', '/api/integrations/webform')).status, 403);
   assert.equal((await admin('PUT', '/api/integrations/webform', { whatsapp: 'abc' })).status, 400);
   const updated = await admin('PUT', '/api/integrations/webform', { whatsapp: '+52 998 392 1530', notifyEmail: false, enabled: false });
   assert.equal(updated.status, 200);
   assert.equal(updated.body.whatsapp, '+52 998 392 1530');
-  assert.match((await admin('GET', '/api/integrations/webform')).body.lastResult, /Lead actualizado · Mariana Torres/);
+  assert.match((await admin('GET', '/api/integrations/webform')).body.lastResult, /Lead creado · Pedro Sol/);
   const paused = await visitor('GET', '/api/public/form');
   assert.equal(paused.body.enabled, false);
   assert.equal(paused.body.whatsapp, '529983921530');

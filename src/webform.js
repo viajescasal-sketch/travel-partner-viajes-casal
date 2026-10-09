@@ -184,8 +184,18 @@ function createWebform(dataStore, mailer, env = {}) {
       if (!cfg.enabled) { res.status(403).json({ ok: false, error: 'El formulario no está disponible por ahora. Escríbenos por WhatsApp.' }); return; }
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       const wa = await whatsappNumber(cfg);
-      // Trampas para robots: campo oculto lleno o envío en menos de 4 segundos. Se responde "ok" sin guardar.
-      if (text(body.website, 200) || (Number(body.elapsed) || 0) < 4000) { res.status(201).json({ ok: true, whatsapp: wa }); return; }
+      // Trampas para robots: envío en menos de 4 segundos, o campo oculto lleno en menos de 20 segundos.
+      // Se responde "ok" sin guardar, pero queda registrado para revisarlo en Integraciones.
+      const elapsed = Number(body.elapsed) || 0;
+      const honeypot = text(body.hp_check ?? body.website, 200);
+      const blockReason = elapsed < 4000 ? `envío en ${Math.round(elapsed / 100) / 10} s` : honeypot && elapsed < 20000 ? 'campo oculto lleno' : '';
+      if (blockReason) {
+        const name = text(body.nombre, 60) || 'sin nombre';
+        console.warn(`Formulario web: envío bloqueado como posible spam (${blockReason}) · ${name}`);
+        await dataStore.setSetting('webform', { ...cfg, blockedCount: (Number(cfg.blockedCount) || 0) + 1, lastBlockedAt: nowCancun(), lastBlocked: `${name} · ${blockReason}` });
+        res.status(201).json({ ok: true, whatsapp: wa });
+        return;
+      }
 
       const now = nowCancun();
       const today = now.slice(0, 10);
@@ -194,7 +204,8 @@ function createWebform(dataStore, mailer, env = {}) {
       const answers = qualificationAnswers(f, questions, today);
       const travelers = f.adultos + f.ninos;
       const perPerson = PER_PERSON[FORM.presupuesto.indexOf(f.presupuesto)] ?? null;
-      const notes = `🌐 Formulario web · ${now.slice(0, 16)}\n${summaryRows(f).map(([k, v]) => `• ${k}: ${v}`).join('\n')}`;
+      const warn = honeypot ? '\n⚠ Revisar: el campo oculto antispam llegó lleno (puede ser autocompletado del navegador).' : '';
+      const notes = `🌐 Formulario web · ${now.slice(0, 16)}\n${summaryRows(f).map(([k, v]) => `• ${k}: ${v}`).join('\n')}${warn}`;
       const result = await intake.intake({
         channel: { label: 'formulario web', source: 'Sitio web', ownerId: cfg.ownerId },
         person: { name: f.nombre, phone: f.telefono, email: f.correo || null },
@@ -229,7 +240,7 @@ function createWebformAdminRouter(dataStore, webform, { requireRole }) {
   const router = express.Router();
   const adminOnly = requireRole('admin');
   const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res)).catch(next);
-  const publicConfig = (cfg) => ({ enabled: Boolean(cfg.enabled), ownerId: cfg.ownerId ?? null, notifyEmail: cfg.notifyEmail !== false, whatsapp: cfg.whatsapp || '', lastAt: cfg.lastAt || null, lastResult: cfg.lastResult || null });
+  const publicConfig = (cfg) => ({ enabled: Boolean(cfg.enabled), ownerId: cfg.ownerId ?? null, notifyEmail: cfg.notifyEmail !== false, whatsapp: cfg.whatsapp || '', lastAt: cfg.lastAt || null, lastResult: cfg.lastResult || null, blockedCount: Number(cfg.blockedCount) || 0, lastBlockedAt: cfg.lastBlockedAt || null, lastBlocked: cfg.lastBlocked || null });
 
   router.get('/integrations/webform', adminOnly, wrap(async (req, res) => {
     res.json({ ok: true, ...publicConfig(await webform.config()) });

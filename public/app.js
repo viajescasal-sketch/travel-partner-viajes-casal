@@ -1392,6 +1392,7 @@ async function renderWebformCard() {
       <small>Reemplaza a Tally: el cliente contesta con botones (paquete, solo vuelo, solo hospedaje, tours o asesoría) y el lead entra a Leads ya calificado, con seguimiento a 15 minutos${st.notifyEmail ? ' y aviso por correo al vendedor' : ''}.</small>
       <p><a href="${escapeHtml(l.link)}" target="_blank" rel="noopener">${escapeHtml(l.link)}</a></p>
       <p>${st.lastAt ? `Último lead recibido: <b>${escapeHtml(fmtLocal(st.lastAt))}</b> · ${escapeHtml(st.lastResult || '')}` : 'Aún no llega ningún lead del formulario.'}</p>
+      ${st.blockedCount ? `<p class="note-warn">Bloqueados como posible spam: <b>${st.blockedCount}</b> · último ${escapeHtml(fmtLocal(st.lastBlockedAt))} · ${escapeHtml(st.lastBlocked || '')}</p>` : ''}
       <div class="bot-row"><label>Los leads del formulario se asignan a <select id="wfOwner">${options(owners.map((u) => [u.id, u.name]), st.ownerId ?? owners.find((u) => u.role === 'travel_partner')?.id ?? '', { blank: 'Primer vendedor activo' })}</select></label></div>
       <div class="bot-row"><label><input type="checkbox" id="wfNotify" ${st.notifyEmail ? 'checked' : ''}> Avisar por correo al vendedor</label></div>
       <div class="bot-row"><label>WhatsApp del botón “Escríbenos” <input id="wfWa" class="wf-wa" value="${escapeHtml(st.whatsapp)}" placeholder="El de la agencia" maxlength="25"> <button class="btn secondary small" id="wfWaSave" type="button">Guardar</button></label></div></div>

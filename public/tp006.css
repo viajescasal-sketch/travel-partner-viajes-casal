@@ -187,3 +187,4 @@ body.role-consulta #exportBtn { display: none; }
 #webformCard .int-side { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
 #modalBody details summary { cursor: pointer; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
 #modalBody details textarea { width: 100%; margin-bottom: 6px; }
+#webformCard .note-warn { background: #fff5d9; color: #7a5300; border-radius: 8px; padding: 6px 9px; font-size: 11px; }
