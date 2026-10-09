@@ -3,23 +3,16 @@
 const crypto = require('node:crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { nowCancun, sanitize, ValidationError } = require('./crm-schema');
+const { nowCancun, ValidationError } = require('./crm-schema');
 const { SELLER_ROLES } = require('./access');
-const { summaryFor, diffChanges } = require('./audit');
-const { DEFAULT_LEAD_QUESTIONS, normalizeQuestions, scoreQualification } = require('./documents');
+const { createLeadIntake } = require('./lead-intake');
 const { parseDates, destinationFrom, peopleFrom, budgetFrom, budgetOption, cleanPhone } = require('./bot-intake');
 
-const CLOSED = ['Vendido', 'Perdido'];
 const FIELDS = {
   telefono: 40, nombre: 120, producto: 80, destino: 300, ciudadSalida: 160, fechaVuelo: 160, personas: 120, presupuesto: 120,
   tipoHospedaje: 120, tipoExperiencia: 120, preferencias: 600, traslado: 120, etapa: 300, resumen: 3000, conversacion: 120
 };
 const hashToken = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
-const addMinutes = (stamp, minutes) => {
-  const d = new Date(`${stamp.replace(' ', 'T')}Z`);
-  d.setUTCMinutes(d.getUTCMinutes() + minutes);
-  return d.toISOString().slice(0, 16).replace('T', ' ');
-};
 
 // Convierte lo que manda el bot en datos de lead.
 function interpret(body, today) {
@@ -63,20 +56,9 @@ function createBotRouter(dataStore) {
   async function config() {
     return { enabled: false, tokenHash: null, tokenHint: null, ownerId: null, ...(await dataStore.getSetting('botpress') || {}) };
   }
-  async function questions() {
-    const saved = await dataStore.getSetting('lead_questions');
-    return normalizeQuestions(Array.isArray(saved) ? saved : DEFAULT_LEAD_QUESTIONS);
-  }
-  // Vendedor que recibe los leads del bot: el configurado o el primer vendedor activo.
-  async function defaultOwner(cfg) {
-    const users = await dataStore.listUsers();
-    const chosen = users.find((u) => u.id === Number(cfg.ownerId) && u.active && SELLER_ROLES.includes(u.role));
-    return chosen || users.find((u) => u.active && u.role === 'travel_partner') || users.find((u) => u.active && u.role === 'admin');
-  }
   async function remember(cfg, result) {
     await dataStore.setSetting('botpress', { ...cfg, lastAt: nowCancun(), lastResult: result });
   }
-  const log = (action, metadata) => dataStore.logActivity(null, action, null, metadata);
 
   router.post('/integrations/botpress/lead', limiter, async (req, res, next) => {
     try {
@@ -90,65 +72,19 @@ function createBotRouter(dataStore) {
       const now = nowCancun();
       const data = interpret(body, now.slice(0, 10));
       if (!data.phone && !body.nombre) throw new ValidationError('Faltan el teléfono y el nombre del cliente');
-      const qs = await questions();
+      const intake = createLeadIntake(dataStore);
+      const qs = await intake.questions();
       const budgetQuestion = qs.find((q) => q.id === 'q_presupuesto');
       const option = budgetOption(data.perPerson, budgetQuestion, data.input.presupuesto);
-      const notes = notesFrom(data, now);
-
-      // Cliente: se busca por WhatsApp; si no existe se crea.
-      let client = data.phone ? await dataStore.findClientByPhone(data.phone) : null;
-      const owner = await defaultOwner(cfg);
-      let createdClient = false;
-      if (!client) {
-        client = await dataStore.insertRecord('clients', sanitize('clients', { name: data.name, phone: data.phone || null }), owner?.id ?? null);
-        createdClient = true;
-        await log('crm_clients_create', { entity: 'clients', entityId: client.id, summary: client.name, note: 'Bot de WhatsApp' });
-      }
-
-      const leads = (await dataStore.listRecords('leads')).filter((l) => l.client_id === client.id && !CLOSED.includes(l.stage));
-      const open = leads.sort((a, b) => b.id - a.id)[0] || null;
-      const all = { clients: [client], leads: open ? [open] : [] };
-      const find = (entity, id) => (all[entity] || []).find((r) => r.id === Number(id)) || null;
-      let lead;
-      let action;
-      if (open) {
-        // Lead abierto: se completa con lo nuevo y se agregan las respuestas a las notas.
-        const changes = { notes: `${open.notes ? `${open.notes}\n\n` : ''}${notes}`.slice(-4000) };
-        if (data.destination && data.destination !== 'Por definir') changes.destination = data.destination;
-        if (data.start) { changes.start_date = data.start; changes.end_date = data.end && data.end >= data.start ? data.end : null; }
-        if (data.travelers) changes.travelers = data.travelers;
-        if (data.budget) changes.budget = data.budget;
-        if (option) {
-          const answers = { ...(open.qualification?.answers || {}), [budgetQuestion.id]: option };
-          changes.qualification = scoreQualification({ answers }, qs);
-        }
-        lead = await dataStore.updateRecord('leads', open.id, changes);
-        action = 'updated';
-        const diff = diffChanges('leads', open, lead, find).filter((c) => c.field !== 'notes');
-        await log('crm_leads_update', { entity: 'leads', entityId: lead.id, summary: summaryFor('leads', lead, find), ...(diff.length ? { changes: diff } : {}), note: 'Actualizado por el bot de WhatsApp' });
-      } else {
-        const fields = sanitize('leads', {
-          client_id: client.id, destination: data.destination, start_date: data.start, end_date: data.start && data.end ? data.end : null,
-          travelers: data.travelers, budget: data.budget, source: 'WhatsApp', stage: 'Nuevo', priority: 'Media', notes,
-          ...(option ? { qualification: scoreQualification({ answers: { [budgetQuestion.id]: option } }, qs) } : {})
-        });
-        lead = await dataStore.insertRecord('leads', fields, client.owner_id && !createdClient ? client.owner_id : owner?.id ?? null);
-        action = 'created';
-        all.leads = [lead];
-        await log('crm_leads_create', { entity: 'leads', entityId: lead.id, summary: summaryFor('leads', lead, find), note: `Creado por el bot de WhatsApp${owner ? ` · asignado a ${owner.name}` : ''}` });
-      }
-
-      // Aviso al vendedor: seguimiento para contactar en 15 minutos (si no tiene uno pendiente).
-      const pending = (await dataStore.listRecords('followups')).some((f) => f.lead_id === lead.id && !f.done);
-      let followup = null;
-      if (!pending) {
-        followup = await dataStore.insertRecord('followups', sanitize('followups', {
-          client_id: client.id, lead_id: lead.id, type: 'WhatsApp', title: `Contactar a ${client.name} (bot de WhatsApp)`,
-          details: [data.destination, data.datesText && !data.start ? `Fechas: ${data.datesText}` : null, data.input.presupuesto ? `Presupuesto: ${data.input.presupuesto}` : null].filter(Boolean).join(' · ').slice(0, 2000),
-          due_at: addMinutes(now, 15)
-        }), lead.owner_id);
-        await log('crm_followups_create', { entity: 'followups', entityId: followup.id, summary: followup.title, note: 'Bot de WhatsApp' });
-      }
+      const destination = data.destination && data.destination !== 'Por definir' ? data.destination : null;
+      const { action, lead, client, followup } = await intake.intake({
+        channel: { label: 'bot de WhatsApp', source: 'WhatsApp', ownerId: cfg.ownerId },
+        person: { name: data.name, phone: data.phone, email: null },
+        lead: { destination, start: data.start, end: data.end, travelers: data.travelers, budget: data.budget },
+        answers: option ? { [budgetQuestion.id]: option } : {},
+        notes: notesFrom(data, now),
+        followupDetails: [data.destination, data.datesText && !data.start ? `Fechas: ${data.datesText}` : null, data.input.presupuesto ? `Presupuesto: ${data.input.presupuesto}` : null].filter(Boolean).join(' · ')
+      });
       await remember(cfg, `${action === 'created' ? 'Lead creado' : 'Lead actualizado'} · ${client.name}`);
       res.status(action === 'created' ? 201 : 200).json({ ok: true, action, leadId: lead.id, clientId: client.id, followupId: followup?.id || null });
     } catch (error) {

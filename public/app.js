@@ -258,7 +258,7 @@ function renderLeads() {
   const cols = admin ? 7 : 6;
   $('#leadRows').innerHTML = list.length ? list.map((l) => {
     const badge = shared.has(l.client_id) ? '<span class="badge-shared" title="Este cliente tiene leads con más de un vendedor">Cliente compartido</span>' : '';
-    return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}${String(l.notes || '').includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip" title="Llegó por el bot de WhatsApp">🤖 Bot</span>' : ''}${qualChip(l)}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
+    return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}${String(l.notes || '').includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip" title="Llegó por el bot de WhatsApp">🤖 Bot</span>' : ''}${String(l.notes || '').includes('🌐 Formulario web') ? '<span class="bot-chip web" title="Llegó por el formulario web">🌐 Web</span>' : ''}${qualChip(l)}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
   }).join('') : emptyRow(cols, db.leads.length ? 'Ningún lead coincide con la búsqueda.' : 'Aún no hay leads registrados.');
 }
 // Exportar a Excel o CSV: cada rol descarga solo lo que puede ver.
@@ -1370,6 +1370,57 @@ function botTokenModal(replacing) {
   };
 }
 
+// Formulario web (TP-102): enlace, código para el sitio y a quién llegan los leads.
+function webformLinks(origen) {
+  const tag = String(origen || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+  const base = location.origin;
+  return {
+    tag,
+    link: `${base}/formulario${tag ? `?origen=${tag}` : ''}`,
+    code: `<script src="${base}/formulario-embed.js"${tag ? ` data-origen="${tag}"` : ''} async></script>`,
+    iframe: `<iframe src="${base}/formulario?embed=1${tag ? `&origen=${tag}` : ''}" title="Formulario para cotizar tu viaje" style="width:100%;max-width:680px;height:1100px;border:0" loading="lazy"></iframe>`
+  };
+}
+async function renderWebformCard() {
+  const card = $('#webformCard');
+  if (!card) return;
+  try {
+    const st = await api('/api/integrations/webform');
+    const owners = sellers();
+    const l = webformLinks('');
+    card.innerHTML = `<div class="int-main"><b>Formulario web → CRM ${st.enabled ? '<span class="tag-ok">Activo</span>' : '<span class="tag-soon">Pausado</span>'}</b>
+      <small>Reemplaza a Tally: el cliente contesta con botones (paquete, solo vuelo, solo hospedaje, tours o asesoría) y el lead entra a Leads ya calificado, con seguimiento a 15 minutos${st.notifyEmail ? ' y aviso por correo al vendedor' : ''}.</small>
+      <p><a href="${escapeHtml(l.link)}" target="_blank" rel="noopener">${escapeHtml(l.link)}</a></p>
+      <p>${st.lastAt ? `Último lead recibido: <b>${escapeHtml(fmtLocal(st.lastAt))}</b> · ${escapeHtml(st.lastResult || '')}` : 'Aún no llega ningún lead del formulario.'}</p>
+      <div class="bot-row"><label>Los leads del formulario se asignan a <select id="wfOwner">${options(owners.map((u) => [u.id, u.name]), st.ownerId ?? owners.find((u) => u.role === 'travel_partner')?.id ?? '', { blank: 'Primer vendedor activo' })}</select></label></div>
+      <div class="bot-row"><label><input type="checkbox" id="wfNotify" ${st.notifyEmail ? 'checked' : ''}> Avisar por correo al vendedor</label></div>
+      <div class="bot-row"><label>WhatsApp del botón “Escríbenos” <input id="wfWa" class="wf-wa" value="${escapeHtml(st.whatsapp)}" placeholder="El de la agencia" maxlength="25"> <button class="btn secondary small" id="wfWaSave" type="button">Guardar</button></label></div></div>
+      <div class="int-side"><img class="qr-mini" src="/api/qr?data=${encodeURIComponent(l.link)}" alt="Código QR del formulario"><button class="btn primary small" id="wfCode" type="button">Código para tu sitio</button><button class="btn secondary small" data-copy="${escapeHtml(l.link)}">Copiar enlace</button><button class="btn secondary small" id="wfToggle" type="button">${st.enabled ? 'Pausar' : 'Activar'}</button></div>`;
+    const save = async (body, msg) => { try { await send('PUT', '/api/integrations/webform', body); toast(msg); renderWebformCard(); } catch (error) { toast(error.message); } };
+    $('#wfOwner').onchange = (e) => save({ ownerId: e.target.value || null }, 'Vendedor para los leads del formulario guardado');
+    $('#wfNotify').onchange = (e) => save({ notifyEmail: e.target.checked }, e.target.checked ? 'Se avisará por correo' : 'Sin aviso por correo');
+    $('#wfWaSave').onclick = () => save({ whatsapp: $('#wfWa').value }, 'WhatsApp del formulario guardado');
+    $('#wfToggle').onclick = () => save({ enabled: !st.enabled }, st.enabled ? 'Formulario pausado: muestra solo el botón de WhatsApp' : 'Formulario activo');
+    $('#wfCode').onclick = () => webformCodeModal();
+  } catch (error) { card.innerHTML = `<div class="int-main"><b>Formulario web → CRM</b><small>${escapeHtml(error.message)}</small></div>`; }
+}
+function webformCodeModal() {
+  openModal('FORMULARIO WEB', 'Ponlo en tu sitio o landing', `<div class="modal-form">
+    <label class="full">Nombre de la página o campaña (opcional)<input id="wfTag" maxlength="40" placeholder="Ej. landing-cancun, instagram, sitio-inicio"><small>Aparece en el lead como “Origen” para saber de dónde llegó.</small></label>
+    <p class="full"><b>1. Código para pegar</b> (Hostinger, WordPress, Wix: bloque “Código / HTML / Embed”). El formulario se ajusta solo al alto de la página.</p>
+    <textarea id="wfSnippet" class="full code-box" rows="3" readonly></textarea>
+    <div class="full"><button type="button" class="btn primary small" data-copy-from="wfSnippet">Copiar código</button></div>
+    <p class="full"><b>2. Enlace directo</b> para la bio de Instagram, anuncios o botones.</p>
+    <input id="wfLink" class="full" readonly>
+    <div class="full"><button type="button" class="btn secondary small" data-copy-from="wfLink">Copiar enlace</button> <a class="btn secondary small" id="wfOpen" target="_blank" rel="noopener">Abrir formulario</a></div>
+    <details class="full"><summary>¿Tu sitio no acepta scripts? Usa este iframe</summary><textarea id="wfIframe" class="code-box" rows="3" readonly></textarea><button type="button" class="btn secondary small" data-copy-from="wfIframe">Copiar iframe</button></details>
+    <div class="modal-actions"><button type="button" class="btn secondary close">Listo</button></div></div>`, { wide: true });
+  const update = () => { const l = webformLinks($('#wfTag').value); $('#wfSnippet').value = l.code; $('#wfLink').value = l.link; $('#wfIframe').value = l.iframe; $('#wfOpen').href = l.link; };
+  $('#wfTag').oninput = update;
+  update();
+  $('#modalBody').querySelectorAll('[data-copy-from]').forEach((b) => { b.onclick = async () => { const el = $(`#${b.dataset.copyFrom}`); try { await navigator.clipboard.writeText(el.value); toast('Copiado'); } catch { el.select(); toast('Selecciona y copia con Ctrl+C'); } }; });
+}
+
 function renderIntegrations() {
   const d = db.documents || {};
   const waNumber = d.supportWhatsapp || db.agency.whatsapp;
@@ -1382,7 +1433,8 @@ function renderIntegrations() {
     + card(`WhatsApp de la agencia ${wa ? '<span class="tag-ok">Listo</span>' : '<span class="tag-soon">Sin número</span>'}`, wa ? `Enlace directo y código QR para ${escapeHtml(waNumber)}. Úsalo en tu sitio, redes o material impreso.` : 'Agrega el WhatsApp en Perfil de agencia o en Plantilla PDF.', wa, wa)
     + card(`Reseñas de Google ${reviews ? '<span class="tag-ok">Listo</span>' : '<span class="tag-soon">Sin enlace</span>'}`, reviews ? 'Aparece al pie de la cotización y la confirmación. Comparte el QR al terminar cada viaje.' : 'Agrega el enlace en Plantilla PDF.', reviews, reviews)
     + '<div id="botCard" class="integration"><div class="int-main"><b>Bot de WhatsApp → CRM</b><small>Cargando…</small></div></div>'
-    + `<div class="int-soon"><div><b>Formulario web</b>Solicitudes de tu sitio directo a Leads. Próximamente (TP-102).</div><div><b>Respaldos y exportación <span class="tag-ok">Activo</span></b>Copia diaria a las 2:00 a.m. y descarga a Excel/CSV. <button class="link" data-settings-tab="backupsPanel">Ver respaldos</button></div></div>`;
+    + '<div id="webformCard" class="integration"><div class="int-main"><b>Formulario web → CRM</b><small>Cargando…</small></div></div>'
+    + `<div class="int-soon"><div><b>Respaldos y exportación <span class="tag-ok">Activo</span></b>Copia diaria a las 2:00 a.m. y descarga a Excel/CSV. <button class="link" data-settings-tab="backupsPanel">Ver respaldos</button></div></div>`;
 }
 $('#integrationCards').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-copy]');
@@ -1583,7 +1635,7 @@ function showSettingsTab(tab) {
   $$('#settingsNav [data-settings-tab]').forEach((b) => b.classList.toggle('active', b.dataset.settingsTab === tab));
   $$('.settings-panel').forEach((p) => { p.hidden = p.id !== tab; });
   if (tab === 'usersPanel') loadUsers();
-  if (tab === 'integrationsPanel') { loadMailStatus(); renderIntegrations(); renderBotCard(); }
+  if (tab === 'integrationsPanel') { loadMailStatus(); renderIntegrations(); renderBotCard(); renderWebformCard(); }
   if (tab === 'pdfPanel') renderDocSettings();
   if (tab === 'questionsPanel') renderQuestionsEditor(true);
   if (tab === 'backupsPanel') loadBackups();

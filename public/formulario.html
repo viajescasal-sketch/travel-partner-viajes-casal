@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Diseñemos tu próximo viaje · Viajes Bumeran Casal</title>
+    <meta name="description" content="Cuéntanos cómo imaginas tu viaje y un asesor de Viajes Bumeran Casal te escribe por WhatsApp con tu propuesta." />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/brand/logo-mark.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/formulario.css?v=tp102" />
+  </head>
+  <body>
+    <main class="wf" id="wf">
+      <header class="wf-head">
+        <img src="/brand/logo-mark.png" alt="" width="44" height="44" />
+        <div>
+          <h1>Diseñemos tu próximo viaje ✈️</h1>
+          <p id="wfAgency">Viajes Bumeran Casal</p>
+        </div>
+      </header>
+      <div class="wf-progress" aria-hidden="true"><span id="wfBar"></span></div>
+      <form id="wfForm" novalidate autocomplete="on">
+        <div id="wfStep" class="wf-step" aria-live="polite"><p class="wf-loading">Cargando…</p></div>
+        <p id="wfError" class="wf-error" role="alert"></p>
+        <div class="wf-nav" id="wfNav">
+          <button type="button" class="wf-btn ghost" id="wfBack">Atrás</button>
+          <button type="submit" class="wf-btn primary" id="wfNext">Siguiente</button>
+        </div>
+        <label class="wf-hp" aria-hidden="true">No llenar <input type="text" name="website" id="wfWebsite" tabindex="-1" autocomplete="off" /></label>
+      </form>
+      <p class="wf-privacy">Tus datos solo se usan para preparar tu cotización.</p>
+    </main>
+    <script src="/formulario.js?v=tp102"></script>
+  </body>
+</html>

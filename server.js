@@ -18,6 +18,7 @@ const { createLoginFlow, requiresTwofa } = require('./src/login-flow');
 const { createPasswordResetService, createRecoveryRouter, createMailAdminRouter, passwordPolicyError } = require('./src/password-reset');
 const { createBackupService, createBackupRouter } = require('./src/backup');
 const { createBotRouter, createBotAdminRouter } = require('./src/bot-routes');
+const { createWebform, createWebformAdminRouter } = require('./src/webform');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -242,6 +243,9 @@ async function createApp(options = {}) {
   // Bot de WhatsApp (Botpress): entra con su propia clave, no con sesión.
   const bot = createBotRouter(dataStore);
   app.use('/api', bot.router);
+  // Formulario web público (sitio y landings): crea el lead sin sesión.
+  const webform = createWebform(dataStore, mailer, process.env);
+  app.use('/api', webform.router);
   app.use('/api', authenticate);
   // Si el servidor estuvo dormido a la hora del respaldo, se revisa al primer uso (máximo cada 5 minutos).
   let lastBackupCheck = 0;
@@ -264,7 +268,21 @@ async function createApp(options = {}) {
   app.use('/api/users', createUserRouter(dataStore, { requireRole, destroyUserSessions: async () => {} }));
   app.use('/api', createBackupRouter(dataStore, backupService, { requireRole }));
   app.use('/api', createBotAdminRouter(dataStore, bot, { requireRole }));
+  app.use('/api', createWebformAdminRouter(dataStore, webform, { requireRole }));
   app.use('/api', createCrmRouter(dataStore, { requireRole }));
+  // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
+  const formPage = path.join(publicDirectory, 'formulario.html');
+  app.get(['/formulario', '/formulario.html'], (req, res) => {
+    res.removeHeader('X-Frame-Options');
+    res.setHeader('Content-Security-Policy', String(res.getHeader('Content-Security-Policy') || '').replace("frame-ancestors 'none'", 'frame-ancestors *'));
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(formPage);
+  });
+  app.get('/formulario-embed.js', (req, res) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.set('Cache-Control', 'public, max-age=300');
+    res.sendFile(path.join(publicDirectory, 'formulario-embed.js'));
+  });
   app.use(express.static(publicDirectory, { index: false, dotfiles: 'ignore' }));
 
   app.get('*', (req, res, next) => {

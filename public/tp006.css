@@ -179,3 +179,11 @@ body.role-consulta #exportBtn { display: none; }
 .code-box { font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace !important; white-space: pre; background: #0f2a2a !important; color: #d8f3ee !important; }
 .bot-steps { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; }
 .bot-chip { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 10px; font-size: 9px; font-weight: 700; background: #e7f9ee; color: #128c4b; }
+
+/* TP-102 formulario web */
+.bot-chip.web { background: #e8f1ff; color: #1f5fbf; }
+.bot-row input[type=checkbox] { width: auto; margin: 0; }
+.bot-row .wf-wa { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 8px; width: 170px; }
+#webformCard .int-side { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+#modalBody details summary { cursor: pointer; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+#modalBody details textarea { width: 100%; margin-bottom: 6px; }
