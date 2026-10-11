@@ -10,8 +10,8 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css?v=tp105" />
-    <link rel="stylesheet" href="/tp006.css?v=tp105" />
+    <link rel="stylesheet" href="/styles.css?v=tp106" />
+    <link rel="stylesheet" href="/tp006.css?v=tp106" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -392,19 +392,33 @@
                 <h2>Seguimientos</h2>
                 <p>Organiza llamadas, mensajes y próximos pasos.</p>
               </div>
-              <button class="btn primary" data-action="followup">
-                + Nuevo seguimiento
-              </button>
+              <div>
+                <button class="btn secondary" id="calGoogle" type="button">📅 Google Calendar</button>
+                <button class="btn primary" data-action="followup">
+                  + Nuevo seguimiento
+                </button>
+              </div>
             </div>
-            <div class="grid two">
-              <article class="panel">
-                <div class="calendar-head">
-                  <button id="calPrev" aria-label="Mes anterior">‹</button>
-                  <h3 id="calTitle"></h3>
-                  <button id="calNext" aria-label="Mes siguiente">›</button>
-                  <button id="calToday" class="btn secondary small">Hoy</button>
+            <div class="cal-layout">
+              <article class="panel cal-panel">
+                <div class="cal-toolbar">
+                  <div class="cal-nav">
+                    <button id="calPrev" class="cal-arrow" type="button" aria-label="Anterior">‹</button>
+                    <button id="calToday" class="btn secondary small" type="button">Hoy</button>
+                    <button id="calNext" class="cal-arrow" type="button" aria-label="Siguiente">›</button>
+                    <h3 id="calTitle"></h3>
+                  </div>
+                  <div class="cal-tools">
+                    <select id="calOwner" class="hidden" aria-label="Vendedor"></select>
+                    <div class="cal-views" role="group" aria-label="Vista del calendario">
+                      <button type="button" data-cal-view="day">Día</button>
+                      <button type="button" data-cal-view="week">Semana</button>
+                      <button type="button" data-cal-view="month">Mes</button>
+                    </div>
+                  </div>
                 </div>
-                <div class="calendar" id="calendar"></div>
+                <div class="cal-legend" id="calLegend"></div>
+                <div id="calendar"></div>
               </article>
               <article class="panel">
                 <div class="panel-head">
@@ -775,6 +789,6 @@
       }
     </style>
     <script src="/docs/documents.js?v=tp104"></script>
-    <script src="/app.js?v=tp105"></script>
+    <script src="/app.js?v=tp106"></script>
   </body>
 </html>

@@ -19,7 +19,7 @@ const WEEKDAYS = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES
 const SOURCE_COLORS = ['var(--teal)', '#0b4f7a', 'var(--coral)', 'var(--gold)', '#7a5bd0', '#8a99a6'];
 
 const db = { clients: [], leads: [], quotes: [], trips: [], followups: [], users: [], agency: {}, documents: {}, leadQuestions: [], me: null };
-const ui = { leadQuery: '', leadStage: '', leadOwner: '', settingsTab: 'agencyPanel', quoteQuery: '', clientQuery: '', funnelRange: 'month', calYear: 0, calMonth: 0, calDay: '' };
+const ui = { leadQuery: '', leadStage: '', leadOwner: '', settingsTab: 'agencyPanel', quoteQuery: '', clientQuery: '', funnelRange: 'month', calDay: '', calView: (() => { const fallback = window.innerWidth < 800 ? 'day' : 'week'; try { const v = localStorage.getItem('tp.calView'); return ['day', 'week', 'month'].includes(v) ? v : fallback; } catch { return fallback; } })(), calOwner: '' };
 const selectedQuoteIds = new Set();
 let currentUser = null;
 let passwordChangeRequired = false;
@@ -690,35 +690,218 @@ function renderTrips() {
   $('#pastTrips').innerHTML = past.map((t) => card(t, fmtDate(t.end_date).toUpperCase())).join('') || empty('Sin viajes por cerrar.');
 }
 
-/* ---------- seguimientos ---------- */
-function renderCalendar() {
-  if (!ui.calYear) { const t = parts(todayStr()); ui.calYear = t.y; ui.calMonth = t.m; ui.calDay = todayStr(); }
-  const { calYear: y, calMonth: m } = ui;
-  $('#calTitle').textContent = `${MONTHS_LONG[m - 1]} ${y}`;
-  const first = new Date(Date.UTC(y, m - 1, 1));
-  const lead = (first.getUTCDay() + 6) % 7; // lunes primero
-  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const busy = new Set(pendingFollowups().map((f) => f.due_at.slice(0, 10)));
-  const cells = ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d) => `<span class="weekday">${d}</span>`);
-  for (let i = 0; i < lead; i++) cells.push('<span class="blank"></span>');
-  for (let d = 1; d <= daysInMonth; d++) {
-    const ds = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const cls = [ds === todayStr() ? 'today' : '', busy.has(ds) ? 'event' : '', ds === ui.calDay ? 'selected' : ''].join(' ');
-    cells.push(`<span class="day ${cls}" data-day="${ds}" role="button" tabindex="0" aria-label="${d} de ${MONTHS_LONG[m - 1]}">${d}</span>`);
-  }
-  $('#calendar').innerHTML = cells.join('');
+/* ---------- seguimientos: calendario día / semana / mes ---------- */
+const FOLLOWUP_ICONS = { Llamada: '📞', WhatsApp: '💬', 'Cotización': '📄', Pago: '💰', Otro: '📌' };
+const FOLLOWUP_CLASS = { Llamada: 'call', WhatsApp: 'wa', 'Cotización': 'quote', Pago: 'pay', Otro: 'other' };
+const CAL_SLOT = 30; // minutos por renglón en día y semana
+const CAL_ROW = 26; // px por renglón
+const WEEKDAYS_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const nowLocalStr = () => nowLocal().toISOString().slice(0, 16).replace('T', ' ');
+const minutesOf = (dueAt) => Number(dueAt.slice(11, 13)) * 60 + Number(dueAt.slice(14, 16));
+const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+const weekStart = (day) => addDays(day, -((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7)); // lunes
+const isLateFollowup = (f) => !f.done && f.due_at.slice(0, 16) < nowLocalStr();
 
-  const items = db.followups.filter((f) => f.due_at.slice(0, 10) === ui.calDay).sort((a, b) => a.due_at.localeCompare(b.due_at));
+function calFollowups() {
+  return db.followups.filter((f) => !ui.calOwner || String(f.owner_id) === String(ui.calOwner));
+}
+function calChip(f, { long = false } = {}) {
+  const c = clientById(f.client_id);
+  const drag = canWrite('followups') && !f.done;
+  const cls = ['cal-ev', FOLLOWUP_CLASS[f.type] || 'other', f.done ? 'done' : '', isLateFollowup(f) ? 'late' : ''].join(' ');
+  const who = c?.name && !f.title.includes(c.name) ? ` · ${c.name}` : '';
+  const tip = `${f.due_at.slice(11, 16)} · ${f.type} · ${f.title}${who}${isAdmin() ? ` · ${userName(f.owner_id)}` : ''}`;
+  return `<div class="${cls}" data-followup="${f.id}"${drag ? ' draggable="true"' : ''} title="${escapeHtml(tip)}" role="button" tabindex="0">
+    <span class="t">${f.due_at.slice(11, 16)}</span> ${FOLLOWUP_ICONS[f.type] || '📌'} <b>${escapeHtml(long ? f.title : (c?.name || f.title))}</b>${long ? `<small>${escapeHtml([c?.name && !f.title.includes(c.name) ? c.name : '', f.details].filter(Boolean).join(' · '))}</small>` : ''}</div>`;
+}
+
+function renderCalendar() {
+  if (!ui.calDay) ui.calDay = todayStr();
+  const view = ui.calView;
+  const today = todayStr();
+  $$('[data-cal-view]').forEach((b) => b.classList.toggle('active', b.dataset.calView === view));
+
+  // Filtro por vendedor (solo administrador)
+  const ownerSel = $('#calOwner');
+  ownerSel.classList.toggle('hidden', !isAdmin());
+  if (isAdmin()) ownerSel.innerHTML = options(sellers().map((u) => [u.id, u.name]), ui.calOwner, { blank: 'Todo el equipo' });
+  $('#calLegend').innerHTML = FOLLOWUP_TYPES.map((t) => `<span class="cal-ev-dot ${FOLLOWUP_CLASS[t]}">${FOLLOWUP_ICONS[t]} ${t}</span>`).join('') +
+    `<span class="cal-ev-dot late">Vencido</span>${canWrite('followups') ? '<span class="muted-note">Arrastra un seguimiento para reprogramarlo</span>' : ''}`;
+
+  const list = calFollowups();
+  const byDay = new Map();
+  list.forEach((f) => { const d = f.due_at.slice(0, 10); if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(f); });
+  byDay.forEach((arr) => arr.sort((a, b) => a.due_at.localeCompare(b.due_at)));
+
+  if (view === 'month') {
+    const { y, m } = parts(ui.calDay);
+    $('#calTitle').textContent = `${MONTHS_LONG[m - 1]} ${y}`;
+    const first = `${y}-${String(m).padStart(2, '0')}-01`;
+    let day = weekStart(first);
+    const cells = WEEKDAYS_SHORT.map((d) => `<div class="cal-wd">${d}</div>`);
+    for (let i = 0; i < 42; i++, day = addDays(day, 1)) {
+      if (i === 35 && parts(day).m !== m) break;
+      const items = byDay.get(day) || [];
+      const pending = items.filter((f) => !f.done).length;
+      const cls = ['cal-cell', parts(day).m !== m ? 'out' : '', day === today ? 'today' : '', day === ui.calDay ? 'selected' : ''].join(' ');
+      cells.push(`<div class="${cls}" data-day="${day}" data-drop-day="${day}" tabindex="0" aria-label="${parts(day).d} de ${MONTHS_LONG[parts(day).m - 1]}: ${pending} pendientes">
+        <span class="n">${parts(day).d}</span>${items.slice(0, 3).map((f) => calChip(f)).join('')}${items.length > 3 ? `<span class="more">+${items.length - 3} más</span>` : ''}</div>`);
+    }
+    $('#calendar').className = 'cal-month';
+    $('#calendar').innerHTML = cells.join('');
+  } else {
+    const days = view === 'week' ? Array.from({ length: 7 }, (_, i) => addDays(weekStart(ui.calDay), i)) : [ui.calDay];
+    const a = parts(days[0]), b = parts(days[days.length - 1]);
+    $('#calTitle').textContent = view === 'day'
+      ? `${WEEKDAYS[new Date(`${ui.calDay}T00:00:00Z`).getUTCDay()].toLowerCase().replace(/^./, (c) => c.toUpperCase())} ${a.d} de ${MONTHS_LONG[a.m - 1].toLowerCase()} ${a.y}`
+      : a.m === b.m ? `${a.d}–${b.d} de ${MONTHS_LONG[a.m - 1].toLowerCase()} ${a.y}` : `${a.d} ${MONTHS[a.m - 1]} – ${b.d} ${MONTHS[b.m - 1]} ${b.y}`;
+    // Horario visible: 7:00 a 21:00, o más si hay seguimientos fuera de ese rango.
+    const inRange = days.flatMap((d) => byDay.get(d) || []);
+    let startMin = 7 * 60, endMin = 21 * 60;
+    inRange.forEach((f) => { const mm = minutesOf(f.due_at); startMin = Math.min(startMin, Math.floor(mm / 60) * 60); endMin = Math.max(endMin, Math.ceil((mm + CAL_SLOT) / 60) * 60); });
+    const rows = (endMin - startMin) / CAL_SLOT;
+    const head = `<div class="cal-corner"></div>${days.map((d) => {
+      const p = parts(d), dow = (new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7;
+      const n = (byDay.get(d) || []).filter((f) => !f.done).length;
+      return `<div class="cal-dayhead${d === today ? ' today' : ''}${d === ui.calDay ? ' selected' : ''}" data-day="${d}" data-drop-day="${d}" tabindex="0"><small>${WEEKDAYS_SHORT[dow]}</small><b>${p.d}</b>${n ? `<em>${n}</em>` : ''}</div>`;
+    }).join('')}`;
+    const gutter = Array.from({ length: rows }, (_, i) => `<div class="cal-hour" style="height:${CAL_ROW}px">${(startMin + i * CAL_SLOT) % 60 === 0 ? hhmm(startMin + i * CAL_SLOT) : ''}</div>`).join('');
+    const nowMin = minutesOf(nowLocalStr());
+    const cols = days.map((d) => {
+      const slots = Array.from({ length: rows }, (_, i) => `<div class="cal-slot${(startMin + i * CAL_SLOT) % 60 === 0 ? ' hour' : ''}" style="height:${CAL_ROW}px" data-drop-day="${d}" data-drop-time="${hhmm(startMin + i * CAL_SLOT)}"></div>`).join('');
+      // Seguimientos que se enciman (menos de 30 min de diferencia) se reparten el ancho.
+      const items = byDay.get(d) || [];
+      const placed = [];
+      let cluster = [], clusterEnd = -1;
+      const flush = () => { const lanes = []; cluster.forEach((f) => { let lane = lanes.findIndex((end) => end <= minutesOf(f.due_at)); if (lane < 0) { lane = lanes.length; lanes.push(0); } lanes[lane] = minutesOf(f.due_at) + CAL_SLOT; placed.push({ f, lane, lanesRef: lanes }); }); cluster = []; };
+      items.forEach((f) => { const mm = minutesOf(f.due_at); if (mm >= clusterEnd) flush(); cluster.push(f); clusterEnd = Math.max(clusterEnd, mm + CAL_SLOT); });
+      flush();
+      const events = placed.map(({ f, lane, lanesRef }) => {
+        const top = ((minutesOf(f.due_at) - startMin) / CAL_SLOT) * CAL_ROW;
+        const w = 100 / lanesRef.length;
+        const compact = view === 'week' && lanesRef.length > 1;
+        return `<div class="cal-place${compact ? ' compact' : ''}" style="top:${top}px;height:${CAL_ROW - 2}px;left:calc(${lane * w}% + 2px);width:calc(${w}% - 4px)">${calChip(f, { long: view === 'day' })}</div>`;
+      }).join('');
+      const nowLine = d === today && nowMin >= startMin && nowMin <= endMin ? `<div class="cal-now" style="top:${((nowMin - startMin) / CAL_SLOT) * CAL_ROW}px"></div>` : '';
+      return `<div class="cal-col${d === today ? ' today' : ''}">${slots}${events}${nowLine}</div>`;
+    }).join('');
+    $('#calendar').className = `cal-grid ${view}`;
+    $('#calendar').innerHTML = `<div class="cal-head" style="--days:${days.length}">${head}</div>
+      <div class="cal-body" style="--days:${days.length}"><div class="cal-gutter">${gutter}</div>${cols}</div>`;
+    const body = $('#calendar .cal-body');
+    const target = Math.max(0, ((8 * 60 - startMin) / CAL_SLOT) * CAL_ROW);
+    if (!body.dataset.scrolled) { body.scrollTop = target; body.dataset.scrolled = '1'; }
+  }
+  renderAgenda(list);
+}
+
+function renderAgenda(list) {
+  const items = list.filter((f) => f.due_at.slice(0, 10) === ui.calDay).sort((a, b) => a.due_at.localeCompare(b.due_at));
   const isToday = ui.calDay === todayStr();
   $('#agendaTitle').textContent = isToday ? 'Agenda de hoy' : `Agenda del ${fmtDate(ui.calDay)}`;
   const pending = items.filter((f) => !f.done).length;
   $('#agendaNote').textContent = items.length ? `${pending} pendientes de ${items.length} actividades` : 'Sin actividades programadas';
-  const overdue = isToday ? pendingFollowups().filter((f) => f.due_at.slice(0, 10) < ui.calDay) : [];
-  const row = (f, label) => `<div class="item${f.done ? ' done' : ''}"><span class="time">${escapeHtml(label)}</span><i class="dot"></i><div class="event-card"><label class="check"><input type="checkbox" data-done="${f.id}" ${f.done ? 'checked' : ''}><span><b>${escapeHtml(f.type)} · ${escapeHtml(f.title)}</b><small>${escapeHtml([clientName(f.client_id), f.details].filter(Boolean).join(' · '))}</small></span></label><button class="link" data-followup="${f.id}">Editar</button></div></div>`;
+  const overdue = isToday ? list.filter((f) => !f.done && f.due_at.slice(0, 10) < ui.calDay).sort((a, b) => a.due_at.localeCompare(b.due_at)) : [];
+  const row = (f, label) => `<div class="item${f.done ? ' done' : ''}"><span class="time">${escapeHtml(label)}</span><i class="dot ${FOLLOWUP_CLASS[f.type] || ''}"></i><div class="event-card"><label class="check"><input type="checkbox" data-done="${f.id}" ${f.done ? 'checked' : ''}${canWrite('followups') ? '' : ' disabled'}><span><b>${FOLLOWUP_ICONS[f.type] || ''} ${escapeHtml(f.type)} · ${escapeHtml(f.title)}</b><small>${escapeHtml([clientName(f.client_id), f.details, isAdmin() ? userName(f.owner_id) : ''].filter(Boolean).join(' · '))}</small></span></label><button class="link" data-followup="${f.id}">Abrir</button></div></div>`;
   $('#timeline').innerHTML =
     (overdue.length ? `<p class="section-label">Vencidos</p>${overdue.map((f) => row(f, fmtDate(f.due_at))).join('')}<p class="section-label">Hoy</p>` : '') +
     (items.map((f) => row(f, f.due_at.slice(11, 16))).join('') || '<p class="empty-note">Nada programado para este día.</p>');
 }
+
+function calShift(dir) {
+  const v = ui.calView;
+  if (v === 'day') ui.calDay = addDays(ui.calDay, dir);
+  else if (v === 'week') ui.calDay = addDays(ui.calDay, dir * 7);
+  else { const { y, m } = parts(ui.calDay); const d = new Date(Date.UTC(y, m - 1 + dir, 1)); ui.calDay = d.toISOString().slice(0, 10); }
+  renderCalendar();
+}
+function setCalView(view) {
+  ui.calView = view;
+  try { localStorage.setItem('tp.calView', view); } catch { /* sin almacenamiento */ }
+  const body = $('#calendar .cal-body'); if (body) delete body.dataset.scrolled;
+  renderCalendar();
+}
+
+// Reprogramar: mueve la fecha (y la hora si se suelta en un horario) sin abrir la ficha.
+async function rescheduleFollowup(id, day, time) {
+  const f = followupById(id);
+  if (!f || !canWrite('followups')) return;
+  const next = `${day} ${time || f.due_at.slice(11, 16)}`;
+  if (next === f.due_at.slice(0, 16)) return;
+  ui.calDay = day;
+  await mutate(() => send('PATCH', `/api/followups/${id}`, { due_at: next.replace(' ', 'T') }), `Reprogramado: ${fmtDue(`${next}:00`)}`);
+}
+
+// Liga "Agregar a Google Calendar" para un seguimiento.
+function googleCalendarLink(f) {
+  const c = clientById(f.client_id), lead = leadById(f.lead_id);
+  const start = f.due_at.slice(0, 16).replace(/[-: ]/g, (ch) => (ch === ' ' ? 'T' : '')) + '00';
+  const endDate = new Date(`${f.due_at.slice(0, 10)}T${f.due_at.slice(11, 16)}:00Z`); endDate.setUTCMinutes(endDate.getUTCMinutes() + CAL_SLOT);
+  const end = endDate.toISOString().slice(0, 19).replace(/[-:]/g, '');
+  const details = [`${f.type}`, c ? `Cliente: ${c.name}${c.phone ? ` · ${c.phone}` : ''}` : '', lead ? `Lead: ${lead.destination} · ${lead.stage}` : '', f.details || '', `CRM: ${location.origin}`].filter(Boolean).join('\n');
+  const q = new URLSearchParams({ action: 'TEMPLATE', text: `${FOLLOWUP_ICONS[f.type] || ''} ${f.title}`.trim(), dates: `${start}/${end}`, ctz: 'America/Cancun', details });
+  return `https://calendar.google.com/calendar/render?${q.toString()}`;
+}
+
+async function googleCalendarModal() {
+  let url = '';
+  try { url = (await api('/api/calendar/feed')).url; } catch (error) { toast(error.message); return; }
+  const html = `<div class="gcal">
+    <p>Agrega tus seguimientos a <b>Google Calendar</b> una sola vez y se actualizarán solos. Verás ahí los seguimientos que tienes asignados, con aviso 10 minutos antes.</p>
+    <label class="gcal-url">Tu liga privada<span><input id="gcalUrl" readonly value="${escapeHtml(url)}"><button type="button" class="btn primary small" id="gcalCopy">Copiar</button></span></label>
+    <ol>
+      <li>Abre <a href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl" target="_blank" rel="noopener">Google Calendar › Agregar desde URL</a> en la computadora.</li>
+      <li>Pega la liga y haz clic en <b>Agregar calendario</b>.</li>
+      <li>Listo: aparecerá como “Seguimientos CRM”. En el celular se ve en la app de Google Calendar con la misma cuenta.</li>
+    </ol>
+    <p class="muted-note">Google revisa la liga cada pocas horas, así que un cambio puede tardar en verse allá. Para agregar uno al instante, abre el seguimiento y usa “Agregar a Google Calendar”. Lo que muevas en Google no regresa al CRM.</p>
+    <p class="muted-note">La liga es personal: no la compartas. Si alguien más la tiene, genera una nueva (la anterior deja de funcionar y tendrás que volver a agregarla).</p>
+    <div class="modal-actions"><button type="button" class="btn secondary small" id="gcalReset">Generar liga nueva</button><button type="button" class="btn primary close">Listo</button></div>
+  </div>`;
+  openModal('PRODUCTIVIDAD', 'Conectar con Google Calendar', html);
+  $('#gcalCopy').onclick = async () => {
+    const input = $('#gcalUrl');
+    try { await navigator.clipboard.writeText(input.value); } catch { input.select(); document.execCommand('copy'); }
+    toast('Liga copiada');
+  };
+  $('#gcalReset').onclick = async () => {
+    if (!confirm('¿Generar una liga nueva? La anterior dejará de funcionar y tendrás que agregarla otra vez en Google Calendar.')) return;
+    try { $('#gcalUrl').value = (await send('POST', '/api/calendar/feed/reset')).url; toast('Liga nueva generada'); } catch (error) { toast(error.message); }
+  };
+}
+
+// Arrastrar y soltar en el calendario.
+document.addEventListener('dragstart', (e) => {
+  const ev = e.target.closest?.('.cal-ev[draggable="true"]');
+  if (!ev) return;
+  e.dataTransfer.setData('text/plain', ev.dataset.followup);
+  e.dataTransfer.effectAllowed = 'move';
+  ev.classList.add('dragging');
+  document.body.classList.add('cal-dragging');
+});
+document.addEventListener('dragend', () => {
+  $$('.cal-ev.dragging').forEach((x) => x.classList.remove('dragging'));
+  $$('.drop-over').forEach((x) => x.classList.remove('drop-over'));
+  document.body.classList.remove('cal-dragging');
+});
+document.addEventListener('dragover', (e) => {
+  if (!document.body.classList.contains('cal-dragging')) return;
+  const target = e.target.closest?.('[data-drop-day]');
+  if (!target) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if (!target.classList.contains('drop-over')) { $$('.drop-over').forEach((x) => x.classList.remove('drop-over')); target.classList.add('drop-over'); }
+});
+document.addEventListener('drop', (e) => {
+  if (!document.body.classList.contains('cal-dragging')) return;
+  const target = e.target.closest?.('[data-drop-day]');
+  if (!target) return;
+  e.preventDefault();
+  const id = Number(e.dataTransfer.getData('text/plain'));
+  document.body.classList.remove('cal-dragging');
+  $$('.drop-over').forEach((x) => x.classList.remove('drop-over'));
+  if (id) rescheduleFollowup(id, target.dataset.dropDay, target.dataset.dropTime);
+});
 
 /* ---------- reportes ---------- */
 function renderReports() {
@@ -806,6 +989,12 @@ function bindDelete(url, message) {
 }
 const clean = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]));
 
+// Seguimientos del lead dentro de su ficha (pendientes primero).
+function leadFollowupsHtml(lead) {
+  const list = db.followups.filter((f) => f.lead_id === lead.id).sort((a, b) => Number(a.done) - Number(b.done) || (a.done ? b.due_at.localeCompare(a.due_at) : a.due_at.localeCompare(b.due_at))).slice(0, 5);
+  if (!list.length) return '<p class="full lead-fups-empty">Sin seguimientos programados para este lead.</p>';
+  return `<div class="full lead-fups"><b>Seguimientos</b>${list.map((f) => `<button type="button" class="lead-fup${f.done ? ' done' : ''}${isLateFollowup(f) ? ' late' : ''}" data-followup="${f.id}"><span>${FOLLOWUP_ICONS[f.type] || '📌'} ${escapeHtml(f.title)}</span><small>${f.done ? 'Hecho' : escapeHtml(fmtDue(f.due_at))}</small></button>`).join('')}</div>`;
+}
 function leadModal(id, presetClientId) {
   if (!canWrite('leads')) return;
   const lead = id ? leadById(id) : null;
@@ -826,7 +1015,8 @@ function leadModal(id, presetClientId) {
     ${isAdmin() ? field('Vendedor asignado', `<select name="owner_id">${options([...(lead ? [] : [['auto', 'Automático (según la asignación)']]), ...sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`])], lead?.owner_id ?? currentUser.id)}</select>`) : ''}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
     ${qualHtml(lead)}
-    ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Programar seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
+    ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="Llamada">📞 Programar llamada</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="WhatsApp">💬 Programar WhatsApp</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Otro seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
+    ${lead ? leadFollowupsHtml(lead) : ''}
     ${lead ? historyButton('leads', lead.id) : ''}
     ${deleteBlock('lead', lead?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${lead ? 'Guardar cambios' : 'Guardar lead'}</button></div></form>`;
@@ -1292,26 +1482,51 @@ function followupModal(id, preset = {}) {
   const f = id ? followupById(id) : null;
   const lead = preset.leadId ? leadById(preset.leadId) : null;
   const clientId = f?.client_id ?? lead?.client_id ?? '';
+  const type = f?.type || preset.type || 'Llamada';
   const leadOptions = (cid) => options(db.leads.filter((l) => l.client_id === Number(cid)).map((l) => [l.id, `${l.destination} · ${l.stage}`]), f?.lead_id ?? lead?.id, { blank: 'Sin lead' });
-  const due = f ? toInputDateTime(f.due_at) : `${ui.calDay && ui.calDay >= todayStr() ? ui.calDay : todayStr()}T10:00`;
+  const defaultTitle = (t, cid) => {
+    const name = clientById(Number(cid))?.name || '';
+    if (!name) return '';
+    return { Llamada: `Llamar a ${name}`, WhatsApp: `Mensaje de WhatsApp a ${name}`, 'Cotización': `Enviar cotización a ${name}`, Pago: `Confirmar pago de ${name}` }[t] || `Seguimiento a ${name}`;
+  };
+  // Hora sugerida: en 1 hora (redondeada a media hora); si ya es tarde, mañana a las 10:00. Si se eligió un día futuro, ese día a las 10:00.
+  const soon = Math.ceil((minutesOf(nowLocalStr()) + 60) / 30) * 30;
+  const due = f ? toInputDateTime(f.due_at) : preset.due || (ui.calDay && ui.calDay > todayStr() ? `${ui.calDay}T10:00` : soon <= 20 * 60 ? `${todayStr()}T${hhmm(soon)}` : `${addDays(todayStr(), 1)}T10:00`);
+  // Atajos de fecha y hora (también sirven para reprogramar desde el celular).
+  const base = f ? f.due_at.slice(0, 16).replace(' ', 'T') : null;
+  const nextMonday = addDays(todayStr(), 7 - ((new Date(`${todayStr()}T00:00:00Z`).getUTCDay() + 6) % 7));
+  const inOneHour = (() => { const mm = Math.ceil((minutesOf(nowLocalStr()) + 60) / 30) * 30; return mm < 24 * 60 ? `${todayStr()}T${hhmm(mm)}` : `${addDays(todayStr(), 1)}T09:00`; })();
+  const quick = [['En 1 hora', inOneHour], ['Hoy 17:00', `${todayStr()}T17:00`], ['Mañana 10:00', `${addDays(todayStr(), 1)}T10:00`], ['En 3 días', `${addDays(todayStr(), 3)}T10:00`], ['Lunes 10:00', `${nextMonday}T10:00`]]
+    .filter(([, v], i, all) => v.replace('T', ' ') > nowLocalStr() && all.findIndex(([, w]) => w === v) === i);
+  if (base) quick.push(['+1 semana', `${addDays(base.slice(0, 10), 7)}T${base.slice(11, 16)}`]);
+  const client = clientById(clientId);
+  const waPhone = client?.phone ? String(client.phone).replace(/\D/g, '') : '';
   const html = `<form class="modal-form">
-    ${field('Tipo', `<select name="type">${options(FOLLOWUP_TYPES, f?.type || 'Llamada')}</select>`)}
+    ${field('Tipo', `<div class="type-pick">${FOLLOWUP_TYPES.map((t) => `<label class="${FOLLOWUP_CLASS[t]}"><input type="radio" name="type" value="${escapeHtml(t)}"${t === type ? ' checked' : ''}><span>${FOLLOWUP_ICONS[t]} ${escapeHtml(t)}</span></label>`).join('')}</div>`, true)}
     ${field('Fecha y hora*', `<input name="due_at" type="datetime-local" required value="${escapeHtml(due)}">`)}
-    ${field('Actividad*', `<input name="title" required maxlength="160" value="${escapeHtml(f?.title ?? (lead ? `Seguimiento a ${clientName(lead.client_id)}` : ''))}">`, true)}
+    <div class="quick-times">${quick.map(([label, value]) => `<button type="button" class="chip-btn" data-quick-due="${value}">${label}</button>`).join('')}</div>
+    ${field('Actividad*', `<input name="title" required maxlength="160" value="${escapeHtml(f?.title ?? defaultTitle(type, clientId))}">`, true)}
     ${field('Cliente', `<select name="client_id">${options(db.clients.map((c) => [c.id, c.name]), clientId, { blank: 'Sin cliente' })}</select>`)}
     ${field('Lead', `<select name="lead_id">${leadOptions(clientId)}</select>`)}
-    ${field('Detalles', `<textarea name="details" rows="2" maxlength="2000">${escapeHtml(f?.details)}</textarea>`, true)}
+    ${field('Detalles', `<textarea name="details" rows="2" maxlength="2000" placeholder="Qué vas a decir o qué falta">${escapeHtml(f?.details)}</textarea>`, true)}
     ${f ? `<label class="full check"><input type="checkbox" name="done" ${f.done ? 'checked' : ''}> Marcar como hecho</label>` : ''}
+    ${f ? `<div class="full quick-actions"><a class="btn secondary small" href="${escapeHtml(googleCalendarLink(f))}" target="_blank" rel="noopener">📅 Agregar a Google Calendar</a>${waPhone ? `<a class="btn secondary small" href="https://wa.me/${waPhone}" target="_blank" rel="noopener">💬 Abrir WhatsApp</a><a class="btn secondary small" href="tel:+${waPhone}">📞 Llamar</a>` : ''}${f.lead_id ? `<button type="button" class="btn secondary small" data-lead="${f.lead_id}">Ver lead</button>` : ''}${isAdmin() ? `<small>Vendedor: ${escapeHtml(userName(f.owner_id))}</small>` : ''}</div>` : ''}
     ${deleteBlock('seguimiento', f?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${f ? 'Guardar cambios' : 'Programar'}</button></div></form>`;
-  openModal('PRODUCTIVIDAD', f ? 'Editar seguimiento' : 'Nuevo seguimiento', html);
+  openModal('PRODUCTIVIDAD', f ? 'Editar seguimiento' : preset.type === 'Llamada' ? 'Programar llamada' : preset.type === 'WhatsApp' ? 'Programar mensaje de WhatsApp' : 'Nuevo seguimiento', html);
   const form = bindForm((v) => {
     const body = clean({ type: v.type, due_at: v.due_at, title: v.title, client_id: v.client_id ? Number(v.client_id) : null, lead_id: v.lead_id ? Number(v.lead_id) : null, details: v.details || null });
+    ui.calDay = v.due_at.slice(0, 10);
     if (f) return mutate(() => send('PATCH', `/api/followups/${f.id}`, { ...body, done: v.done === 'on' }), 'Seguimiento actualizado');
-    ui.calDay = v.due_at.slice(0, 10); const p = parts(ui.calDay); ui.calYear = p.y; ui.calMonth = p.m;
     return mutate(() => send('POST', '/api/followups', body), 'Seguimiento programado');
   });
-  form.client_id.onchange = () => { form.lead_id.innerHTML = leadOptions(form.client_id.value); };
+  // El título sugerido cambia con el tipo y el cliente mientras no se haya escrito uno propio.
+  let autoTitle = form.title.value === defaultTitle(type, clientId);
+  form.title.oninput = () => { autoTitle = false; };
+  const refreshTitle = () => { if (autoTitle) form.title.value = defaultTitle(form.querySelector('[name=type]:checked')?.value, form.client_id.value); };
+  form.querySelectorAll('[name=type]').forEach((r) => { r.onchange = refreshTitle; });
+  form.client_id.onchange = () => { form.lead_id.innerHTML = leadOptions(form.client_id.value); refreshTitle(); };
+  form.querySelectorAll('[data-quick-due]').forEach((b) => { b.onclick = () => { form.due_at.value = b.dataset.quickDue; form.querySelectorAll('[data-quick-due]').forEach((x) => x.classList.toggle('active', x === b)); }; });
   if (f) bindDelete(`/api/followups/${f.id}`, 'Seguimiento eliminado');
 }
 
@@ -2256,7 +2471,7 @@ document.addEventListener('click', (e) => {
   if (t.classList.contains('close')) { close(); return; }
   if ((el = hit('[data-demo]'))) { toast(el.dataset.demo); return; }
   if ((el = hit('[data-quote-for]'))) { quoteModal(null, { clientId: Number(el.dataset.quoteFor), leadId: el.dataset.quoteLead ? Number(el.dataset.quoteLead) : undefined }); return; }
-  if ((el = hit('[data-new-followup-lead]'))) { followupModal(null, { leadId: Number(el.dataset.newFollowupLead) }); return; }
+  if ((el = hit('[data-new-followup-lead]'))) { followupModal(null, { leadId: Number(el.dataset.newFollowupLead), type: el.dataset.followupType }); return; }
   if ((el = hit('[data-new-lead-client]'))) { leadModal(null, Number(el.dataset.newLeadClient)); return; }
   if ((el = hit('[data-new-trip-client]'))) { tripModal(null, { clientId: Number(el.dataset.newTripClient) }); return; }
   if ((el = hit('[data-trip-from-quote]'))) { tripModal(null, { quoteId: Number(el.dataset.tripFromQuote) }); return; }
@@ -2326,9 +2541,18 @@ $('#globalSearch').onkeydown = (e) => {
   renderLeads();
 };
 $('#multiSend').onclick = () => prepareWhatsapp([...selectedQuoteIds]);
-$('#calPrev').onclick = () => { ui.calMonth -= 1; if (ui.calMonth < 1) { ui.calMonth = 12; ui.calYear -= 1; } renderCalendar(); };
-$('#calNext').onclick = () => { ui.calMonth += 1; if (ui.calMonth > 12) { ui.calMonth = 1; ui.calYear += 1; } renderCalendar(); };
-$('#calToday').onclick = () => { ui.calYear = 0; renderCalendar(); };
+$('#calPrev').onclick = () => calShift(-1);
+$('#calNext').onclick = () => calShift(1);
+$('#calToday').onclick = () => { ui.calDay = todayStr(); renderCalendar(); };
+$$('[data-cal-view]').forEach((b) => { b.onclick = () => setCalView(b.dataset.calView); });
+$('#calOwner').onchange = (e) => { ui.calOwner = e.target.value; renderCalendar(); };
+$('#calGoogle').onclick = () => googleCalendarModal();
+// Doble clic en un horario vacío: nuevo seguimiento a esa hora.
+$('#calendar').addEventListener('dblclick', (e) => {
+  const slot = e.target.closest('.cal-slot, .cal-cell');
+  if (!slot || e.target.closest('.cal-ev') || !canWrite('followups')) return;
+  followupModal(null, { due: `${slot.dataset.dropDay}T${slot.dataset.dropTime || '10:00'}` });
+});
 $('#saveSettings').onclick = () => mutate(() => send('PUT', '/api/settings/agency', {
   name: $('#setName').value, whatsapp: $('#setWhatsapp').value, email: $('#setEmail').value, website: $('#setWebsite').value
 }), 'Configuración guardada');
