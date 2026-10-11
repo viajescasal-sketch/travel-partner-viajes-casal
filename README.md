@@ -220,3 +220,20 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - Arriba: vendido, pagado, saldo, viajes, promedio de reseñas y último contacto; notas fijas y preferencias del cliente; próximos seguimientos.
 - Botones **Registrar pago** (monto, concepto, forma de pago, fecha, viaje/cotización), **Registrar reseña** (1–5 estrellas, plataforma, comentario) y **Agregar nota**. La pestaña *Datos del cliente* conserva el formulario de antes.
 - Tabla `crm_client_events` (se borra con el cliente; incluida en el respaldo JSON). API: `GET|POST /api/clients/:id/events`, `DELETE /api/client-events/:id` (solo admin). Cada vendedor ve y registra solo en sus clientes.
+
+## Calificación automática de leads (TP-109)
+
+- `src/scoring.js`: puntaje 0–100 con presupuesto por persona, cercanía de fechas, tamaño del grupo, respuesta del cliente y las preguntas de calificación (si se contestaron; si no, su peso se reparte). Caliente/Tibio/Frío → prioridad Alta/Media/Baja, que ya no se elige a mano (se guarda sola al cambiar).
+- Respuesta del cliente: botones ⚡ Responde rápido · 🕒 Tarda · 😶 No responde en la ficha del lead (`POST /api/leads/:id/response`), más señales automáticas: volvió a escribir al bot o al formulario (`reengaged_at`) o abrió la liga de la cotización.
+- Pesos y umbrales en **Configuración › Calificación de leads** (`GET|PUT /api/scoring`, setting `lead_scoring`).
+
+## Centro de notificaciones (TP-110)
+
+- Campanita con pestañas *Todos / Sin leer*, ícono por tipo y clic que abre el lead, la cotización, el cliente o el seguimiento (`crm_notifications.link`).
+- Avisos: lead nuevo (al vendedor asignado y, si entra por bot o formulario, a los administradores), **cotización vista** (liga privada `/cotizacion/<token>`, máximo un aviso por hora; las vistas del equipo no cuentan), **pago recibido** (al registrar un pago en la ficha 360: vendedor y administradores) y **seguimiento vencido** (15 min después de la hora, una vez; se reinicia al reprogramar). También los recordatorios de TP-106.
+- Liga privada: botón **🔗 Liga** en la cotización (`POST /api/quotes/:id/share`, `{ enabled: false }` la desactiva); variable `{liga_cotizacion}` en las plantillas de WhatsApp. Vista pública: `src/public-quote.js` (sin datos de contacto del cliente; imágenes servidas por la misma liga).
+
+## Duplicados (TP-111)
+
+- Aviso al escribir WhatsApp o correo en *Nuevo cliente*, *Nuevo lead* y *Datos del cliente* (`GET /api/clients/duplicates/check`). Crear un cliente que ya existe pide confirmación (409). Un lead nuevo con un correo ya registrado se agrega a ese cliente.
+- Administrador: aviso en **Clientes** y en la ficha 360, revisión por grupos (mismo WhatsApp, correo o nombre) y **Conservar este** para fusionar (`GET /api/duplicates`, `POST /api/clients/merge`): mueve leads, cotizaciones, viajes, seguimientos y ficha 360, completa datos faltantes y elimina el duplicado.

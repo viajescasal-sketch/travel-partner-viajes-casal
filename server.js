@@ -20,6 +20,7 @@ const { createBackupService, createBackupRouter } = require('./src/backup');
 const { createBotRouter, createBotAdminRouter } = require('./src/bot-routes');
 const { createWebform, createWebformAdminRouter } = require('./src/webform');
 const { createCalendarFeed } = require('./src/calendar');
+const { createPublicQuote } = require('./src/public-quote');
 const { createAssignment, createAssignmentRouter } = require('./src/assignment');
 const { createReminders, createRemindersRouter } = require('./src/reminders');
 
@@ -256,6 +257,8 @@ async function createApp(options = {}) {
   // Calendario de seguimientos por suscripción (Google Calendar): liga privada sin sesión.
   const calendarFeed = createCalendarFeed(dataStore, process.env);
   app.use(calendarFeed.publicRouter);
+  // TP-110: liga privada de la cotización para el cliente (sin sesión).
+  app.use(createPublicQuote(dataStore, assignment, { publicDirectory }));
   app.use('/api', authenticate);
   // Si el servidor estuvo dormido a la hora del respaldo, se revisa al primer uso (máximo cada 5 minutos).
   let lastBackupCheck = 0;
