@@ -15,13 +15,13 @@ const STAGES = [
 const VARIABLES = [
   ['nombre', 'Primer nombre del cliente'], ['nombre_completo', 'Nombre completo'], ['destino', 'Destino'], ['fechas', 'Fechas del viaje'],
   ['viajeros', 'Número de viajeros'], ['folio', 'Folio de la cotización'], ['hotel', 'Hotel o paquete'], ['precio', 'Precio de la cotización'],
-  ['vigencia', 'Vigencia de la cotización'], ['vendedor', 'Tu nombre'], ['agencia', 'Nombre de la agencia'], ['liga_resenas', 'Liga para dejar reseña']
+  ['vigencia', 'Vigencia de la cotización'], ['liga_cotizacion', 'Liga privada para ver la cotización'], ['vendedor', 'Tu nombre'], ['agencia', 'Nombre de la agencia'], ['liga_resenas', 'Liga para dejar reseña']
 ];
 
 const DEFAULT_TEMPLATES = [
   { id: 'pc1', stage: 'primer_contacto', name: 'Bienvenida', body: '¡Hola {nombre}! 👋 Soy {vendedor}, tu Travel Partner de {agencia}. Vi que te interesa viajar a {destino} y me encantaría ayudarte a armar tu viaje. ¿Me compartes tus fechas y cuántas personas viajan?' },
   { id: 'pc2', stage: 'primer_contacto', name: 'Sin respuesta', body: 'Hola {nombre}, te escribo de nuevo por tu viaje a {destino} ✈️. Cuando tengas un momento, cuéntame qué tienes en mente y te preparo opciones a tu medida.' },
-  { id: 'co1', stage: 'cotizacion', name: 'Envío de cotización', body: 'Hola {nombre}, ya tengo lista tu cotización {folio} para {destino} ({fechas}) 🏝️\n\n🏨 {hotel}\n💰 {precio}\n📅 Vigente hasta {vigencia}\n\nTe comparto el PDF con todos los detalles. ¿Lo revisamos juntos?' },
+  { id: 'co1', stage: 'cotizacion', name: 'Envío de cotización', body: 'Hola {nombre}, ya tengo lista tu cotización {folio} para {destino} ({fechas}) 🏝️\n\n🏨 {hotel}\n💰 {precio}\n📅 Vigente hasta {vigencia}\n\nAquí puedes verla completa: {liga_cotizacion}\n¿La revisamos juntos?' },
   { id: 'se1', stage: 'seguimiento', name: '¿Pudiste revisarla?', body: 'Hola {nombre} 😊 ¿Pudiste revisar la cotización de {destino}? Si quieres cambiar fechas, hotel o presupuesto, lo ajustamos sin problema.' },
   { id: 'se2', stage: 'seguimiento', name: 'Vigencia por terminar', body: 'Hola {nombre}, te aviso que los precios de tu cotización {folio} para {destino} están vigentes hasta {vigencia}. ¿Quieres que te ayude a apartarlo antes de que cambien? 🙌' },
   { id: 'ci1', stage: 'cierre', name: 'Apartar el viaje', body: '¡Qué emoción, {nombre}! 🎉 Para apartar tu viaje a {destino} ({fechas}) solo necesito el anticipo. Te paso los datos de pago y en cuanto lo recibamos te envío tu confirmación.' },

@@ -65,9 +65,9 @@ function createAssignment(dataStore, mailer, env = {}) {
   const appUrlFor = (req) => String(env.APP_URL || '').trim().replace(/\/+$/, '') || (req ? `${req.protocol}://${req.get('host')}` : '');
 
   // Aviso al vendedor: campanita y, si se pide, correo.
-  async function notify(user, { title, body, leadId, kind = 'lead', email = null }) {
+  async function notify(user, { title, body, leadId, link = null, kind = 'lead', email = null }) {
     if (!user?.id) return;
-    try { await dataStore.createNotification({ userId: user.id, kind, title, body, leadId }); } catch (error) { console.error('Aviso: no se pudo guardar:', error.message); }
+    try { await dataStore.createNotification({ userId: user.id, kind, title, body, leadId, link }); } catch (error) { console.error('Aviso: no se pudo guardar:', error.message); }
     if (email && mailer.configured && user.email) {
       try { await mailer.send({ to: user.email, ...email }); } catch (error) { console.error('Aviso: no se pudo enviar el correo:', error.message); }
     }

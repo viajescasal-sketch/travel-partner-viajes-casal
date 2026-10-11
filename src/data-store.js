@@ -101,7 +101,7 @@ function requiredProductionVariables(env) {
 
 function normalizeNotification(row) {
   const stamp = (v) => (v instanceof Date ? nowCancun(new Date(v.getTime() + 5 * 3600000)) : v ? String(v) : null);
-  return { id: Number(row.id), kind: row.kind, title: row.title, body: row.body || '', leadId: row.lead_id == null ? null : Number(row.lead_id), read: Boolean(row.read_at), createdAt: stamp(row.created_at) };
+  return { id: Number(row.id), kind: row.kind, title: row.title, body: row.body || '', leadId: row.lead_id == null ? null : Number(row.lead_id), link: row.link || null, read: Boolean(row.read_at), createdAt: stamp(row.created_at) };
 }
 
 class MySQLDataStore {
@@ -204,6 +204,9 @@ class MySQLDataStore {
       INDEX idx_notif_user (user_id, id),
       CONSTRAINT fk_notif_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+    // TP-110: a dónde lleva el aviso (cliente, cotización, seguimiento…)
+    const [notifCols] = await this.pool.query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'crm_notifications' AND COLUMN_NAME = 'link'");
+    if (!notifCols.length) await this.pool.query('ALTER TABLE crm_notifications ADD COLUMN link VARCHAR(40) NULL AFTER lead_id');
     await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_settings (
       setting_key VARCHAR(60) NOT NULL PRIMARY KEY,
       setting_value TEXT NOT NULL,
@@ -300,10 +303,10 @@ class MySQLDataStore {
   }
 
   // Avisos para cada usuario (campanita).
-  async createNotification({ userId, kind, title, body, leadId }) {
+  async createNotification({ userId, kind, title, body, leadId, link }) {
     const [result] = await this.pool.execute(
-      'INSERT INTO crm_notifications (user_id, kind, title, body, lead_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, String(kind).slice(0, 30), String(title).slice(0, 200), body ? String(body).slice(0, 500) : null, leadId ?? null, nowCancun()]
+      'INSERT INTO crm_notifications (user_id, kind, title, body, lead_id, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [userId, String(kind).slice(0, 30), String(title).slice(0, 200), body ? String(body).slice(0, 500) : null, leadId ?? null, link ? String(link).slice(0, 40) : null, nowCancun()]
     );
     return Number(result.insertId);
   }
@@ -553,6 +556,7 @@ class MySQLDataStore {
     const [rows] = await this.pool.query('SELECT * FROM crm_client_events ORDER BY id');
     return rows.map(normalizeEvent);
   }
+  async moveClientEvents(fromId, toId) { await this.pool.execute('UPDATE crm_client_events SET client_id = ? WHERE client_id = ?', [toId, fromId]); }
   async deleteClientEvent(id) {
     const [result] = await this.pool.execute('DELETE FROM crm_client_events WHERE id = ?', [id]);
     return result.affectedRows > 0;
@@ -754,9 +758,9 @@ class MemoryDataStore {
     return this.backupSeq;
   }
   async withLock(_name, fn) { return fn(); }
-  async createNotification({ userId, kind, title, body, leadId }) {
+  async createNotification({ userId, kind, title, body, leadId, link }) {
     this.notifications = this.notifications || [];
-    const row = { id: this.notifications.length + 1, user_id: userId, kind, title: String(title).slice(0, 200), body: body ? String(body).slice(0, 500) : null, lead_id: leadId ?? null, read_at: null, created_at: nowCancun() };
+    const row = { id: this.notifications.length + 1, user_id: userId, kind, title: String(title).slice(0, 200), body: body ? String(body).slice(0, 500) : null, lead_id: leadId ?? null, link: link || null, read_at: null, created_at: nowCancun() };
     this.notifications.push(row);
     return row.id;
   }
@@ -849,6 +853,7 @@ class MemoryDataStore {
     return this.events.filter((e) => e.client_id === Number(clientId)).sort((a, b) => String(b.event_at).localeCompare(String(a.event_at)) || b.id - a.id).map(normalizeEvent);
   }
   async listAllClientEvents() { return (this.events || []).map(normalizeEvent); }
+  async moveClientEvents(fromId, toId) { (this.events || []).forEach((e) => { if (e.client_id === Number(fromId)) e.client_id = Number(toId); }); }
   async deleteClientEvent(id) { const before = (this.events || []).length; this.events = (this.events || []).filter((e) => e.id !== Number(id)); return this.events.length < before; }
   async getSetting(key) { return this.settings.has(key) ? JSON.parse(this.settings.get(key)) : null; }
   async setSetting(key, value) { this.settings.set(key, JSON.stringify(value)); }

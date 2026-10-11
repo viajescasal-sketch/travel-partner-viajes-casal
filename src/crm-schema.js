@@ -46,7 +46,11 @@ const ENTITIES = {
       assigned_at: { type: 'datetime', internal: true },
       contacted_at: { type: 'datetime', internal: true },
       contact_alert_at: { type: 'datetime', internal: true },
-      contact_escalated_at: { type: 'datetime', internal: true }
+      contact_escalated_at: { type: 'datetime', internal: true },
+      // TP-109: calificación automática
+      score: { type: 'int', internal: true },
+      response: { type: 'string', max: 20, internal: true },
+      reengaged_at: { type: 'datetime', internal: true }
     }
   },
   quotes: {
@@ -67,7 +71,11 @@ const ENTITIES = {
       accepted_at: { type: 'datetime', internal: true },
       // TP-106: cuándo se envió y cuándo se recordó
       sent_at: { type: 'datetime', internal: true },
-      reminder_at: { type: 'datetime', internal: true }
+      reminder_at: { type: 'datetime', internal: true },
+      // TP-110: liga privada para que el cliente vea la cotización
+      share_token: { type: 'string', max: 48, internal: true },
+      viewed_at: { type: 'datetime', internal: true },
+      view_count: { type: 'int', internal: true }
     }
   },
   trips: {
@@ -94,7 +102,8 @@ const ENTITIES = {
       title: { type: 'string', max: 160, required: true },
       details: { type: 'text', max: 2000 },
       due_at: { type: 'datetime', required: true },
-      done: { type: 'bool', default: false }
+      done: { type: 'bool', default: false },
+      overdue_notified_at: { type: 'datetime', internal: true } // TP-110
     }
   }
 };

@@ -89,7 +89,8 @@ function createReminders(dataStore, assignment, env = {}, { now = () => nowCancu
       // Primera vez: lo anterior no dispara alertas de golpe.
       state.startedAt = current;
     }
-    const result = { quotes: 0, contact: 0, escalated: 0, at: current };
+    const result = { quotes: 0, contact: 0, escalated: 0, overdue: 0, at: current };
+    if (!state.overdueStartedAt) state.overdueStartedAt = current; // TP-110: lo vencido antes de activar no avisa de golpe
     if (!cfg.enabled) { await dataStore.setSetting('reminders_state', { ...state, lastRunAt: current, lastResult: 'Pausados' }); return result; }
 
     const [quotes, leads, clients, followups, users] = await Promise.all(['quotes', 'leads', 'clients', 'followups'].map((e) => dataStore.listRecords(e)).concat(dataStore.listUsers()));
@@ -168,7 +169,23 @@ function createReminders(dataStore, assignment, env = {}, { now = () => nowCancu
       result.escalated += 1;
     }
 
-    const parts = [result.quotes && `${result.quotes} cotizaciones`, result.contact && `${result.contact} leads sin contacto`, result.escalated && `${result.escalated} avisos al administrador`].filter(Boolean);
+    // 3) Seguimientos vencidos (TP-110): aviso en la campanita 15 minutos después de la hora, una sola vez.
+    for (const f of followups) {
+      if (f.done || f.overdue_notified_at || !f.due_at) continue;
+      if (String(f.due_at) < state.overdueStartedAt) continue;
+      if (toMs(current) - toMs(f.due_at) < 15 * 60000) continue;
+      const lead = leadById(f.lead_id);
+      if (lead && CLOSED.includes(lead.stage)) continue;
+      const owner = userById(f.owner_id ?? lead?.owner_id) || null;
+      const client = clientById(f.client_id);
+      if (owner && assignment) {
+        await assignment.notify(owner, { kind: 'followup_overdue', leadId: f.lead_id || null, link: `followup:${f.id}`, title: `⏰ Seguimiento vencido: ${f.title}`.slice(0, 200), body: `${f.type}${client ? ` · ${client.name}` : ''} · era a las ${String(f.due_at).slice(11, 16)} del ${String(f.due_at).slice(8, 10)}/${String(f.due_at).slice(5, 7)}` });
+      }
+      await dataStore.updateRecord('followups', f.id, { overdue_notified_at: current });
+      result.overdue += 1;
+    }
+
+    const parts = [result.quotes && `${result.quotes} cotizaciones`, result.overdue && `${result.overdue} seguimientos vencidos`, result.contact && `${result.contact} leads sin contacto`, result.escalated && `${result.escalated} avisos al administrador`].filter(Boolean);
     await dataStore.setSetting('reminders_state', { ...state, lastRunAt: current, lastResult: parts.length ? `Avisos: ${parts.join(', ')}` : 'Sin pendientes', ...(parts.length ? { lastAlertAt: current, lastAlert: parts.join(', ') } : {}) });
     return result;
   }

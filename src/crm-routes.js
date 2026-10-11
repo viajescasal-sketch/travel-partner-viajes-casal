@@ -20,6 +20,9 @@ const { PROFILE_FIELDS } = require('./data-store');
 const { ROLE_SECTIONS, SECTIONS, buildSheets } = require('./export');
 const { buildXlsx, buildCsv, zip } = require('./xlsx');
 const { cleanConfig: reminderConfig } = require('./reminders');
+const { scoreLead, cleanScoring, sanitizeScoring, RESPONSES } = require('./scoring');
+const { newShareToken } = require('./public-quote');
+const { phoneKey } = require('./data-store');
 const { STAGES: TEMPLATE_STAGES, VARIABLES: TEMPLATE_VARIABLES, DEFAULT_TEMPLATES, sanitizeTemplates, readTemplates } = require('./templates');
 
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
@@ -194,13 +197,33 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
       agency: { ...DEFAULT_AGENCY, ...(await dataStore.getSetting('agency') || {}) },
       documents: { ...DEFAULT_DOCUMENTS, ...(await dataStore.getSetting('documents') || {}) },
       leadQuestions: normalizeQuestions(Array.isArray(questions) ? questions : DEFAULT_LEAD_QUESTIONS),
+      scoring: cleanScoring(await dataStore.getSetting('lead_scoring')),
       reminders: (({ enabled, contactHours, quoteHours, workStart, workEnd }) => ({ enabled, contactHours, quoteHours, workStart, workEnd }))(reminderConfig(await dataStore.getSetting('reminders')))
     };
   }
 
   // Datos visibles para el usuario en una sola respuesta.
+  // TP-109: puntaje automático de cada lead; la prioridad se guarda sola cuando cambia.
+  async function refreshScores(data) {
+    const config = cleanScoring(await dataStore.getSetting('lead_scoring'));
+    const today = nowCancun().slice(0, 10);
+    const byLead = new Map();
+    data.quotes.forEach((q) => { if (q.lead_id) { if (!byLead.has(q.lead_id)) byLead.set(q.lead_id, []); byLead.get(q.lead_id).push(q); } });
+    for (const lead of data.leads) {
+      const auto = scoreLead(lead, { today, quotes: byLead.get(lead.id) || [], config });
+      lead.auto = auto;
+      if (CLOSED_STAGES.includes(lead.stage)) continue;
+      if (lead.score !== auto.score || lead.priority !== auto.priority) {
+        await dataStore.updateRecord('leads', lead.id, { score: auto.score, priority: auto.priority });
+        lead.score = auto.score;
+        lead.priority = auto.priority;
+      }
+    }
+  }
+
   router.get('/crm', wrap(async (req, res) => {
     const ctx = await context(req);
+    await refreshScores(ctx.data);
     const visible = filterData(ctx.scope, ctx.data);
     const users = ctx.user.role === 'admin'
       ? (await dataStore.listUsers()).map((u) => ({ id: u.id, name: u.name, role: u.role, active: u.active }))
@@ -241,6 +264,8 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
       client = ctx.checkRef('clients', parseId(body.client_id));
     } else {
       client = clientData.phone ? await dataStore.findClientByPhone(clientData.phone) : null;
+      // TP-111: si no coincide el WhatsApp, se busca por correo para no duplicar al cliente.
+      if (!client && clientData.email) client = ctx.data.clients.find((c) => String(c.email || '').toLowerCase() === clientData.email.toLowerCase()) || null;
       if (client) {
         // Cliente existente: avisar si lo atiende otro vendedor.
         const others = new Set(ctx.data.leads.filter((l) => l.client_id === client.id && l.owner_id && l.owner_id !== ownerId).map((l) => l.owner_id));
@@ -402,6 +427,12 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
   // ---- Clientes ----
   router.post('/clients', requireWrite('clients'), wrap(async (req, res) => {
     const data = sanitize('clients', req.body);
+    // TP-111: no crear un cliente que ya existe (a menos que se confirme).
+    if (!req.body?.force) {
+      const ctx = await context(req);
+      const found = matchesFor(ctx.data.clients, { phone: data.phone, email: data.email });
+      if (found.length) { res.status(409).json({ ok: false, error: 'Ya existe un cliente con ese WhatsApp o correo', duplicates: await describeMatches(ctx, found) }); return; }
+    }
     const record = await dataStore.insertRecord('clients', data, req.session.user.id);
     await audit(req, 'create', 'clients', null, record);
     res.status(201).json({ ok: true, record });
@@ -460,6 +491,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
     const ctx = await context(req);
     const current = ctx.mustSee('followups', id);
     const data = sanitize('followups', req.body, { partial: true });
+    if (data.due_at && data.due_at !== current.due_at) data.overdue_notified_at = null; // TP-110: reprogramado, vuelve a avisar si se vence
     if (data.lead_id !== undefined) ctx.checkRef('leads', data.lead_id);
     if (data.client_id !== undefined) ctx.checkRef('clients', data.client_id);
     const record = await dataStore.updateRecord('followups', id, data);
@@ -545,6 +577,17 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
       note = 'Nota agregada a la ficha';
     }
     const event = await dataStore.insertClientEvent(ev);
+    // TP-110: "pago recibido" al vendedor del cliente y a los administradores (menos a quien lo registró).
+    if (type === 'payment' && assignment) {
+      const lead = ev.lead_id ? ctx.find('leads', ev.lead_id) : ctx.data.leads.filter((l) => l.client_id === client.id).sort((a, b) => b.id - a.id)[0] || null;
+      const users = await dataStore.listUsers();
+      const ids = new Set([lead?.owner_id, client.owner_id, ...users.filter((u) => u.active && u.role === 'admin').map((u) => u.id)].filter(Boolean));
+      ids.delete(ctx.user.id);
+      for (const id of ids) {
+        const u = users.find((x) => x.id === id && x.active);
+        if (u) await assignment.notify(u, { kind: 'payment', leadId: lead?.id || null, link: `client:${client.id}`, title: `💰 Pago recibido: $${ev.amount.toLocaleString('es-MX')} de ${client.name}`, body: `${ev.title} · ${ev.meta.method} · registró ${ctx.user.name}` });
+      }
+    }
     await log(req, 'crm_clients_update', { entity: 'clients', entityId: client.id, summary: client.name, note });
     res.status(201).json({ ok: true, event: { ...event, created_by_name: ctx.user.name } });
   }));
@@ -557,6 +600,111 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
     await dataStore.deleteClientEvent(event.id);
     await log(req, 'crm_clients_update', { entity: 'clients', entityId: client.id, summary: client.name, note: `Registro eliminado de la ficha: ${event.title || event.type}` });
     res.json({ ok: true });
+  }));
+
+  // ---- TP-109: respuesta del cliente y pesos del puntaje ----
+  router.post('/leads/:id/response', requireWrite('leads'), wrap(async (req, res) => {
+    const id = parseId(req.params.id);
+    const ctx = await context(req);
+    const current = ctx.mustSee('leads', id);
+    const value = req.body?.value ? String(req.body.value) : null;
+    if (value && !RESPONSES[value]) throw new ValidationError('Respuesta inválida');
+    const record = await dataStore.updateRecord('leads', id, { response: value, ...(value && !current.contacted_at ? { contacted_at: nowCancun() } : {}) });
+    await log(req, 'crm_leads_update', { entity: 'leads', entityId: id, summary: summaryFor('leads', current, ctx.find), note: `Respuesta del cliente: ${value ? RESPONSES[value] : 'sin marcar'}` });
+    res.json({ ok: true, record });
+  }));
+  router.get('/scoring', wrap(async (req, res) => { res.json({ ok: true, ...cleanScoring(await dataStore.getSetting('lead_scoring')) }); }));
+  router.put('/scoring', adminOnly, wrap(async (req, res) => {
+    const cfg = sanitizeScoring(req.body || {});
+    await dataStore.setSetting('lead_scoring', cfg);
+    await log(req, 'crm_settings_update', { note: `Calificación automática: ${Object.entries(cfg.weights).map(([k, v]) => `${k} ${v}`).join(', ')} · caliente ≥${cfg.hot} · tibio ≥${cfg.warm}` });
+    res.json({ ok: true, ...cfg });
+  }));
+
+  // ---- TP-110: liga privada de la cotización ----
+  const appUrlFor = (req) => String(process.env.APP_URL || '').trim().replace(/\/+$/, '') || `${req.protocol}://${req.get('host')}`;
+  router.post('/quotes/:id/share', requireWrite('quotes'), wrap(async (req, res) => {
+    const id = parseId(req.params.id);
+    const ctx = await context(req);
+    const quote = ctx.mustSee('quotes', id);
+    const enabled = req.body?.enabled !== false;
+    const token = enabled ? (quote.share_token || newShareToken()) : null;
+    if (token !== quote.share_token) {
+      await dataStore.updateRecord('quotes', id, { share_token: token });
+      await log(req, 'crm_quotes_update', { entity: 'quotes', entityId: id, summary: summaryFor('quotes', quote, ctx.find), note: enabled ? 'Liga para el cliente activada' : 'Liga para el cliente desactivada' });
+    }
+    res.json({ ok: true, url: token ? `${appUrlFor(req)}/cotizacion/${token}` : null, viewed_at: quote.viewed_at || null, view_count: quote.view_count || 0 });
+  }));
+
+  // ---- TP-111: duplicados por WhatsApp o correo ----
+  const emailKey = (v) => String(v || '').trim().toLowerCase();
+  const nameKey = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  function matchesFor(clients, { phone, email, excludeId }) {
+    const pk = phoneKey(phone), ek = emailKey(email);
+    return clients.filter((c) => c.id !== excludeId).map((c) => {
+      const reasons = [];
+      if (pk.length >= 10 && phoneKey(c.phone) === pk) reasons.push('WhatsApp');
+      if (ek && emailKey(c.email) === ek) reasons.push('correo');
+      return reasons.length ? { c, reasons } : null;
+    }).filter(Boolean);
+  }
+  async function describeMatches(ctx, list) {
+    const users = await dataStore.listUsers();
+    return list.map(({ c, reasons }) => {
+      const visible = isVisible(ctx.scope, 'clients', c.id);
+      const ownerIds = new Set([c.owner_id, ...ctx.data.leads.filter((l) => l.client_id === c.id).map((l) => l.owner_id)].filter(Boolean));
+      return { id: visible ? c.id : null, name: c.name, visible, reasons, owners: [...ownerIds].map((id) => users.find((u) => u.id === id)?.name).filter(Boolean) };
+    });
+  }
+  router.get('/clients/duplicates/check', wrap(async (req, res) => {
+    const ctx = await context(req);
+    const list = matchesFor(ctx.data.clients, { phone: req.query.phone, email: req.query.email, excludeId: Number(req.query.exclude) || null });
+    res.json({ ok: true, matches: await describeMatches(ctx, list) });
+  }));
+  router.get('/duplicates', adminOnly, wrap(async (req, res) => {
+    const ctx = await context(req);
+    const groups = new Map();
+    const add = (key, reason, c) => { if (!groups.has(key)) groups.set(key, { reason, ids: new Set() }); groups.get(key).ids.add(c.id); };
+    for (const c of ctx.data.clients) {
+      if (phoneKey(c.phone).length >= 10) add(`p:${phoneKey(c.phone)}`, 'Mismo WhatsApp', c);
+      if (emailKey(c.email)) add(`e:${emailKey(c.email)}`, 'Mismo correo', c);
+      if (nameKey(c.name).split(' ').length >= 2) add(`n:${nameKey(c.name)}`, 'Mismo nombre', c);
+    }
+    // Une grupos que comparten clientes y conserva el motivo más fuerte.
+    const merged = [];
+    for (const g of [...groups.values()].filter((g) => g.ids.size > 1)) {
+      const hit = merged.find((m) => [...g.ids].some((id) => m.ids.has(id)));
+      if (hit) { g.ids.forEach((id) => hit.ids.add(id)); if (!hit.reasons.includes(g.reason)) hit.reasons.push(g.reason); } else merged.push({ ids: new Set(g.ids), reasons: [g.reason] });
+    }
+    const info = (id) => {
+      const c = ctx.find('clients', id);
+      return { id: c.id, name: c.name, phone: c.phone, email: c.email, created_at: c.created_at, leads: ctx.data.leads.filter((l) => l.client_id === id).length, quotes: ctx.data.quotes.filter((q) => q.client_id === id).length, trips: ctx.data.trips.filter((t) => t.client_id === id).length };
+    };
+    res.json({ ok: true, groups: merged.map((m) => ({ reasons: m.reasons, strong: m.reasons.some((r) => r !== 'Mismo nombre'), clients: [...m.ids].map(info) })).sort((a, b) => Number(b.strong) - Number(a.strong)) });
+  }));
+  router.post('/clients/merge', adminOnly, wrap(async (req, res) => {
+    const ctx = await context(req);
+    const keep = ctx.mustSee('clients', parseId(req.body?.keep_id));
+    const drop = ctx.mustSee('clients', parseId(req.body?.merge_id));
+    if (keep.id === drop.id) throw new ValidationError('Elige dos clientes distintos');
+    const moved = {};
+    for (const entity of ['leads', 'quotes', 'trips', 'followups']) {
+      const rows = ctx.data[entity].filter((r) => r.client_id === drop.id);
+      for (const r of rows) await dataStore.updateRecord(entity, r.id, { client_id: keep.id });
+      moved[entity] = rows.length;
+    }
+    await dataStore.moveClientEvents(drop.id, keep.id);
+    const tags = [...new Set([keep.tags, drop.tags].join(',').split(',').map((t) => t.trim()).filter(Boolean))].join(', ').slice(0, 255);
+    const fill = {
+      phone: keep.phone || drop.phone || null,
+      email: keep.email || drop.email || null,
+      tags: tags || null,
+      notes: [keep.notes, drop.notes && drop.notes !== keep.notes ? `(De ${drop.name}) ${drop.notes}` : ''].filter(Boolean).join('\n').slice(0, 4000) || null
+    };
+    const record = await dataStore.updateRecord('clients', keep.id, fill);
+    await dataStore.deleteRecord('clients', drop.id);
+    await log(req, 'crm_clients_merge', { entity: 'clients', entityId: keep.id, summary: keep.name, note: `Fusionado con ${drop.name} (#${drop.id}): ${moved.leads} leads, ${moved.quotes} cotizaciones, ${moved.trips} viajes, ${moved.followups} seguimientos` });
+    res.json({ ok: true, record, moved });
   }));
 
   // ---- Eliminar: solo administradores ----

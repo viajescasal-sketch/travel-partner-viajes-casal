@@ -76,6 +76,7 @@ function createLeadIntake(dataStore, assignment) {
     if (open) {
       // Lead abierto: se completa con lo nuevo y se agregan las respuestas a las notas.
       const changes = { notes: `${open.notes ? `${open.notes}\n\n` : ''}${notes}`.slice(-4000) };
+      changes.reengaged_at = now; // TP-109: el cliente volvió a escribir (señal de interés)
       if (data.destination) changes.destination = data.destination;
       if (data.start) { changes.start_date = data.start; changes.end_date = data.end && data.end >= data.start ? data.end : null; }
       if (data.travelers) changes.travelers = data.travelers;
@@ -113,6 +114,13 @@ function createLeadIntake(dataStore, assignment) {
       await log('crm_followups_create', { entity: 'followups', entityId: followup.id, summary: followup.title, note: capital(label) });
     }
     const seller = lead.owner_id ? await dataStore.findUserById(lead.owner_id) : null;
+    // TP-110: los administradores también ven en su campanita los leads que entran solos.
+    if (action === 'created' && assignment?.notify) {
+      const admins = (await dataStore.listUsers()).filter((u) => u.active && u.role === 'admin' && u.id !== seller?.id);
+      for (const admin of admins) {
+        await assignment.notify(admin, { kind: 'new_lead', leadId: lead.id, title: `🆕 Nuevo lead (${label}): ${client.name} · ${lead.destination}`, body: seller ? `Asignado a ${seller.name}` : 'Sin vendedor asignado' });
+      }
+    }
     return { action, lead, client, followup, seller, reason: pick?.reason || null };
   }
 
