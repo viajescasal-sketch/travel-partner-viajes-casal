@@ -187,3 +187,12 @@ Además del formulario del CRM (`/formulario`, incrustado con `formulario-embed.
 - El lead llega con origen `encuesta-paquetes-viajescasal` o `encuesta-tours-viajescasal` y, en sus notas, todas las respuestas tal cual las vio el cliente.
 - CORS solo para `viajescasal.com`, `www.viajescasal.com` y `paulina.viajescasal.com`; para agregar otro sitio usa la variable `WEBFORM_ORIGINS` (separados por coma).
 - Encuesta nueva: agrega al `<form>` el atributo `data-crm-encuesta="Nombre"` y usa `name="nombre"`, `"whatsapp"`, `"correo"`, `"destino"`…
+
+## Calendario de seguimientos (TP-105)
+
+- **Seguimientos** muestra el calendario en vista **Día, Semana o Mes** (se recuerda la última vista). El administrador puede filtrar por vendedor.
+- Colores por tipo (llamada, WhatsApp, cotización, pago, otro); los vencidos se marcan en rojo.
+- **Arrastrar para reprogramar:** en Semana/Día cambia día y hora (bloques de 30 min); en Mes cambia el día y conserva la hora. Doble clic en un horario vacío crea un seguimiento a esa hora.
+- **Desde la ficha del lead:** botones *Programar llamada*, *Programar WhatsApp* y *Otro seguimiento*, y la lista de seguimientos del lead. La ficha del seguimiento trae atajos de fecha (en 1 hora, mañana 10:00, lunes…), *Abrir WhatsApp*, *Llamar* y *Agregar a Google Calendar*.
+- **Google Calendar (suscripción, una vía):** botón *Google Calendar* → liga privada `/calendario/<token>.ics` por usuario (`src/calendar.js`). El vendedor la agrega en Google Calendar › Agregar desde URL. Incluye seguimientos de los últimos 60 días y los próximos, con aviso 10 min antes. *Generar liga nueva* invalida la anterior. Las ligas viven en `crm_settings` (`calendar_feeds`).
+- Pendiente: sincronización completa en dos vías con la API de Google Calendar (OAuth).

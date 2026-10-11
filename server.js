@@ -19,6 +19,7 @@ const { createPasswordResetService, createRecoveryRouter, createMailAdminRouter,
 const { createBackupService, createBackupRouter } = require('./src/backup');
 const { createBotRouter, createBotAdminRouter } = require('./src/bot-routes');
 const { createWebform, createWebformAdminRouter } = require('./src/webform');
+const { createCalendarFeed } = require('./src/calendar');
 const { createAssignment, createAssignmentRouter } = require('./src/assignment');
 
 const PORT = process.env.PORT || 3000;
@@ -248,6 +249,9 @@ async function createApp(options = {}) {
   // Formulario web público (sitio y landings): crea el lead sin sesión.
   const webform = createWebform(dataStore, mailer, process.env, { assignment });
   app.use('/api', webform.router);
+  // Calendario de seguimientos por suscripción (Google Calendar): liga privada sin sesión.
+  const calendarFeed = createCalendarFeed(dataStore, process.env);
+  app.use(calendarFeed.publicRouter);
   app.use('/api', authenticate);
   // Si el servidor estuvo dormido a la hora del respaldo, se revisa al primer uso (máximo cada 5 minutos).
   let lastBackupCheck = 0;
@@ -272,6 +276,7 @@ async function createApp(options = {}) {
   app.use('/api', createBotAdminRouter(dataStore, bot, { requireRole }));
   app.use('/api', createWebformAdminRouter(dataStore, webform, { requireRole }));
   app.use('/api', createAssignmentRouter(dataStore, assignment, { requireRole }));
+  app.use('/api', calendarFeed.apiRouter);
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');
