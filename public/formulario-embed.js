@@ -4,6 +4,13 @@
   var script = document.currentScript;
   if (!script) return;
   var origin = new URL(script.src).origin;
+  // Conecta también al CRM las encuestas propias del sitio (paquetes, tours…), sin cambiar su diseño.
+  if (!window.__tpPuenteEncuestas && !document.querySelector('script[src*="puente-encuestas.js"]')) {
+    var bridge = document.createElement('script');
+    bridge.src = origin + '/puente-encuestas.js';
+    bridge.async = true;
+    (document.head || document.documentElement).appendChild(bridge);
+  }
   var query = new URLSearchParams();
   query.set('embed', '1');
   if (script.getAttribute('data-origen')) query.set('origen', script.getAttribute('data-origen'));
