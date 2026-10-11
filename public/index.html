@@ -11,7 +11,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css?v=tp106" />
-    <link rel="stylesheet" href="/tp006.css?v=tp106" />
+    <link rel="stylesheet" href="/tp006.css?v=tp108" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -530,6 +530,7 @@
                 ><button data-settings-tab="pdfPanel">Plantilla PDF</button
                 ><button data-settings-tab="questionsPanel">Preguntas de calificación</button
                 ><button data-settings-tab="assignmentPanel">Asignación de leads</button
+                ><button data-settings-tab="remindersPanel">Recordatorios</button
                 ><button data-settings-tab="integrationsPanel">Integraciones</button
                 ><button data-settings-tab="backupsPanel">Respaldos</button>
               </nav>
@@ -591,6 +592,15 @@
                   </div>
                 </div>
                 <div id="assignmentBody"><p class="muted">Cargando…</p></div>
+              </article>
+              <article class="panel settings-panel" id="remindersPanel" hidden>
+                <div class="panel-head">
+                  <div>
+                    <h3>Recordatorios automáticos</h3>
+                    <p>Avisos al vendedor cuando una cotización no tiene respuesta o un lead nuevo sigue sin contacto.</p>
+                  </div>
+                </div>
+                <div id="remindersBody"><p class="muted">Cargando…</p></div>
               </article>
               <article class="panel settings-panel" id="integrationsPanel" hidden>
                 <h3>Integraciones</h3>
@@ -789,6 +799,6 @@
       }
     </style>
     <script src="/docs/documents.js?v=tp104"></script>
-    <script src="/app.js?v=tp107"></script>
+    <script src="/app.js?v=tp108"></script>
   </body>
 </html>

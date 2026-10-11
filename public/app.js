@@ -72,6 +72,36 @@ function fmtDue(dueAt) {
   if (day < today) return `Vencido · ${fmtDate(day)}`;
   return `${fmtDate(day)}, ${time}`;
 }
+// TP-106: horas laborales (Cancún) para el primer contacto de un lead.
+function addWorkMinutesLocal(start, minutes, { workStart = '09:00', workEnd = '20:00' } = {}) {
+  const toMin = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+  const open = toMin(workStart), closeAt = toMin(workEnd);
+  let ms = Date.parse(`${String(start).slice(0, 19).replace(' ', 'T')}Z`);
+  if (closeAt <= open) return new Date(ms + minutes * 60000).toISOString().slice(0, 16).replace('T', ' ');
+  let left = minutes;
+  for (let guard = 0; guard < 400; guard += 1) {
+    const day = Math.floor(ms / 86400000) * 86400000, now = (ms - day) / 60000;
+    if (now < open) { ms = day + open * 60000; continue; }
+    if (now >= closeAt) { ms = day + 86400000 + open * 60000; continue; }
+    if (left <= closeAt - now) { ms += left * 60000; break; }
+    left -= closeAt - now; ms = day + 86400000 + open * 60000;
+  }
+  return new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
+}
+// Estado del primer contacto: null (no aplica), { due, late } mientras falta contactar.
+function contactState(l) {
+  const r = db.reminders;
+  if (!l || l.stage !== 'Nuevo' || l.contacted_at || !l.assigned_at || !r || r.enabled === false) return null;
+  const due = addWorkMinutesLocal(l.assigned_at, Math.round(Number(r.contactHours || 2) * 60), r);
+  return { due, late: Boolean(l.contact_alert_at) || due <= nowLocal().toISOString().slice(0, 16).replace('T', ' ') };
+}
+function contactChip(l) {
+  const st = contactState(l);
+  if (!st) return '';
+  return st.late
+    ? `<span class="contact-chip late" title="Pasó el tiempo para el primer contacto">⚠ Sin contacto</span>`
+    : `<span class="contact-chip" title="Tiempo para el primer contacto (horario laboral)">⏰ Contactar antes de ${escapeHtml(fmtDue(`${st.due}:00`).replace(/^Hoy, /, ''))}</span>`;
+}
 const toInputDateTime = (v) => (v ? v.slice(0, 16).replace(' ', 'T') : '');
 const daysBetween = (a, b) => (new Date(`${b.slice(0, 10)}T00:00:00Z`) - new Date(`${a.slice(0, 10)}T00:00:00Z`)) / 86400000;
 
@@ -114,6 +144,7 @@ async function loadAll() {
     db.agency = data.settings?.agency || {};
     db.documents = data.settings?.documents || {};
     db.leadQuestions = data.settings?.leadQuestions || [];
+    db.reminders = data.settings?.reminders || null;
     db.me = data.me || null;
     loaded = true;
     renderAll();
@@ -295,7 +326,7 @@ function boardCard(l, admin) {
   const next = nextFollowupFor(l.id);
   const overdue = next && next.due_at.slice(0, 16) < nowLocal().toISOString().slice(0, 16).replace('T', ' ');
   const notes = String(l.notes || '');
-  const chips = `${notes.includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip">🤖 Bot</span>' : ''}${notes.includes('🌐 Formulario web') ? '<span class="bot-chip web">🌐 Web</span>' : ''}${qualChip(l)}`;
+  const chips = `${contactChip(l)}${notes.includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip">🤖 Bot</span>' : ''}${notes.includes('🌐 Formulario web') ? '<span class="bot-chip web">🌐 Web</span>' : ''}${qualChip(l)}`;
   const value = boardValue(l);
   const canMove = canWrite('leads');
   return `<div class="kb-card${late ? ' late' : ''}" data-lead="${l.id}"${canMove ? ' draggable="true"' : ''} tabindex="0" aria-label="${escapeHtml(`${c?.name || ''}, ${l.destination}, ${l.stage}`)}">
@@ -304,7 +335,7 @@ function boardCard(l, admin) {
     ${chips ? `<div class="kb-chips">${chips}</div>` : ''}
     <div class="kb-foot"><span class="kb-days${late ? ' late' : ''}" title="${late ? `Lleva más de ${limit} ${limit === 1 ? 'día' : 'días'} en ${escapeHtml(l.stage)}` : 'Días en esta etapa'}">⏱ ${days === 0 ? 'Hoy' : `${days} ${days === 1 ? 'día' : 'días'}`}</span>
       ${next ? `<span class="kb-next${overdue ? ' late' : ''}" title="Próximo seguimiento">📅 ${escapeHtml(fmtDue(next.due_at))}</span>` : ''}
-      <span class="kb-actions">${admin ? `<button type="button" class="kb-owner" data-kb-owner="${l.id}" title="Vendedor: ${escapeHtml(userName(l.owner_id))} · clic para reasignar" aria-label="Reasignar (vendedor: ${escapeHtml(userName(l.owner_id))})">${escapeHtml(initials(userName(l.owner_id)))}</button>` : ''}
+      <span class="kb-actions">${contactState(l) && canMove ? `<button type="button" class="kb-move kb-contacted" data-mark-contacted="${l.id}" title="Ya lo contacté" aria-label="Marcar como contactado">✅</button>` : ''}${admin ? `<button type="button" class="kb-owner" data-kb-owner="${l.id}" title="Vendedor: ${escapeHtml(userName(l.owner_id))} · clic para reasignar" aria-label="Reasignar (vendedor: ${escapeHtml(userName(l.owner_id))})">${escapeHtml(initials(userName(l.owner_id)))}</button>` : ''}
       ${canMove ? `<button type="button" class="kb-move" data-kb-move="${l.id}" title="Mover a otra etapa" aria-label="Mover a otra etapa">⇄</button>` : ''}</span></div>
   </div>`;
 }
@@ -519,6 +550,48 @@ async function renderAssignment() {
   } catch (error) { box.innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`; }
 }
 
+// TP-106: configuración de recordatorios automáticos.
+async function renderReminders() {
+  const box = $('#remindersBody');
+  try {
+    const st = await api('/api/reminders');
+    const hoursSel = (name, list, value) => `<select name="${name}">${list.map(([v, label]) => `<option value="${v}"${Number(v) === Number(value) ? ' selected' : ''}>${label}</option>`).join('')}</select>`;
+    box.innerHTML = `<form class="modal-form rem-form">
+      <label class="full kb-check"><input type="checkbox" name="enabled" ${st.enabled ? 'checked' : ''}> Recordatorios activos</label>
+      ${field('Cotización “Enviada” sin respuesta', hoursSel('quoteHours', [[24, '24 horas'], [48, '48 horas'], [72, '72 horas'], [96, '4 días']], st.quoteHours))}
+      ${field('Lead nuevo sin contacto', hoursSel('contactHours', [[0.5, '30 minutos'], [1, '1 hora'], [2, '2 horas'], [4, '4 horas']], st.contactHours))}
+      ${field('Avisar al administrador si sigue sin contacto', hoursSel('escalateHours', [[0, 'No avisar'], [1, '1 hora después'], [2, '2 horas después'], [4, '4 horas después']], st.escalateHours))}
+      ${field('Avisos por correo', `<select name="email"><option value="1"${st.email ? ' selected' : ''}>Campanita y correo</option><option value="0"${st.email ? '' : ' selected'}>Solo campanita</option></select>`)}
+      ${field('Horario laboral: entrada', `<input name="workStart" type="time" value="${escapeHtml(st.workStart)}" required>`)}
+      ${field('Horario laboral: salida', `<input name="workEnd" type="time" value="${escapeHtml(st.workEnd)}" required>`)}
+      <ul class="full as-rules">
+        <li>Las horas del lead sin contacto cuentan <b>solo en horario laboral</b> (todos los días). Un lead que llega de noche se alerta la mañana siguiente.</li>
+        <li>Cuenta como contactado si el lead sale de <b>Nuevo</b>, si se marca hecho un seguimiento del lead o si el vendedor toca <b>✅ Ya lo contacté</b>. Los leads que registra el propio vendedor ya cuentan como contactados.</li>
+        <li>La cotización sin respuesta crea un seguimiento “Cotización” al vendedor (si no tiene ya uno pendiente) y le avisa. Si la cotización cambia de estado y se vuelve a enviar, el tiempo empieza de nuevo.</li>
+      </ul>
+      <p class="full as-next">Última revisión: ${st.state.lastRunAt ? `${escapeHtml(fmtDue(st.state.lastRunAt))} · ${escapeHtml(st.state.lastResult || '')}` : 'aún no corre'}${st.state.lastAlertAt ? ` · Último aviso: ${escapeHtml(fmtDue(st.state.lastAlertAt))} (${escapeHtml(st.state.lastAlert)})` : ''}</p>
+      <div class="modal-actions"><button type="button" class="btn secondary" id="remRun">Revisar ahora</button><button type="submit" class="btn primary">Guardar recordatorios</button></div></form>`;
+    const form = box.querySelector('form');
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const v = formValues(form);
+      try {
+        await send('PUT', '/api/reminders', { enabled: Boolean(v.enabled), quoteHours: Number(v.quoteHours), contactHours: Number(v.contactHours), escalateHours: Number(v.escalateHours), email: v.email === '1', workStart: v.workStart, workEnd: v.workEnd });
+        toast('Recordatorios guardados');
+        await loadAll(); renderReminders();
+      } catch (error) { toast(error.message, 6000); }
+    };
+    $('#remRun').onclick = async () => {
+      try {
+        const r = (await send('POST', '/api/reminders/run')).result;
+        const total = r.quotes + r.contact + r.escalated;
+        toast(total ? `Se enviaron ${total} avisos` : 'Revisado: no hay pendientes');
+        await loadAll(); renderReminders(); refreshBell();
+      } catch (error) { toast(error.message); }
+    };
+  } catch (error) { box.innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`; }
+}
+
 // Cambiar el vendedor de un lead (administrador) desde el tablero.
 function ownerModal(id) {
   const lead = leadById(id);
@@ -612,7 +685,7 @@ function renderQuotes() {
   const editable = canWrite('quotes');
   $('#multiSend').classList.toggle('hidden', !editable);
   $('#quoteGrid').innerHTML = list.length ? list.map((x) =>
-    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span><h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Ver PDF</button>${editable ? `<button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
+    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span>${x.status === 'Enviada' && x.reminder_at ? '<span class="contact-chip late" title="Se programó un seguimiento automático">⏰ Sin respuesta</span>' : ''}<h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Ver PDF</button>${editable ? `<button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
     : `<p class="empty-note">${db.quotes.length ? 'Ninguna cotización coincide con la búsqueda.' : 'Aún no hay cotizaciones. Crea la primera con “+ Nueva cotización”.'}</p>`;
 }
 
@@ -989,6 +1062,13 @@ function bindDelete(url, message) {
 }
 const clean = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]));
 
+// TP-106: primer contacto en la ficha del lead.
+function leadContactHtml(lead) {
+  if (lead.contacted_at) return `<p class="full lead-contact ok">✅ Contactado · ${escapeHtml(fmtDate(lead.contacted_at))} ${escapeHtml(String(lead.contacted_at).slice(11, 16))}</p>`;
+  const st = contactState(lead);
+  if (!st && lead.stage !== 'Nuevo') return '';
+  return `<div class="full lead-contact${st?.late ? ' late' : ''}"><span>${st ? (st.late ? '⚠ <b>Sin contacto:</b> ya pasó el tiempo para el primer contacto.' : `⏰ <b>Primer contacto</b> antes de ${escapeHtml(fmtDue(`${st.due}:00`))}.`) : 'Aún no se registra el primer contacto.'}</span><button type="button" class="btn primary small" data-mark-contacted="${lead.id}">✅ Ya lo contacté</button></div>`;
+}
 // Seguimientos del lead dentro de su ficha (pendientes primero).
 function leadFollowupsHtml(lead) {
   const list = db.followups.filter((f) => f.lead_id === lead.id).sort((a, b) => Number(a.done) - Number(b.done) || (a.done ? b.due_at.localeCompare(a.due_at) : a.due_at.localeCompare(b.due_at))).slice(0, 5);
@@ -1016,6 +1096,7 @@ function leadModal(id, presetClientId) {
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
     ${qualHtml(lead)}
     ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="Llamada">📞 Programar llamada</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="WhatsApp">💬 Programar WhatsApp</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Otro seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
+    ${lead ? leadContactHtml(lead) : ''}
     ${lead ? leadFollowupsHtml(lead) : ''}
     ${lead ? historyButton('leads', lead.id) : ''}
     ${deleteBlock('lead', lead?.id)}
@@ -2148,6 +2229,7 @@ function showSettingsTab(tab) {
   if (tab === 'questionsPanel') renderQuestionsEditor(true);
   if (tab === 'backupsPanel') loadBackups();
   if (tab === 'assignmentPanel') renderAssignment();
+  if (tab === 'remindersPanel') renderReminders();
 }
 async function loadMailStatus() {
   const el = $('#mailStatus'), button = $('#testMail');
@@ -2489,6 +2571,12 @@ document.addEventListener('click', (e) => {
   if ((el = hit('[data-user-profile]'))) { profileModal(Number(el.dataset.userProfile)); return; }
   if ((el = hit('[data-edit-quote]'))) { quoteModal(Number(el.dataset.editQuote)); return; }
   if ((el = hit('[data-lead-view]'))) { setLeadView(el.dataset.leadView); renderLeads(); return; }
+  if ((el = hit('[data-mark-contacted]'))) {
+    const id = Number(el.dataset.markContacted);
+    el.disabled = true;
+    mutate(() => send('POST', `/api/leads/${id}/contacted`), 'Lead marcado como contactado').then((ok) => { if (ok && !$('#modalBg').classList.contains('hidden') && $('#modalBody [data-mark-contacted]')) leadModal(id); });
+    return;
+  }
   if ((el = hit('[data-kb-move]'))) { moveMenu(Number(el.dataset.kbMove)); return; }
   if ((el = hit('[data-kb-owner]'))) { ownerModal(Number(el.dataset.kbOwner)); return; }
   if ((el = hit('#reassignLeads'))) { reassignModal(); return; }

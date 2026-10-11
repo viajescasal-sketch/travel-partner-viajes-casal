@@ -400,3 +400,18 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 
 .modal-form label.full.check { display: flex; align-items: center; gap: 8px; }
 .modal-form label.full.check input { width: auto; margin: 0; }
+
+/* ---------- TP-106 Recordatorios ---------- */
+.contact-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 10px; padding: 2px 7px; background: #fff5d9; color: #916300; white-space: nowrap; }
+.contact-chip.late { background: #fdecec; color: #b13e3e; }
+body.dark .contact-chip { background: rgba(246,185,59,.15); color: #f6d38a; }
+body.dark .contact-chip.late { background: rgba(214,69,69,.18); color: #f2a7a7; }
+.card-top .contact-chip { margin-left: 6px; }
+.kb-contacted { border-color: #9fd9b5; }
+.lead-contact { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; border: 1px solid #f1d58a; background: #fffaeb; border-radius: 10px; padding: 9px 12px; font-size: 12px; margin: 0; }
+.lead-contact.late { border-color: #eab0b0; background: #fdf1f1; }
+.lead-contact.ok { border-color: #bfe5cd; background: #effaf3; color: #18815d; font-weight: 700; }
+body.dark .lead-contact { background: rgba(246,185,59,.08); }
+body.dark .lead-contact.late { background: rgba(214,69,69,.1); }
+body.dark .lead-contact.ok { background: rgba(24,129,93,.12); color: #8fe0b8; }
+.rem-form .as-rules { margin: 0; }
