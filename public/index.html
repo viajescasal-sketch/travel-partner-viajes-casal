@@ -11,7 +11,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css?v=tp106" />
-    <link rel="stylesheet" href="/tp006.css?v=tp109" />
+    <link rel="stylesheet" href="/tp006.css?v=tp111" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -352,6 +352,7 @@
                 + Nuevo cliente
               </button>
             </div>
+            <div id="dupeBanner" class="dupe-banner hidden"></div>
             <div class="toolbar">
               <div class="search grow">
                 ⌕ <input id="clientSearch" placeholder="Buscar cliente, teléfono o preferencia..." />
@@ -528,7 +529,7 @@
                 <button class="active" data-settings-tab="agencyPanel">Perfil de agencia</button
                 ><button data-settings-tab="usersPanel">Usuarios</button
                 ><button data-settings-tab="pdfPanel">Plantilla PDF</button
-                ><button data-settings-tab="questionsPanel">Preguntas de calificación</button
+                ><button data-settings-tab="questionsPanel">Calificación de leads</button
                 ><button data-settings-tab="assignmentPanel">Asignación de leads</button
                 ><button data-settings-tab="remindersPanel">Recordatorios</button
                 ><button data-settings-tab="templatesPanel">Plantillas WhatsApp</button
@@ -574,8 +575,16 @@
               <article class="panel settings-panel" id="questionsPanel" hidden>
                 <div class="panel-head">
                   <div>
+                    <h3>Calificación automática</h3>
+                    <p>Cada lead recibe un puntaje de 0 a 100 con su presupuesto por persona, la cercanía de sus fechas, el tamaño del grupo y cómo responde. La prioridad (Alta, Media, Baja) se calcula sola.</p>
+                  </div>
+                </div>
+                <div id="scoringBody"><p class="muted">Cargando…</p></div>
+                <hr class="soft-sep">
+                <div class="panel-head">
+                  <div>
                     <h3>Preguntas de calificación</h3>
-                    <p>Hasta 5 preguntas que el vendedor responde con un toque. Cada respuesta suma puntos y el lead queda Caliente, Tibio o Frío.</p>
+                    <p>Hasta 5 preguntas opcionales que el vendedor responde con un toque. Si se contestan, suman al puntaje automático con el peso de “Preguntas”.</p>
                   </div>
                   <button class="btn secondary small" id="addQuestion">+ Agregar pregunta</button>
                 </div>
@@ -809,6 +818,6 @@
       }
     </style>
     <script src="/docs/documents.js?v=tp104"></script>
-    <script src="/app.js?v=tp109"></script>
+    <script src="/app.js?v=tp111"></script>
   </body>
 </html>

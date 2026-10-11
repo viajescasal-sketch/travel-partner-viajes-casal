@@ -132,7 +132,7 @@ async function api(url, opts = {}) {
   const response = await fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } });
   const payload = await response.json().catch(() => ({ ok: false, error: 'Respuesta inválida del servidor' }));
   if (response.status === 401 && currentUser) { showLogin(); throw new Error('Tu sesión expiró. Vuelve a iniciar sesión.'); }
-  if (!response.ok) throw new Error(payload.error || 'No se pudo completar la solicitud');
+  if (!response.ok) { const error = new Error(payload.error || 'No se pudo completar la solicitud'); error.status = response.status; error.payload = payload; throw error; }
   return payload;
 }
 const send = (method, url, body) => api(url, { method, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -482,11 +482,13 @@ function startBell() {
   refreshBell();
   bell.timer = setInterval(() => { if (!document.hidden) refreshBell(); }, 60000);
 }
+const BELL_ICONS = { assigned: '🎯', lead: '🎯', lead_update: '🔄', new_lead: '🆕', reminder: '⏰', contact_alert: '⏰', contact_escalation: '⚠', quote_viewed: '👀', payment: '💰', followup_overdue: '⏰' };
 function renderBellPanel() {
   const panel = $('#bellPanel');
   panel.innerHTML = `<div class="bell-head"><b>Avisos</b>${bell.unread ? '<button type="button" class="link" id="bellReadAll">Marcar todo como leído</button>' : ''}</div>
     ${bell.receivesLeads ? `<label class="bell-avail"><input type="checkbox" id="bellAvail" ${bell.available ? 'checked' : ''}> <span>Recibir leads nuevos <small>${bell.available ? 'Estás disponible en los turnos' : 'No disponible: tu turno se salta'}</small></span></label>` : ''}
-    <div class="bell-list">${bell.items.length ? bell.items.map((n) => `<button type="button" class="bell-item${n.read ? '' : ' unread'}" data-bell-id="${n.id}" data-bell-lead="${n.leadId || ''}"><b>${escapeHtml(n.title)}</b><small>${escapeHtml(n.body)}${n.body ? ' · ' : ''}${escapeHtml(fmtAgo(n.createdAt))}</small></button>`).join('') : '<p class="bell-empty">Sin avisos por ahora.</p>'}</div>`;
+    <div class="bell-tabs"><button type="button" data-bell-filter="all" class="${bell.filter === 'unread' ? '' : 'active'}">Todos</button><button type="button" data-bell-filter="unread" class="${bell.filter === 'unread' ? 'active' : ''}">Sin leer${bell.unread ? ` (${bell.unread})` : ''}</button></div>
+    <div class="bell-list">${(() => { const list = bell.items.filter((n) => bell.filter !== 'unread' || !n.read); return list.length ? list.map((n) => `<button type="button" class="bell-item${n.read ? '' : ' unread'} k-${escapeHtml(n.kind || '')}" data-bell-id="${n.id}" data-bell-lead="${n.leadId || ''}" data-bell-link="${escapeHtml(n.link || '')}"><b>${/^\p{Extended_Pictographic}/u.test(n.title) ? '' : `${BELL_ICONS[n.kind] || '🔔'} `}${escapeHtml(n.title)}</b><small>${escapeHtml(n.body)}${n.body ? ' · ' : ''}${escapeHtml(fmtAgo(n.createdAt))}</small></button>`).join('') : `<p class="bell-empty">${bell.filter === 'unread' ? 'Todo leído. 👌' : 'Sin avisos por ahora.'}</p>`; })()}</div>`;
   if ($('#bellReadAll')) $('#bellReadAll').onclick = async () => { await send('POST', '/api/notifications/read', { all: true }).catch(() => {}); refreshBell(); };
   if ($('#bellAvail')) $('#bellAvail').onchange = async (e) => {
     try { await send('PUT', '/api/assignment/availability', { available: e.target.checked }); toast(e.target.checked ? 'Estás disponible para recibir leads' : 'No recibirás leads nuevos hasta que te vuelvas a activar'); refreshBell(); } catch (error) { toast(error.message); e.target.checked = !e.target.checked; }
@@ -502,9 +504,25 @@ function toggleBell(open) {
 $('#bellBtn').addEventListener('click', (e) => { e.stopPropagation(); toggleBell(); });
 $('#bellPanel').addEventListener('click', async (e) => {
   e.stopPropagation();
+  const tab = e.target.closest('[data-bell-filter]');
+  if (tab) { bell.filter = tab.dataset.bellFilter; renderBellPanel(); return; }
   const item = e.target.closest('[data-bell-id]');
   if (!item) return;
   const leadId = Number(item.dataset.bellLead);
+  const [linkType, linkId] = String(item.dataset.bellLink || '').split(':');
+  if (linkType && Number(linkId)) {
+    send('POST', '/api/notifications/read', { ids: [Number(item.dataset.bellId)] }).then(refreshBell).catch(() => {});
+    toggleBell(false);
+    const id = Number(linkId);
+    const open = () => {
+      if (linkType === 'quote' && quoteById(id)) { navigate('quotes'); quoteModal(id); return true; }
+      if (linkType === 'client' && clientById(id)) { navigate('clients'); clientFile(id); return true; }
+      if (linkType === 'followup' && followupById(id)) { navigate('followups'); followupModal(id); return true; }
+      return false;
+    };
+    if (!open()) { await loadAll(); if (!open()) toast('Ese registro ya no está disponible'); }
+    return;
+  }
   send('POST', '/api/notifications/read', { ids: [Number(item.dataset.bellId)] }).then(refreshBell).catch(() => {});
   toggleBell(false);
   if (leadId) {
@@ -685,7 +703,7 @@ function renderQuotes() {
   const editable = canWrite('quotes');
   $('#multiSend').classList.toggle('hidden', !editable);
   $('#quoteGrid').innerHTML = list.length ? list.map((x) =>
-    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span>${x.status === 'Enviada' && x.reminder_at ? '<span class="contact-chip late" title="Se programó un seguimiento automático">⏰ Sin respuesta</span>' : ''}<h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Ver PDF</button>${editable ? `<button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
+    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span>${x.status === 'Enviada' && x.reminder_at ? '<span class="contact-chip late" title="Se programó un seguimiento automático">⏰ Sin respuesta</span>' : ''}${x.viewed_at ? `<span class="contact-chip seen" title="El cliente abrió la liga ${x.view_count || 1} ${Number(x.view_count) === 1 ? 'vez' : 'veces'}">👀 Vista</span>` : ''}<h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Ver PDF</button>${editable ? `<button class="btn secondary small" data-share-quote="${x.id}" title="Liga privada para el cliente">🔗 Liga</button><button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
     : `<p class="empty-note">${db.quotes.length ? 'Ninguna cotización coincide con la búsqueda.' : 'Aún no hay cotizaciones. Crea la primera con “+ Nueva cotización”.'}</p>`;
 }
 
@@ -737,6 +755,7 @@ function prepareWhatsapp(ids) {
 
 /* ---------- clientes ---------- */
 function renderClients() {
+  if ($('#clients').classList.contains('active')) renderDuplicatesBanner();
   const q = ui.clientQuery.toLowerCase();
   const list = db.clients.filter((c) => !q || [c.name, c.phone, c.email, c.tags].join(' ').toLowerCase().includes(q));
   $('#clientGrid').innerHTML = list.length ? list.map((c) => {
@@ -1081,7 +1100,7 @@ function leadModal(id, presetClientId) {
   const client = lead ? clientById(lead.client_id) : presetClientId ? clientById(presetClientId) : null;
   const clientFields = client
     ? `<div class="full fixed-client">${clientCell(client)}<button type="button" class="link" data-client="${client.id}">Ver cliente</button></div>`
-    : field('Nombre*', '<input name="name" required maxlength="120">') + field('WhatsApp*', '<input name="phone" required maxlength="40" placeholder="998 123 4567">') + field('Correo', '<input name="email" type="email" maxlength="254">');
+    : field('Nombre*', '<input name="name" required maxlength="120">') + field('WhatsApp*', '<input name="phone" required maxlength="40" placeholder="998 123 4567">') + field('Correo', '<input name="email" type="email" maxlength="254">') + '<p class="full dupe-warn hidden"></p>';
   const html = `<form class="modal-form">${clientFields}
     ${field('Destino*', `<input name="destination" required maxlength="120" value="${escapeHtml(lead?.destination)}">`)}
     ${field('Origen', `<select name="source">${options(SOURCES, lead?.source || 'WhatsApp')}</select>`)}
@@ -1091,9 +1110,9 @@ function leadModal(id, presetClientId) {
     ${field('Presupuesto (MXN)', `<input name="budget" type="number" min="0" step="1" value="${escapeHtml(lead?.budget)}">`)}
     ${lead ? field('Etapa', `<select name="stage">${options(STAGES, lead.stage)}</select>`) : field('Primer seguimiento', '<input name="first_followup_at" type="datetime-local">')}
     ${lead?.stage === 'Perdido' ? field('Motivo de pérdida', `<input name="lost_reason" maxlength="160" value="${escapeHtml(lead.lost_reason)}">`) : ''}
-    ${field('Prioridad', `<select name="priority">${options(PRIORITIES, lead?.priority || 'Media')}</select>`)}
     ${isAdmin() ? field('Vendedor asignado', `<select name="owner_id">${options([...(lead ? [] : [['auto', 'Automático (según la asignación)']]), ...sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`])], lead?.owner_id ?? currentUser.id)}</select>`) : ''}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
+    ${lead ? autoScoreHtml(lead) : ''}
     ${qualHtml(lead)}
     ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn primary small" data-wa-lead="${lead.id}">💬 Plantilla WhatsApp</button><button type="button" class="btn secondary small" data-client="${lead.client_id}">Ficha 360</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="Llamada">📞 Programar llamada</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="WhatsApp">💬 Programar WhatsApp</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Otro seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
     ${lead ? leadContactHtml(lead) : ''}
@@ -1103,10 +1122,11 @@ function leadModal(id, presetClientId) {
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${lead ? 'Guardar cambios' : 'Guardar lead'}</button></div></form>`;
   openModal('REGISTRO COMERCIAL', lead ? `Lead de ${client?.name || ''}` : 'Nuevo lead', html);
   bindQualification();
+  if (!client) { const f = $('#modalBody form'); f.dataset.kind = 'lead'; bindDuplicateCheck(f); }
   bindForm(async (v, form) => {
     const body = clean({
       destination: v.destination, source: v.source, start_date: v.start_date || null, end_date: v.end_date || null,
-      travelers: v.travelers || null, budget: v.budget || null, priority: v.priority, notes: v.notes || null
+      travelers: v.travelers || null, budget: v.budget || null, notes: v.notes || null
     });
     if (db.leadQuestions.length) body.qualification = readQualification();
     if (v.owner_id) body.owner_id = v.owner_id === 'auto' ? 'auto' : Number(v.owner_id);
@@ -1518,6 +1538,7 @@ function clientModal(id) {
     ${field('Correo', `<input name="email" type="email" maxlength="254" value="${escapeHtml(c?.email)}">`)}
     ${field('Preferencias (separadas por coma)', `<input name="tags" maxlength="255" placeholder="Pareja, Todo incluido" value="${escapeHtml(c?.tags)}">`)}
     ${field('Notas', `<textarea name="notes" rows="2" maxlength="4000">${escapeHtml(c?.notes)}</textarea>`, true)}
+    <p class="full dupe-warn hidden"></p>
     </fieldset>
     ${c ? `<div class="full quick-actions">${canWrite('leads') ? `<button type="button" class="btn secondary small" data-new-lead-client="${c.id}">Nuevo lead</button>` : ''}${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-quote-for="${c.id}">Nueva cotización</button>` : ''}${canWrite('trips') ? `<button type="button" class="btn secondary small" data-new-trip-client="${c.id}">Nuevo viaje</button>` : ''}</div>` : ''}
     ${history}
@@ -1527,8 +1548,18 @@ function clientModal(id) {
   openModal('CLIENTE', c ? c.name : 'Nuevo cliente', html);
   bindForm((v) => {
     const body = clean({ name: v.name, phone: v.phone || null, email: v.email || null, tags: v.tags || null, notes: v.notes || null });
-    return c ? mutate(() => send('PATCH', `/api/clients/${c.id}`, body), 'Cliente actualizado') : mutate(() => send('POST', '/api/clients', body), 'Cliente creado');
+    if (c) return mutate(() => send('PATCH', `/api/clients/${c.id}`, body), 'Cliente actualizado');
+    // TP-111: si ya existe, avisar antes de crear otro.
+    return (async () => {
+      try { await send('POST', '/api/clients', body); await loadAll(); toast('Cliente creado'); return true; } catch (error) {
+        if (error.status !== 409) { toast(error.message); return false; }
+        const names = (error.payload?.duplicates || []).map((d) => d.name).join(', ');
+        if (!confirm(`Ya existe un cliente con ese WhatsApp o correo: ${names}. ¿Crear otro de todos modos?`)) return false;
+        return mutate(() => send('POST', '/api/clients', { ...body, force: true }), 'Cliente creado');
+      }
+    })();
   });
+  bindDuplicateCheck($('#modalBody form'));
   if (c) bindDelete(`/api/clients/${c.id}`, 'Cliente eliminado');
 }
 
@@ -1642,7 +1673,7 @@ function templateVars({ client, lead, quote, trip }) {
     fechas: dates, viajeros: lead?.travelers ? String(lead.travelers) : '', folio: quote?.folio || '', hotel: quote?.hotel || '',
     precio: quote ? `${money(quote.price)}${quote.mode && quote.mode !== 'Total' ? ` ${quote.mode.toLowerCase()}` : ''}` : '',
     vigencia: quote?.valid_until ? fmtLongRange(quote.valid_until) : '', vendedor: String(currentUser?.name || '').trim(),
-    agencia: db.agency?.name || 'Viajes Casal', liga_resenas: db.templates?.reviewLink || ''
+    agencia: db.agency?.name || 'Viajes Casal', liga_resenas: db.templates?.reviewLink || '', liga_cotizacion: quote ? db.shareUrls?.[quote.id] || '' : ''
   };
 }
 // Reemplaza {variable}; lo que falta queda como [variable] para que el vendedor lo complete.
@@ -1713,6 +1744,10 @@ async function waModal(preset = {}) {
     const t = tpl.templates.find((x) => x.id === templateId);
     if (!t) return;
     if (edited && text.value.trim() && !confirm('¿Reemplazar el mensaje que escribiste?')) return;
+    // TP-110: la liga de la cotización se genera al usarla en el mensaje.
+    if (t.body.includes('{liga_cotizacion}') && state.quoteId && !db.shareUrls[state.quoteId] && canWrite('quotes')) {
+      quoteShareUrl(Number(state.quoteId)).then(() => { edited = false; apply(templateId); }).catch(() => {});
+    }
     state.templateId = t.id;
     text.value = fillTemplate(t.body, templateVars(current())).text;
     edited = false;
@@ -1889,6 +1924,7 @@ async function clientFile(id, opts = {}) {
         ${field('Correo', `<input name="email" type="email" maxlength="254" value="${escapeHtml(c.email)}">`)}
         ${field('Preferencias (separadas por coma)', `<input name="tags" maxlength="255" placeholder="Pareja, Todo incluido" value="${escapeHtml(c.tags)}">`)}
         ${field('Notas fijas del cliente', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(c.notes)}</textarea>`, true)}
+        <p class="full dupe-warn hidden"></p>
         </fieldset>
         ${historyButton('clients', c.id)}
         ${deleteBlock('cliente y todo su historial', c.id)}
@@ -1930,6 +1966,15 @@ async function clientFile(id, opts = {}) {
     else if (a === 'note') eventModal(c, 'note');
   };
   bindForm((v) => mutate(() => send('PATCH', `/api/clients/${c.id}`, clean({ name: v.name, phone: v.phone || null, email: v.email || null, tags: v.tags || null, notes: v.notes || null })), 'Cliente actualizado'));
+  const dataForm = $('#modalBody form');
+  bindDuplicateCheck(dataForm, c.id);
+  if (isAdmin() && (c.phone || c.email)) {
+    api(`/api/clients/duplicates/check?${new URLSearchParams({ phone: c.phone || '', email: c.email || '', exclude: c.id })}`).then(({ matches }) => {
+      if (!matches.length || !$('.c360-head')) return;
+      $('.c360-head').insertAdjacentHTML('afterend', `<div class="dupe-warn">⚠ <b>Posible duplicado:</b> ${matches.map((m) => `${escapeHtml(m.name)} (mismo ${m.reasons.join(' y ')})`).join(', ')} <button type="button" class="btn secondary small" id="c360Dupes">Revisar y fusionar</button></div>`);
+      $('#c360Dupes').onclick = duplicatesModal;
+    }).catch(() => {});
+  }
   bindDelete(`/api/clients/${c.id}`, 'Cliente eliminado');
 }
 function eventModal(c, type) {
@@ -1957,6 +2002,120 @@ function eventModal(c, type) {
     if (type === 'review') body.rating = Number(v.rating);
     try { await send('POST', `/api/clients/${c.id}/events`, body); toast({ payment: 'Pago registrado', review: 'Reseña registrada', note: 'Nota agregada' }[type]); await loadAll(); clientFile(c.id); return false; } catch (error) { toast(error.message); return false; }
   });
+}
+
+/* ---------- TP-109 Calificación automática ---------- */
+const RESPONSE_OPTS = [['rapido', '⚡ Responde rápido'], ['tarda', '🕒 Tarda'], ['no_responde', '😶 No responde']];
+function autoScoreHtml(lead) {
+  const a = lead?.auto;
+  if (!a) return '';
+  const cls = LEVEL_CLASS[a.level] || '';
+  return `<div class="full auto-score" id="autoScore">
+    <div class="auto-head"><b>Calificación automática</b><span class="qual-chip ${cls}">${a.level === 'Caliente' ? '🔥 ' : ''}${a.score} · ${escapeHtml(a.level)}</span><small>Prioridad: <b>${escapeHtml(a.priority)}</b> (se calcula sola)</small></div>
+    <div class="qual-bar"><i class="bar-${cls}" style="width:${a.score}%"></i></div>
+    <div class="auto-parts">${a.parts.map((p) => `<div class="auto-part"><span>${escapeHtml(p.label)}</span><div class="auto-mini"><i style="width:${Math.round(p.factor * 100)}%"></i></div><b>${p.points}/${p.max}</b><small>${escapeHtml(p.detail || '')}</small></div>`).join('')}</div>
+    <div class="auto-resp"><span>¿Cómo responde el cliente?</span>${RESPONSE_OPTS.map(([v, label]) => `<button type="button" class="chip-btn${lead.response === v ? ' active' : ''}" data-lead-response="${v}" data-lead-id="${lead.id}">${label}</button>`).join('')}${lead.response ? `<button type="button" class="link" data-lead-response="" data-lead-id="${lead.id}">Quitar</button>` : ''}</div>
+  </div>`;
+}
+async function setLeadResponse(id, value) {
+  const ok = await mutate(() => send('POST', `/api/leads/${id}/response`, { value: value || null }), value ? 'Respuesta del cliente registrada' : 'Respuesta quitada');
+  if (ok && $('#autoScore')) leadModal(id);
+}
+// Configuración › Calificación: pesos del puntaje automático.
+async function renderScoringSettings() {
+  const box = $('#scoringBody');
+  if (!box) return;
+  try {
+    const st = await api('/api/scoring');
+    const labels = { budget: 'Presupuesto por persona', dates: 'Cercanía de fechas', group: 'Tamaño del grupo', response: 'Respuesta del cliente', questions: 'Preguntas (si se contestan)' };
+    box.innerHTML = `<div class="scoring-grid">${Object.entries(labels).map(([k, label]) => `<label>${label}<span><input type="range" min="0" max="50" step="5" data-w="${k}" value="${st.weights[k]}"><b data-wv="${k}">${st.weights[k]}</b></span></label>`).join('')}</div>
+      <div class="scoring-grid two"><label>🔥 Caliente desde<input type="number" id="scHot" min="2" max="100" value="${st.hot}"></label><label>Tibio desde<input type="number" id="scWarm" min="1" max="99" value="${st.warm}"></label></div>
+      <p class="muted-note">Los pesos son relativos: lo que cuenta es la proporción entre ellos. Caliente = prioridad Alta, Tibio = Media, Frío = Baja. Si un lead no contestó las preguntas, su peso se reparte entre los demás.</p>
+      <div class="actions"><button type="button" class="btn primary" id="scSave">Guardar puntaje</button></div>`;
+    box.oninput = (e) => { if (e.target.dataset.w) box.querySelector(`[data-wv="${e.target.dataset.w}"]`).textContent = e.target.value; };
+    $('#scSave').onclick = async () => {
+      const weights = Object.fromEntries([...box.querySelectorAll('[data-w]')].map((i) => [i.dataset.w, Number(i.value)]));
+      try { await send('PUT', '/api/scoring', { weights, hot: Number($('#scHot').value), warm: Number($('#scWarm').value) }); toast('Puntaje guardado: los leads se recalculan'); loadAll(); } catch (error) { toast(error.message, 6000); }
+    };
+  } catch (error) { box.innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`; }
+}
+
+/* ---------- TP-110 Liga de la cotización ---------- */
+db.shareUrls = {};
+async function quoteShareUrl(quoteId) {
+  if (db.shareUrls[quoteId]) return db.shareUrls[quoteId];
+  const r = await send('POST', `/api/quotes/${quoteId}/share`, {});
+  db.shareUrls[quoteId] = r.url;
+  return r.url;
+}
+async function shareModal(quoteId) {
+  const q = quoteById(quoteId);
+  if (!q) return;
+  let r;
+  try { r = await send('POST', `/api/quotes/${q.id}/share`, {}); db.shareUrls[q.id] = r.url; } catch (error) { toast(error.message); return; }
+  openModal('COTIZACIÓN', `Liga para ${clientName(q.client_id)}`, `<div class="gcal">
+    <p>Tu cliente ve la cotización <b>${escapeHtml(q.folio)}</b> con el mismo diseño del PDF, sin cuenta ni contraseña, y puede descargarla. Cuando la abra te llega un aviso en la campanita 🔔.</p>
+    <label class="gcal-url">Liga privada<span><input id="shareUrl" readonly value="${escapeHtml(r.url)}"><button type="button" class="btn primary small" id="shareCopy">Copiar</button></span></label>
+    <p class="muted-note">${q.viewed_at ? `👀 El cliente la ha abierto ${q.view_count || 1} ${Number(q.view_count) === 1 ? 'vez' : 'veces'} · última: ${escapeHtml(fmtDue(q.viewed_at))}` : 'Aún no la ha abierto.'} La plantilla “Envío de cotización” incluye esta liga con <b>{liga_cotizacion}</b>.</p>
+    <div class="modal-actions"><button type="button" class="btn secondary small" id="shareOff">Desactivar liga</button><a class="btn secondary small" href="${escapeHtml(r.url)}" target="_blank" rel="noopener">Ver como cliente</a><button type="button" class="btn primary close">Listo</button></div></div>`);
+  $('#shareCopy').onclick = async () => { try { await navigator.clipboard.writeText(r.url); } catch { $('#shareUrl').select(); document.execCommand('copy'); } toast('Liga copiada'); };
+  $('#shareOff').onclick = async () => {
+    if (!confirm('¿Desactivar la liga? El cliente ya no podrá abrirla; si la vuelves a activar se genera una nueva.')) return;
+    try { await send('POST', `/api/quotes/${q.id}/share`, { enabled: false }); delete db.shareUrls[q.id]; toast('Liga desactivada'); close(); } catch (error) { toast(error.message); }
+  };
+}
+
+/* ---------- TP-111 Duplicados ---------- */
+async function checkDuplicates(form, excludeId) {
+  const box = form.querySelector('.dupe-warn');
+  if (!box) return;
+  const phone = form.phone?.value.trim() || '', email = form.email?.value.trim() || '';
+  if (phone.replace(/\D/g, '').length < 10 && !email.includes('@')) { box.classList.add('hidden'); return; }
+  try {
+    const q = new URLSearchParams({ phone, email, ...(excludeId ? { exclude: excludeId } : {}) });
+    const { matches } = await api(`/api/clients/duplicates/check?${q}`);
+    box.classList.toggle('hidden', !matches.length);
+    box.innerHTML = matches.length ? `⚠ <b>Posible duplicado:</b> ${matches.map((m) => `${escapeHtml(m.name)} (mismo ${m.reasons.join(' y ')})${m.visible ? ` <button type="button" class="link" data-client="${m.id}">Abrir ficha</button>` : m.owners.length ? ` · lo atiende ${escapeHtml(m.owners.join(', '))}` : ''}`).join(' · ')}${form.dataset.kind === 'lead' ? '<br><small>Al guardar, el lead se agrega a ese cliente en lugar de crear uno nuevo.</small>' : ''}` : '';
+  } catch { box.classList.add('hidden'); }
+}
+function bindDuplicateCheck(form, excludeId) {
+  if (!form || !form.querySelector('.dupe-warn')) return;
+  ['phone', 'email'].forEach((n) => { if (form[n]) form[n].addEventListener('change', () => checkDuplicates(form, excludeId)); });
+}
+async function duplicatesModal() {
+  let groups;
+  try { groups = (await api('/api/duplicates')).groups; } catch (error) { toast(error.message); return; }
+  const card = (c, g) => `<div class="dupe-card"><b>${escapeHtml(c.name)}</b><small>${escapeHtml([c.phone, c.email].filter(Boolean).join(' · ') || 'Sin datos de contacto')}</small><small>${c.leads} leads · ${c.quotes} cotizaciones · ${c.trips} viajes · desde ${escapeHtml(fmtDate(c.created_at))}</small>
+    <div class="dupe-acts"><button type="button" class="link" data-client="${c.id}">Ver ficha</button>${g.clients.length > 1 ? `<button type="button" class="btn primary small" data-keep="${c.id}" data-group="${groups.indexOf(g)}">Conservar este</button>` : ''}</div></div>`;
+  openModal('CLIENTES', 'Posibles duplicados', `<div class="dupes">${groups.length ? groups.map((g) => `<section class="dupe-group${g.strong ? ' strong' : ''}"><p><b>${escapeHtml(g.reasons.join(' · '))}</b>${g.strong ? '' : ' <small>(revisa bien: solo coincide el nombre)</small>'}</p><div class="dupe-row">${g.clients.map((c) => card(c, g)).join('')}</div></section>`).join('') : '<p class="empty-note">No hay posibles duplicados. 🎉</p>'}
+    <p class="muted-note">“Conservar este” pasa al cliente elegido todos los leads, cotizaciones, viajes, seguimientos y la ficha 360 de los otros, completa su WhatsApp, correo y preferencias si le faltan, y elimina los demás registros.</p>
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cerrar</button></div></div>`, { wide: true });
+  $('#modalBody').onclick = async (e) => {
+    const b = e.target.closest('[data-keep]');
+    if (!b) return;
+    const g = groups[Number(b.dataset.group)];
+    const keep = g.clients.find((c) => c.id === Number(b.dataset.keep));
+    const others = g.clients.filter((c) => c.id !== keep.id);
+    if (!confirm(`¿Fusionar ${others.map((c) => c.name).join(', ')} dentro de “${keep.name}”? No se puede deshacer.`)) return;
+    try {
+      for (const o of others) await send('POST', '/api/clients/merge', { keep_id: keep.id, merge_id: o.id });
+      toast(`Clientes fusionados en ${keep.name}`);
+      await loadAll();
+      duplicatesModal();
+    } catch (error) { toast(error.message, 6000); }
+  };
+}
+async function renderDuplicatesBanner() {
+  const el = $('#dupeBanner');
+  if (!el) return;
+  if (!isAdmin()) { el.classList.add('hidden'); return; }
+  try {
+    const { groups } = await api('/api/duplicates');
+    const strong = groups.filter((g) => g.strong).length;
+    el.classList.toggle('hidden', !groups.length);
+    el.innerHTML = groups.length ? `⚠ ${groups.length} ${groups.length === 1 ? 'posible duplicado' : 'posibles duplicados'}${strong ? ` (${strong} con mismo WhatsApp o correo)` : ''} <button type="button" class="btn secondary small" id="dupeReview">Revisar y fusionar</button>` : '';
+    if ($('#dupeReview')) $('#dupeReview').onclick = duplicatesModal;
+  } catch { el.classList.add('hidden'); }
 }
 
 /* ---------- Confirmación de servicios (diseño V8 de Viajes Casal) ---------- */
@@ -2045,6 +2204,8 @@ function scoreAnswers(answers) {
   return { score, answered: answeredCount, total: qs.length, level: score == null ? null : score >= 70 ? 'Caliente' : score >= 40 ? 'Tibio' : 'Frío' };
 }
 function qualChip(lead) {
+  // TP-109: puntaje automático (datos del lead + respuesta + preguntas)
+  if (lead?.auto) return `<span class="qual-chip ${LEVEL_CLASS[lead.auto.level] || 'none'}" title="${escapeHtml(lead.auto.parts.map((p) => `${p.label}: ${p.points}/${p.max}`).join(' · '))}">${lead.auto.level === 'Caliente' ? '🔥 ' : ''}${lead.auto.score} ${escapeHtml(lead.auto.level)}</span>`;
   if (!db.leadQuestions.length) return '';
   const q = lead?.qualification;
   if (!q || q.score == null) return '<span class="qual-chip none" title="Responde las preguntas de calificación">Sin calificar</span>';
@@ -2062,7 +2223,7 @@ function qualHtml(lead) {
   qualDraft = { ...(lead?.qualification?.answers || {}) };
   const totalMax = qs.reduce((sum, q) => sum + maxPoints(q), 0) || 1;
   const { r, html, cls } = qualSummary();
-  return `<div class="qual full" id="qualBox"><div class="qual-head"><b>Calificación del lead</b><span class="qual-score" id="qualScore">${html}</span></div>
+  return `<div class="qual full" id="qualBox"><div class="qual-head"><b>Preguntas de calificación <small class="muted">(opcional · suman al puntaje)</small></b><span class="qual-score" id="qualScore">${html}</span></div>
     <div class="qual-bar"><i id="qualBar" class="bar-${cls}" style="width:${r.score || 0}%"></i></div>
     ${qs.map((q) => `<div class="qual-q"><span class="qual-label">${escapeHtml(q.label)}<small>peso ${Math.round((maxPoints(q) / totalMax) * 100)}%</small></span>
       <div class="qual-btns">${q.options.map((o) => `<button type="button" data-qa="${escapeHtml(q.id)}" data-val="${escapeHtml(o.label)}" class="${qualDraft[q.id] === o.label ? 'on' : ''}">${escapeHtml(o.label)}</button>`).join('')}</div></div>`).join('')}
@@ -2574,7 +2735,7 @@ function showSettingsTab(tab) {
   if (tab === 'usersPanel') loadUsers();
   if (tab === 'integrationsPanel') { loadMailStatus(); renderIntegrations(); renderBotCard(); renderWebformCard(); }
   if (tab === 'pdfPanel') renderDocSettings();
-  if (tab === 'questionsPanel') renderQuestionsEditor(true);
+  if (tab === 'questionsPanel') { renderQuestionsEditor(true); renderScoringSettings(); }
   if (tab === 'backupsPanel') loadBackups();
   if (tab === 'assignmentPanel') renderAssignment();
   if (tab === 'remindersPanel') renderReminders();
@@ -2684,6 +2845,7 @@ function navigate(page) {
   if (page === 'activity') { fillActivityUsers(); loadActivity(); }
   $$('aside nav button').forEach((b) => b.classList.toggle('active', b.dataset.page === page));
   $$('.page').forEach((p) => p.classList.toggle('active', p.id === page));
+  if (page === 'clients') renderDuplicatesBanner();
   $('#sidebar').classList.remove('open');
   scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -2920,6 +3082,8 @@ document.addEventListener('click', (e) => {
   if ((el = hit('[data-user-profile]'))) { profileModal(Number(el.dataset.userProfile)); return; }
   if ((el = hit('[data-edit-quote]'))) { quoteModal(Number(el.dataset.editQuote)); return; }
   if ((el = hit('[data-lead-view]'))) { setLeadView(el.dataset.leadView); renderLeads(); return; }
+  if ((el = hit('[data-lead-response]'))) { setLeadResponse(Number(el.dataset.leadId), el.dataset.leadResponse); return; }
+  if ((el = hit('[data-share-quote]'))) { shareModal(Number(el.dataset.shareQuote)); return; }
   if ((el = hit('[data-wa-lead]'))) { const l = leadById(el.dataset.waLead); if (l) waModal({ clientId: l.client_id, leadId: l.id }); return; }
   if ((el = hit('[data-wa-trip]'))) { const tr = tripById(el.dataset.waTrip); if (tr) waModal({ clientId: tr.client_id, tripId: tr.id, quoteId: tr.quote_id || undefined }); return; }
   if ((el = hit('[data-mark-contacted]'))) {
