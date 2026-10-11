@@ -304,8 +304,8 @@ function boardCard(l, admin) {
     ${chips ? `<div class="kb-chips">${chips}</div>` : ''}
     <div class="kb-foot"><span class="kb-days${late ? ' late' : ''}" title="${late ? `Lleva más de ${limit} ${limit === 1 ? 'día' : 'días'} en ${escapeHtml(l.stage)}` : 'Días en esta etapa'}">⏱ ${days === 0 ? 'Hoy' : `${days} ${days === 1 ? 'día' : 'días'}`}</span>
       ${next ? `<span class="kb-next${overdue ? ' late' : ''}" title="Próximo seguimiento">📅 ${escapeHtml(fmtDue(next.due_at))}</span>` : ''}
-      ${admin ? `<button type="button" class="kb-owner" data-kb-owner="${l.id}" title="Vendedor: ${escapeHtml(userName(l.owner_id))} · clic para reasignar" aria-label="Reasignar (vendedor: ${escapeHtml(userName(l.owner_id))})">${escapeHtml(initials(userName(l.owner_id)))}</button>` : ''}
-      ${canMove ? `<button type="button" class="kb-move" data-kb-move="${l.id}" title="Mover a otra etapa" aria-label="Mover a otra etapa">⇄</button>` : ''}</div>
+      <span class="kb-actions">${admin ? `<button type="button" class="kb-owner" data-kb-owner="${l.id}" title="Vendedor: ${escapeHtml(userName(l.owner_id))} · clic para reasignar" aria-label="Reasignar (vendedor: ${escapeHtml(userName(l.owner_id))})">${escapeHtml(initials(userName(l.owner_id)))}</button>` : ''}
+      ${canMove ? `<button type="button" class="kb-move" data-kb-move="${l.id}" title="Mover a otra etapa" aria-label="Mover a otra etapa">⇄</button>` : ''}</span></div>
   </div>`;
 }
 function renderBoard() {

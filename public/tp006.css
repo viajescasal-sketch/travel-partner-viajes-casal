@@ -198,9 +198,9 @@ body.dark .view-switch button.active { background: rgba(0,184,200,.18); color: #
 .kb-summary { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 .kb-summary b { color: var(--text); }
 .muted-note { font-size: 11px; }
-.kb-cols { display: grid; grid-template-columns: repeat(5, minmax(190px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 6px; align-items: start; }
-.kb-col { background: rgba(7,59,102,.04); border: 1px solid var(--border); border-radius: 14px; padding: 10px; min-height: 220px; transition: background .15s, border-color .15s; }
-body.dark .kb-col { background: rgba(255,255,255,.03); }
+.kb-cols { display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 6px; align-items: start; }
+.kb-col { min-width: 0; background: rgba(7,59,102,.04); border: 1px solid var(--border); border-radius: 14px; padding: 10px; min-height: 220px; transition: background .15s, border-color .15s; }
+body.dark .kb-col { min-width: 0; background: rgba(255,255,255,.03); }
 .kb-col .kb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; margin: 2px 4px 10px; }
 .kb-col .kb-head div { display: flex; align-items: baseline; gap: 6px; }
 .kb-col .kb-head b { font-size: 13px; color: var(--navy); }
@@ -209,22 +209,28 @@ body.dark .kb-col .kb-head b { color: #fff; }
 .kb-col .kb-head em { font-style: normal; font-size: 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px; color: var(--muted); }
 .kb-total { font-size: 12px; font-weight: 800; color: var(--text); }
 .kb-col.won .kb-total { color: #18815d; }
-.kb-list { display: grid; gap: 8px; min-height: 60px; }
+.kb-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-height: 60px; }
 .kb-empty { text-align: center; color: var(--muted); font-size: 11px; border: 1.5px dashed var(--border); border-radius: 10px; padding: 16px 6px; margin: 0; }
-.kb-card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--teal); border-radius: 10px; padding: 10px 10px 8px; cursor: pointer; box-shadow: 0 2px 6px rgba(7,59,102,.06); }
+.kb-card { min-width: 0; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--teal); border-radius: 10px; padding: 10px 10px 8px; cursor: pointer; box-shadow: 0 2px 6px rgba(7,59,102,.06); }
 .kb-card[draggable=true] { cursor: grab; }
 .kb-card:hover { border-color: var(--teal); }
 .kb-card:focus-visible { outline: 3px solid rgba(0,184,200,.35); }
 .kb-card.late { border-left-color: #d64545; }
 .kb-card.dragging { opacity: .45; }
-.kb-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-.kb-top b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+/* El nombre usa hasta 2 líneas para que la tarjeta nunca se salga de su columna */
+.kb-top b { flex: 1; min-width: 0; font-size: 13px; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .kb-val { font-size: 12px; font-weight: 800; color: var(--navy); white-space: nowrap; }
 body.dark .kb-val { color: #7fe3ec; }
-.kb-dest { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.kb-dest { font-size: 11px; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }
 .kb-chips { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
 .kb-chips .bot-chip { margin-left: 0; }
-.kb-foot { display: flex; align-items: center; gap: 6px; white-space: nowrap; margin-top: 8px; font-size: 10px; color: var(--muted); }
+.kb-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; white-space: nowrap; margin-top: 8px; font-size: 10px; color: var(--muted); }
+.kb-foot > * { flex: none; }
+/* Vendedor y botón de mover van juntos a la derecha (si no caben, bajan juntos) */
+.kb-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.kb-actions:empty { display: none; }
+.kb-actions .kb-owner, .kb-actions .kb-move { margin-left: 0 !important; }
 .kb-days.late, .kb-next.late { color: #c23b3b; font-weight: 800; }
 .kb-owner { margin-left: auto; width: 22px; height: 22px; border-radius: 50%; background: var(--coral); color: #fff; display: grid; place-items: center; font-size: 9px; font-weight: 800; }
 .kb-move { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; padding: 1px 6px; cursor: pointer; font-size: 12px; }
