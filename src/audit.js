@@ -10,7 +10,7 @@ const FIELD_LABELS = {
   stage: 'Etapa', priority: 'Prioridad', source: 'Origen', lost_reason: 'Motivo de pérdida',
   hotel: 'Hotel / paquete', price: 'Precio', mode: 'Modalidad', valid_until: 'Vigencia', status: 'Estado', services: 'Servicios',
   type: 'Tipo', title: 'Actividad', details: 'Detalles', due_at: 'Fecha y hora', done: 'Hecho',
-  owner_id: 'Vendedor',
+  owner_id: 'Vendedor', contacted_at: 'Contactado',
   details: 'Cotizador', confirmation: 'Confirmación de servicios', qualification: 'Calificación'
 };
 

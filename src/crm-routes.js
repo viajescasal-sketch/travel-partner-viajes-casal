@@ -19,6 +19,7 @@ const {
 const { PROFILE_FIELDS } = require('./data-store');
 const { ROLE_SECTIONS, SECTIONS, buildSheets } = require('./export');
 const { buildXlsx, buildCsv, zip } = require('./xlsx');
+const { cleanConfig: reminderConfig } = require('./reminders');
 
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
 const AGENCY_FIELDS = { name: 120, whatsapp: 40, email: 254, website: 200 };
@@ -146,8 +147,22 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
     return null;
   }
 
+  // TP-106: al reasignar un lead que aún no se contacta, el nuevo vendedor tiene su propio tiempo.
+  async function restartContactClock(lead) {
+    if (lead.contacted_at || lead.stage !== 'Nuevo') return;
+    await dataStore.updateRecord('leads', lead.id, { assigned_at: nowCancun(), contact_alert_at: null, contact_escalated_at: null });
+  }
+  async function markContacted(leadId) {
+    const lead = leadId ? await dataStore.getRecord('leads', leadId) : null;
+    if (!lead || lead.contacted_at) return lead;
+    return dataStore.updateRecord('leads', lead.id, { contacted_at: nowCancun() });
+  }
+
   // Ajusta etapas y fechas cuando una cotización cambia de estado.
   async function applyQuoteEffects(quote, req) {
+    // TP-106: fecha de envío para el recordatorio de 48 h (se reinicia si se vuelve a enviar).
+    if (quote.status === 'Enviada' && !quote.sent_at) quote = await dataStore.updateRecord('quotes', quote.id, { sent_at: nowCancun(), reminder_at: null });
+    else if (quote.status !== 'Enviada' && (quote.sent_at || quote.reminder_at)) quote = await dataStore.updateRecord('quotes', quote.id, { sent_at: null, reminder_at: null });
     if (quote.status === 'Aceptada' && !quote.accepted_at) {
       quote = await dataStore.updateRecord('quotes', quote.id, { accepted_at: nowCancun() });
     } else if (quote.status !== 'Aceptada' && quote.accepted_at) {
@@ -158,9 +173,9 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
       if (lead) {
         let updated = null;
         if (quote.status === 'Aceptada' && lead.stage !== 'Vendido') {
-          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Vendido', closed_at: nowCancun(), stage_changed_at: nowCancun(), lost_reason: null });
+          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Vendido', closed_at: nowCancun(), stage_changed_at: nowCancun(), lost_reason: null, ...(lead.contacted_at ? {} : { contacted_at: nowCancun() }) });
         } else if (['Nuevo', 'Calificado'].includes(lead.stage) && quote.status !== 'Rechazada') {
-          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Cotizado', stage_changed_at: nowCancun() });
+          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Cotizado', stage_changed_at: nowCancun(), ...(lead.contacted_at ? {} : { contacted_at: nowCancun() }) });
         }
         if (updated && req) await audit(req, 'update', 'leads', lead, updated, { note: `Automático por la cotización ${quote.folio}` });
       }
@@ -177,7 +192,8 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
     return {
       agency: { ...DEFAULT_AGENCY, ...(await dataStore.getSetting('agency') || {}) },
       documents: { ...DEFAULT_DOCUMENTS, ...(await dataStore.getSetting('documents') || {}) },
-      leadQuestions: normalizeQuestions(Array.isArray(questions) ? questions : DEFAULT_LEAD_QUESTIONS)
+      leadQuestions: normalizeQuestions(Array.isArray(questions) ? questions : DEFAULT_LEAD_QUESTIONS),
+      reminders: (({ enabled, contactHours, quoteHours, workStart, workEnd }) => ({ enabled, contactHours, quoteHours, workStart, workEnd }))(reminderConfig(await dataStore.getSetting('reminders')))
     };
   }
 
@@ -245,6 +261,9 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
     if (CLOSED_STAGES.includes(data.stage)) data.closed_at = nowCancun();
     if (data.stage !== 'Perdido') data.lost_reason = null;
     data.stage_changed_at = nowCancun();
+    // TP-106: si lo registra su propio vendedor, ya está en contacto; si se lo asignaron, corre el tiempo del primer contacto.
+    if (ownerId === ctx.user.id || data.stage !== 'Nuevo') data.contacted_at = nowCancun();
+    else data.assigned_at = nowCancun();
     const lead = await dataStore.insertRecord('leads', data, ownerId);
     await audit(req, 'create', 'leads', null, lead, ownerId !== ctx.user.id ? { note: `Asignado a ${(await dataStore.findUserById(ownerId))?.name || 'otro vendedor'}` } : {});
     if (warning) await log(req, 'crm_shared_client', { entity: 'leads', entityId: lead.id, summary: `${client.name} · ${lead.destination}`, note: warning });
@@ -280,6 +299,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
       const lead = ctx.mustSee('leads', id);
       if (lead.owner_id === owner.id) continue;
       await dataStore.transferLeadOwnership(id, owner.id);
+      await restartContactClock(lead);
       const previous = lead.owner_id ? await dataStore.findUserById(lead.owner_id) : null;
       await log(req, 'crm_leads_reassign', {
         entity: 'leads', entityId: id, summary: summaryFor('leads', lead, ctx.find),
@@ -290,6 +310,17 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
     }
     if (assignment && moved.length && owner.id !== ctx.user.id) await assignment.notifyAssigned(owner, moved, { by: ctx.user.name, req });
     res.json({ ok: true, moved: moved.length, owner: { id: owner.id, name: owner.name } });
+  }));
+
+  // TP-106: "Ya lo contacté" (detiene las alertas de lead sin contacto).
+  router.post('/leads/:id/contacted', requireWrite('leads'), wrap(async (req, res) => {
+    const id = parseId(req.params.id);
+    const ctx = await context(req);
+    const current = ctx.mustSee('leads', id);
+    if (current.contacted_at) { res.json({ ok: true, record: current }); return; }
+    const record = await dataStore.updateRecord('leads', id, { contacted_at: nowCancun() });
+    await audit(req, 'update', 'leads', current, record, { note: 'Marcado como contactado' });
+    res.json({ ok: true, record });
   }));
 
   router.patch('/leads/:id', requireWrite('leads'), wrap(async (req, res) => {
@@ -306,6 +337,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
       if (!CLOSED_STAGES.includes(data.stage)) data.closed_at = null;
       if (data.stage !== current.stage) data.stage_changed_at = nowCancun();
       if (data.stage !== 'Perdido') data.lost_reason = null;
+      if (data.stage !== 'Nuevo' && !current.contacted_at) data.contacted_at = nowCancun();
     }
     let record = await dataStore.updateRecord('leads', id, data);
     await audit(req, 'update', 'leads', current, record);
@@ -314,6 +346,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
       if (ctx.user.role !== 'admin') throw forbidden('Solo el administrador puede reasignar leads');
       const owner = await assignableOwner(parseId(body.owner_id));
       await dataStore.transferLeadOwnership(id, owner.id);
+      await restartContactClock(current);
       const previous = current.owner_id ? await dataStore.findUserById(current.owner_id) : null;
       await log(req, 'crm_leads_reassign', {
         entity: 'leads', entityId: id, summary: summaryFor('leads', current, ctx.find),
@@ -344,7 +377,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
   router.post('/quotes/:id/duplicate', requireWrite('quotes'), wrap(async (req, res) => {
     const ctx = await context(req);
     const source = ctx.mustSee('quotes', parseId(req.params.id));
-    const { id, folio, accepted_at, owner_id, created_at, updated_at, ...rest } = source;
+    const { id, folio, accepted_at, sent_at, reminder_at, owner_id, created_at, updated_at, ...rest } = source;
     const record = await insertQuote({ ...rest, status: 'Borrador', accepted_at: null }, owner_id ?? ctx.user.id);
     await audit(req, 'duplicate', 'quotes', null, record, { note: `Copia de ${source.folio}` });
     res.status(201).json({ ok: true, record });
@@ -430,6 +463,8 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
     if (data.client_id !== undefined) ctx.checkRef('clients', data.client_id);
     const record = await dataStore.updateRecord('followups', id, data);
     await audit(req, 'update', 'followups', current, record);
+    // TP-106: completar un seguimiento del lead cuenta como contacto.
+    if (data.done && !current.done && record.lead_id) await markContacted(record.lead_id);
     res.json({ ok: true, record });
   }));
 

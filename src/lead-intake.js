@@ -93,6 +93,7 @@ function createLeadIntake(dataStore, assignment) {
         ...(hasAnswers ? { qualification: scoreQualification({ answers: validAnswers }, qs) } : {})
       });
       fields.stage_changed_at = now;
+      fields.assigned_at = now; // TP-106: desde aquí corre el tiempo para el primer contacto
       if (!pick) pick = await pickOwner(client);
       lead = await dataStore.insertRecord('leads', fields, pick.user?.id ?? null);
       action = 'created';

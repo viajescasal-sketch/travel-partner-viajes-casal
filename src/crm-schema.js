@@ -41,7 +41,12 @@ const ENTITIES = {
       qualification: { type: 'json', max: 20000 },
       lost_reason: { type: 'string', max: 160 },
       closed_at: { type: 'datetime', internal: true },
-      stage_changed_at: { type: 'datetime', internal: true }
+      stage_changed_at: { type: 'datetime', internal: true },
+      // TP-106: contacto del lead nuevo y sus alertas
+      assigned_at: { type: 'datetime', internal: true },
+      contacted_at: { type: 'datetime', internal: true },
+      contact_alert_at: { type: 'datetime', internal: true },
+      contact_escalated_at: { type: 'datetime', internal: true }
     }
   },
   quotes: {
@@ -59,7 +64,10 @@ const ENTITIES = {
       status: { type: 'enum', values: QUOTE_STATUSES, default: 'Borrador' },
       services: { type: 'text', max: 4000 },
       details: { type: 'json', max: 120000 },
-      accepted_at: { type: 'datetime', internal: true }
+      accepted_at: { type: 'datetime', internal: true },
+      // TP-106: cuándo se envió y cuándo se recordó
+      sent_at: { type: 'datetime', internal: true },
+      reminder_at: { type: 'datetime', internal: true }
     }
   },
   trips: {
