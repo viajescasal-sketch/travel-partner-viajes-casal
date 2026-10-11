@@ -176,3 +176,14 @@ Las contraseñas iniciales solo se utilizan para crear cuentas inexistentes. Des
 ├── server.js
 └── README.md
 ```
+
+## Encuestas del sitio conectadas al CRM
+
+Además del formulario del CRM (`/formulario`, incrustado con `formulario-embed.js`), las encuestas propias de viajescasal.com
+(paquetes: "Solicitar cotización"; tours: "Cotizar", "Aparta tu fecha"…) registran el lead en el CRM sin cambiar su diseño ni su mensaje de WhatsApp.
+
+- `public/puente-encuestas.js` lee la encuesta cuando el cliente la envía (después de que pasa sus validaciones y abre WhatsApp) y la manda a `POST /api/public/lead`.
+- `formulario-embed.js` carga el puente automáticamente, así que no hay que tocar el código del sitio.
+- El lead llega con origen `encuesta-paquetes-viajescasal` o `encuesta-tours-viajescasal` y, en sus notas, todas las respuestas tal cual las vio el cliente.
+- CORS solo para `viajescasal.com`, `www.viajescasal.com` y `paulina.viajescasal.com`; para agregar otro sitio usa la variable `WEBFORM_ORIGINS` (separados por coma).
+- Encuesta nueva: agrega al `<form>` el atributo `data-crm-encuesta="Nombre"` y usa `name="nombre"`, `"whatsapp"`, `"correo"`, `"destino"`…

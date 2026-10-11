@@ -281,10 +281,11 @@ async function createApp(options = {}) {
     res.set('Cache-Control', 'no-cache');
     res.sendFile(formPage);
   });
-  app.get('/formulario-embed.js', (req, res) => {
+  // Scripts que se cargan desde otros sitios: el formulario incrustable y el puente de las encuestas del sitio.
+  app.get(['/formulario-embed.js', '/puente-encuestas.js'], (req, res) => {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.set('Cache-Control', 'public, max-age=300');
-    res.sendFile(path.join(publicDirectory, 'formulario-embed.js'));
+    res.sendFile(path.join(publicDirectory, req.path.slice(1)));
   });
   app.use(express.static(publicDirectory, { index: false, dotfiles: 'ignore' }));
 
