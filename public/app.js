@@ -876,8 +876,8 @@ document.addEventListener('dragstart', (e) => {
   if (!ev) return;
   e.dataTransfer.setData('text/plain', ev.dataset.followup);
   e.dataTransfer.effectAllowed = 'move';
-  ev.classList.add('dragging');
-  document.body.classList.add('cal-dragging');
+  // Se aplica después de iniciar el arrastre: cambiar estilos dentro de dragstart puede cancelarlo en Chrome.
+  setTimeout(() => { ev.classList.add('dragging'); document.body.classList.add('cal-dragging'); }, 0);
 });
 document.addEventListener('dragend', () => {
   $$('.cal-ev.dragging').forEach((x) => x.classList.remove('dragging'));
@@ -885,7 +885,7 @@ document.addEventListener('dragend', () => {
   document.body.classList.remove('cal-dragging');
 });
 document.addEventListener('dragover', (e) => {
-  if (!document.body.classList.contains('cal-dragging')) return;
+  if (!e.dataTransfer?.types?.includes('text/plain') || !document.querySelector('.cal-ev.dragging, body.cal-dragging')) return;
   const target = e.target.closest?.('[data-drop-day]');
   if (!target) return;
   e.preventDefault();
