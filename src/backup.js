@@ -41,8 +41,10 @@ function createBackupService({ dataStore, mailer, now = nowCancun }) {
     for (const entity of ENTITY_ORDER) data[entity] = await dataStore.listRecords(entity);
     const users = (await dataStore.listUsers()).map(({ id, name, email, role, active, last_login_at, created_at }) => ({ id, name, email, role, active, last_login_at, created_at }));
     const settingsData = {};
-    for (const key of ['agency', 'documents', 'lead_questions', 'backup', 'webform']) settingsData[key] = await dataStore.getSetting(key);
-    return { data, users, settings: settingsData };
+    for (const key of ['agency', 'documents', 'lead_questions', 'backup', 'webform', 'assignment', 'reminders', 'wa_templates']) settingsData[key] = await dataStore.getSetting(key);
+    // TP-108: mensajes, pagos, reseñas y notas de la ficha 360
+    const clientEvents = dataStore.listAllClientEvents ? await dataStore.listAllClientEvents() : [];
+    return { data, users, settings: settingsData, clientEvents };
   }
 
   async function createBackup({ kind = 'auto', userId = null } = {}) {

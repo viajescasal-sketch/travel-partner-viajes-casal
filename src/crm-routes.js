@@ -20,6 +20,7 @@ const { PROFILE_FIELDS } = require('./data-store');
 const { ROLE_SECTIONS, SECTIONS, buildSheets } = require('./export');
 const { buildXlsx, buildCsv, zip } = require('./xlsx');
 const { cleanConfig: reminderConfig } = require('./reminders');
+const { STAGES: TEMPLATE_STAGES, VARIABLES: TEMPLATE_VARIABLES, DEFAULT_TEMPLATES, sanitizeTemplates, readTemplates } = require('./templates');
 
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
 const AGENCY_FIELDS = { name: 120, whatsapp: 40, email: 254, website: 200 };
@@ -466,6 +467,96 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
     // TP-106: completar un seguimiento del lead cuenta como contacto.
     if (data.done && !current.done && record.lead_id) await markContacted(record.lead_id);
     res.json({ ok: true, record });
+  }));
+
+  // ---- TP-107: plantillas de WhatsApp por etapa ----
+  router.get('/templates', wrap(async (req, res) => {
+    res.json({ ok: true, stages: TEMPLATE_STAGES, variables: TEMPLATE_VARIABLES, defaults: DEFAULT_TEMPLATES, ...readTemplates(await dataStore.getSetting('wa_templates')) });
+  }));
+  router.put('/templates', adminOnly, wrap(async (req, res) => {
+    const clean = req.body?.restoreDefaults ? { templates: DEFAULT_TEMPLATES, reviewLink: String(req.body.reviewLink || '') } : sanitizeTemplates(req.body || {});
+    const saved = sanitizeTemplates(clean);
+    await dataStore.setSetting('wa_templates', saved);
+    await log(req, 'crm_settings_update', { note: `Plantillas de WhatsApp: ${saved.templates.length} plantillas` });
+    res.json({ ok: true, ...readTemplates(saved) });
+  }));
+
+  // ---- TP-108: ficha 360 (mensajes, pagos, reseñas y notas del cliente) ----
+  const EVENT_TYPES = ['message', 'payment', 'review', 'note'];
+  const PAY_METHODS = ['Transferencia', 'Depósito', 'Tarjeta', 'Efectivo', 'Liga de pago', 'Otro'];
+  const REVIEW_PLATFORMS = ['Google', 'TripAdvisor', 'Facebook', 'WhatsApp', 'Otro'];
+  const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+  const plain = (v, max) => String(v ?? '').replace(/\r\n/g, '\n').replace(/[\u0000-\u0008\u000b-\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, max);
+
+  router.get('/clients/:id/events', wrap(async (req, res) => {
+    const ctx = await context(req);
+    const client = ctx.mustSee('clients', parseId(req.params.id));
+    const users = await dataStore.listUsers();
+    const events = (await dataStore.listClientEvents(client.id)).map((e) => ({ ...e, created_by_name: users.find((u) => u.id === e.created_by)?.name || null }));
+    res.json({ ok: true, events });
+  }));
+
+  router.post('/clients/:id/events', requireWrite('followups'), wrap(async (req, res) => {
+    const ctx = await context(req);
+    const client = ctx.mustSee('clients', parseId(req.params.id));
+    const b = req.body || {};
+    const type = EVENT_TYPES.includes(b.type) ? b.type : null;
+    if (!type) throw new ValidationError('Tipo de registro inválido');
+    const ref = (entity, id) => {
+      if (id == null || id === '') return null;
+      const row = ctx.checkRef(entity, parseId(id));
+      if (row.client_id !== client.id) throw new ValidationError('El registro relacionado no es de este cliente');
+      return row.id;
+    };
+    const ev = { client_id: client.id, type, lead_id: ref('leads', b.lead_id), quote_id: ref('quotes', b.quote_id), trip_id: ref('trips', b.trip_id), created_by: ctx.user.id };
+    if (b.date !== undefined && b.date !== null && b.date !== '') {
+      if (!ISO_DATE.test(String(b.date))) throw new ValidationError('Fecha inválida');
+      ev.event_at = `${b.date} ${nowCancun().slice(11, 19)}`;
+      if (ev.event_at > nowCancun()) throw new ValidationError('La fecha no puede ser futura');
+    }
+    let note = '';
+    if (type === 'message') {
+      ev.body = plain(b.body, 4000);
+      if (!ev.body) throw new ValidationError('El mensaje está vacío');
+      ev.title = plain(b.title, 80) || 'Mensaje de WhatsApp';
+      const stage = TEMPLATE_STAGES.find((st) => st.id === b.stage)?.id || null;
+      ev.meta = { stage, template: plain(b.template, 20) || null, channel: b.channel === 'copiado' ? 'copiado' : 'whatsapp' };
+      note = `Mensaje por WhatsApp: ${ev.title}`;
+    } else if (type === 'payment') {
+      const amount = Math.round(Number(b.amount) * 100) / 100;
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 50000000) throw new ValidationError('Escribe el monto del pago');
+      ev.amount = amount;
+      ev.title = plain(b.title, 120) || 'Pago';
+      ev.body = plain(b.body, 1000) || null;
+      ev.meta = { method: PAY_METHODS.includes(b.method) ? b.method : 'Otro' };
+      note = `Pago registrado: ${ev.title} · $${amount.toLocaleString('es-MX')}`;
+    } else if (type === 'review') {
+      const rating = Number(b.rating);
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new ValidationError('Elige de 1 a 5 estrellas');
+      ev.rating = rating;
+      ev.body = plain(b.body, 2000) || null;
+      ev.title = `Reseña ${'★'.repeat(rating)}`;
+      ev.meta = { platform: REVIEW_PLATFORMS.includes(b.platform) ? b.platform : 'Otro' };
+      note = `Reseña registrada: ${rating} estrellas (${ev.meta.platform})`;
+    } else {
+      ev.body = plain(b.body, 2000);
+      if (!ev.body) throw new ValidationError('La nota está vacía');
+      ev.title = 'Nota';
+      note = 'Nota agregada a la ficha';
+    }
+    const event = await dataStore.insertClientEvent(ev);
+    await log(req, 'crm_clients_update', { entity: 'clients', entityId: client.id, summary: client.name, note });
+    res.status(201).json({ ok: true, event: { ...event, created_by_name: ctx.user.name } });
+  }));
+
+  router.delete('/client-events/:id', adminOnly, wrap(async (req, res) => {
+    const ctx = await context(req);
+    const event = await dataStore.getClientEvent(parseId(req.params.id));
+    if (!event) throw notFound('registro');
+    const client = ctx.mustSee('clients', event.client_id);
+    await dataStore.deleteClientEvent(event.id);
+    await log(req, 'crm_clients_update', { entity: 'clients', entityId: client.id, summary: client.name, note: `Registro eliminado de la ficha: ${event.title || event.type}` });
+    res.json({ ok: true });
   }));
 
   // ---- Eliminar: solo administradores ----

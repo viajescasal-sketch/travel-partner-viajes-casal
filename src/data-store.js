@@ -50,6 +50,17 @@ function normalizeRow(entityName, row) {
   return out;
 }
 
+// Registro de la ficha 360 tal como lo usa la página.
+function normalizeEvent(row) {
+  let meta = row.meta;
+  if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch { meta = null; } }
+  return {
+    id: Number(row.id), client_id: Number(row.client_id), lead_id: row.lead_id == null ? null : Number(row.lead_id), quote_id: row.quote_id == null ? null : Number(row.quote_id),
+    trip_id: row.trip_id == null ? null : Number(row.trip_id), type: row.type, title: row.title || '', body: row.body || '', amount: row.amount == null ? null : Number(row.amount),
+    rating: row.rating == null ? null : Number(row.rating), meta: meta || null, event_at: String(row.event_at).slice(0, 19), created_by: row.created_by == null ? null : Number(row.created_by), created_at: String(row.created_at).slice(0, 19)
+  };
+}
+
 // Los campos JSON se guardan como texto en MySQL.
 function serializeRow(entityName, record) {
   const out = { ...record };
@@ -140,6 +151,26 @@ class MySQLDataStore {
       await this.pool.query(createTableSql(entityName));
     }
     await this.migrateEntities();
+    // TP-108: registros de la ficha 360 (mensajes, pagos, reseñas y notas del cliente).
+    await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_client_events (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      client_id BIGINT UNSIGNED NOT NULL,
+      lead_id BIGINT UNSIGNED NULL,
+      quote_id BIGINT UNSIGNED NULL,
+      trip_id BIGINT UNSIGNED NULL,
+      type VARCHAR(20) NOT NULL,
+      title VARCHAR(200) NULL,
+      body TEXT NULL,
+      amount DECIMAL(12,2) NULL,
+      rating TINYINT NULL,
+      meta TEXT NULL,
+      event_at DATETIME NOT NULL,
+      created_by BIGINT UNSIGNED NULL,
+      created_at DATETIME NOT NULL,
+      INDEX idx_events_client (client_id, event_at),
+      CONSTRAINT fk_events_client FOREIGN KEY (client_id) REFERENCES crm_clients(id) ON DELETE CASCADE,
+      CONSTRAINT fk_events_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
     await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_media (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       owner_id BIGINT UNSIGNED NULL,
@@ -501,6 +532,32 @@ class MySQLDataStore {
     return rows.map((row) => row.folio);
   }
 
+  // ---- Ficha 360: registros del cliente ----
+  async insertClientEvent(ev) {
+    const now = nowCancun();
+    const [result] = await this.pool.execute(
+      'INSERT INTO crm_client_events (client_id, lead_id, quote_id, trip_id, type, title, body, amount, rating, meta, event_at, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [ev.client_id, ev.lead_id ?? null, ev.quote_id ?? null, ev.trip_id ?? null, ev.type, ev.title ?? null, ev.body ?? null, ev.amount ?? null, ev.rating ?? null, ev.meta ? JSON.stringify(ev.meta) : null, ev.event_at || now, ev.created_by ?? null, now]
+    );
+    return this.getClientEvent(result.insertId);
+  }
+  async getClientEvent(id) {
+    const [rows] = await this.pool.execute('SELECT * FROM crm_client_events WHERE id = ?', [id]);
+    return rows[0] ? normalizeEvent(rows[0]) : null;
+  }
+  async listClientEvents(clientId) {
+    const [rows] = await this.pool.execute('SELECT * FROM crm_client_events WHERE client_id = ? ORDER BY event_at DESC, id DESC LIMIT 500', [clientId]);
+    return rows.map(normalizeEvent);
+  }
+  async listAllClientEvents() {
+    const [rows] = await this.pool.query('SELECT * FROM crm_client_events ORDER BY id');
+    return rows.map(normalizeEvent);
+  }
+  async deleteClientEvent(id) {
+    const [result] = await this.pool.execute('DELETE FROM crm_client_events WHERE id = ?', [id]);
+    return result.affectedRows > 0;
+  }
+
   async getSetting(key) {
     const [rows] = await this.pool.execute('SELECT setting_value FROM crm_settings WHERE setting_key = ? LIMIT 1', [key]);
     return rows[0] ? JSON.parse(rows[0].setting_value) : null;
@@ -778,6 +835,21 @@ class MemoryDataStore {
   }
 
   async listFolios(prefix) { return this.records.quotes.map((row) => row.folio).filter((folio) => folio && folio.startsWith(prefix)); }
+  async insertClientEvent(ev) {
+    this.events = this.events || [];
+    const now = nowCancun();
+    const row = { id: (this.eventSeq = (this.eventSeq || 0) + 1), client_id: Number(ev.client_id), lead_id: ev.lead_id ?? null, quote_id: ev.quote_id ?? null, trip_id: ev.trip_id ?? null, type: ev.type, title: ev.title ?? null, body: ev.body ?? null, amount: ev.amount ?? null, rating: ev.rating ?? null, meta: ev.meta ? JSON.stringify(ev.meta) : null, event_at: ev.event_at || now, created_by: ev.created_by ?? null, created_at: now };
+    this.events.push(row);
+    return normalizeEvent(row);
+  }
+  async getClientEvent(id) { const row = (this.events || []).find((e) => e.id === Number(id)); return row ? normalizeEvent(row) : null; }
+  async listClientEvents(clientId) {
+    const ids = new Set(this.records.clients.map((c) => c.id));
+    this.events = (this.events || []).filter((e) => ids.has(e.client_id)); // borrado en cascada
+    return this.events.filter((e) => e.client_id === Number(clientId)).sort((a, b) => String(b.event_at).localeCompare(String(a.event_at)) || b.id - a.id).map(normalizeEvent);
+  }
+  async listAllClientEvents() { return (this.events || []).map(normalizeEvent); }
+  async deleteClientEvent(id) { const before = (this.events || []).length; this.events = (this.events || []).filter((e) => e.id !== Number(id)); return this.events.length < before; }
   async getSetting(key) { return this.settings.has(key) ? JSON.parse(this.settings.get(key)) : null; }
   async setSetting(key, value) { this.settings.set(key, JSON.stringify(value)); }
 }
