@@ -34,6 +34,9 @@ const PER_PERSON = [8000, 15000, 25000, 25000, null];
 const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]{2,}$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULTS = { enabled: true, ownerId: null, notifyEmail: true, whatsapp: '' };
+// Sitios que pueden mandar leads desde sus propias encuestas (además del formulario del CRM).
+const DEFAULT_ORIGINS = ['https://viajescasal.com', 'https://www.viajescasal.com', 'https://paulina.viajescasal.com'];
+const allowedOrigins = (env) => new Set([...DEFAULT_ORIGINS, ...String(env.WEBFORM_ORIGINS || '').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean)]);
 
 const text = (value, max) => String(value ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, max);
 const oneOf = (value, list) => (list.includes(value) ? value : '');
@@ -80,7 +83,11 @@ function readForm(body, today) {
     comentarios: text(b.comentarios, 1500),
     origen: text(b.origen, 80).replace(/[^\w .:/-]/g, ''),
     utm: ['utm_source', 'utm_medium', 'utm_campaign'].map((k) => text(b[k], 60).replace(/[^\w .:/-]/g, '')).filter(Boolean).join(' / '),
-    pagina: text(b.pagina, 200).replace(/[^\w .:/?=&%#-]/g, '')
+    pagina: text(b.pagina, 200).replace(/[^\w .:/?=&%#-]/g, ''),
+    // Encuestas propias del sitio (paquetes, tours…): nombre de la encuesta y sus respuestas tal cual las vio el cliente.
+    encuesta: text(b.encuesta, 80),
+    respuestas: (Array.isArray(b.respuestas) ? b.respuestas : []).slice(0, 40)
+      .map((r) => [text(r && r[0], 80), text(r && r[1], 400)]).filter(([k, v]) => k && v)
   };
   if (f.nombre.length < 2) throw new ValidationError('Escribe tu nombre');
   if (!f.telefono) throw new ValidationError('Escribe un WhatsApp válido (con lada)');
@@ -133,6 +140,7 @@ function summaryRows(f) {
     ['Experiencias', f.experiencias.join(', ')], ['Le preocupa', f.preocupacion], ['Destino', f.destino], ['Fechas', datesText(f)],
     ['Viajeros', travelersText(f)], ['Noches', f.noches], ['Presupuesto por persona', f.presupuesto], ['Etapa', f.etapa],
     ['Motivo', f.motivo], ['Decide', f.quien], ['Correo', f.correo], ['Comentarios', f.comentarios],
+    ['Encuesta', f.encuesta], ...(f.respuestas || []).map(([k, v]) => [`› ${k}`, v]),
     ['Origen', [f.origen, f.utm, f.pagina].filter(Boolean).join(' · ')]
   ].filter(([, v]) => v);
 }
@@ -167,6 +175,27 @@ function createWebform(dataStore, mailer, env = {}, { assignment } = {}) {
   const appUrlFor = (req) => String(env.APP_URL || '').trim().replace(/\/+$/, '') || `${req.protocol}://${req.get('host')}`;
 
   const router = express.Router();
+  const origins = allowedOrigins(env);
+  // CORS solo para las rutas públicas y solo para los sitios permitidos.
+  router.use('/public', (req, res, next) => {
+    const origin = req.get('origin');
+    if (origin && origins.has(origin)) {
+      res.set('Access-Control-Allow-Origin', origin);
+      res.set('Vary', 'Origin');
+      res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.set('Access-Control-Allow-Headers', 'content-type');
+      res.set('Access-Control-Max-Age', '86400');
+    }
+    if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+    next();
+  });
+  // Las encuestas del sitio envían texto plano (JSON) para no depender de la verificación previa del navegador.
+  router.use('/public/lead', express.text({ type: 'text/plain', limit: '100kb' }), (req, res, next) => {
+    if (typeof req.body === 'string') {
+      try { req.body = JSON.parse(req.body); } catch { res.status(400).json({ ok: false, error: 'Solicitud inválida' }); return; }
+    }
+    next();
+  });
   const limiter = rateLimit({ windowMs: 10 * 60 * 1000, limit: 8, skipFailedRequests: true, standardHeaders: true, legacyHeaders: false, message: { ok: false, error: 'Recibimos varias solicitudes desde tu conexión. Intenta de nuevo en unos minutos o escríbenos por WhatsApp.' } });
 
   router.get('/public/form', async (req, res, next) => {
