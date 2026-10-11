@@ -206,3 +206,17 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - **Cuenta como contactado** (`contacted_at`): salir de *Nuevo*, completar un seguimiento del lead, o el botón **✅ Ya lo contacté** (ficha del lead y tablero; `POST /api/leads/:id/contacted`). Los leads que registra su propio vendedor ya cuentan como contactados. Reasignar un lead sin contacto reinicia su tiempo.
 - Lo que ya existía antes de activar la función no dispara alertas de golpe (`reminders_state.startedAt`); las cotizaciones enviadas antes cuentan sus 48 h desde la activación.
 - API (admin): `GET|PUT /api/reminders`, `POST /api/reminders/run` (revisar ahora).
+
+## Plantillas de WhatsApp por etapa (TP-107)
+
+- Etapas: primer contacto, envío de cotización, seguimiento, cierre y postviaje (`src/templates.js`, con plantillas iniciales).
+- El administrador las edita en **Configuración › Plantillas WhatsApp** (variables `{nombre}`, `{destino}`, `{fechas}`, `{folio}`, `{hotel}`, `{precio}`, `{vigencia}`, `{viajeros}`, `{vendedor}`, `{agencia}`, `{liga_resenas}`; vista previa y *Restaurar plantillas originales*). Se guardan en `crm_settings` (`wa_templates`).
+- El vendedor abre **💬 Plantilla WhatsApp** desde la ficha del lead, la ficha 360 o el viaje: elige lead/cotización/viaje, la etapa se sugiere sola, el CRM llena los datos (lo que falta queda como `[dato]`) y puede retocar el texto. **Abrir WhatsApp** abre `wa.me` con el mensaje listo en el WhatsApp del vendedor; **Copiar** lo copia. Ambos lo registran en la ficha 360 y, en la etapa de cotización, pueden marcar la cotización como *Enviada*.
+- API: `GET /api/templates` (todos), `PUT /api/templates` (admin; `{ restoreDefaults: true }` restaura).
+
+## Ficha 360 del cliente (TP-108)
+
+- Al abrir un cliente se ve su **línea de tiempo única**: cliente registrado, leads (creación, primer contacto, vendido/perdido), cotizaciones (creada, enviada, aceptada), viajes (salida, regreso y estado de pago de la confirmación), seguimientos hechos, mensajes de WhatsApp, pagos, reseñas y notas; filtros por tipo y agrupada por mes.
+- Arriba: vendido, pagado, saldo, viajes, promedio de reseñas y último contacto; notas fijas y preferencias del cliente; próximos seguimientos.
+- Botones **Registrar pago** (monto, concepto, forma de pago, fecha, viaje/cotización), **Registrar reseña** (1–5 estrellas, plataforma, comentario) y **Agregar nota**. La pestaña *Datos del cliente* conserva el formulario de antes.
+- Tabla `crm_client_events` (se borra con el cliente; incluida en el respaldo JSON). API: `GET|POST /api/clients/:id/events`, `DELETE /api/client-events/:id` (solo admin). Cada vendedor ve y registra solo en sus clientes.
