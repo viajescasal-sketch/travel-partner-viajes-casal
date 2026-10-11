@@ -415,3 +415,75 @@ body.dark .lead-contact { background: rgba(246,185,59,.08); }
 body.dark .lead-contact.late { background: rgba(214,69,69,.1); }
 body.dark .lead-contact.ok { background: rgba(24,129,93,.12); color: #8fe0b8; }
 .rem-form .as-rules { margin: 0; }
+
+/* ---------- TP-107 Plantillas de WhatsApp ---------- */
+.wa-context { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.wa-context label, .tpl-link { font-size: 11px; font-weight: 700; display: grid; gap: 5px; }
+.wa-context select, .tpl-link input, .tpl-card input, .tpl-card textarea, .wa-editor textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; }
+.wa-stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 10px; }
+.wa-stages button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 20px; padding: 7px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.wa-stages button.active { background: #e3f7ee; border-color: #1f9d55; color: #13703b; }
+body.dark .wa-stages button.active { background: rgba(31,157,85,.18); color: #8fe0b8; }
+.wa-body { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 12px; align-items: start; }
+.wa-list { display: grid; gap: 6px; max-height: 340px; overflow-y: auto; }
+.wa-tpl { text-align: left; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 10px; padding: 9px 10px; cursor: pointer; display: grid; gap: 3px; }
+.wa-tpl b { font-size: 12px; }
+.wa-tpl small { font-size: 10px; color: var(--muted); line-height: 1.35; }
+.wa-tpl.active { border-color: #1f9d55; box-shadow: inset 3px 0 0 #1f9d55; }
+.wa-editor { display: grid; gap: 8px; }
+.wa-editor textarea { min-height: 220px; line-height: 1.5; resize: vertical; background: #f3fbf6; }
+body.dark .wa-editor textarea { background: rgba(31,157,85,.06); }
+.wa-missing { margin: 0; font-size: 12px; color: #b13e3e; font-weight: 700; }
+.wa-modal .muted-note { margin: 0; }
+@media (max-width: 760px) { .wa-context, .wa-body { grid-template-columns: 1fr; } .wa-list { max-height: none; } }
+.tpl-link { margin: 10px 0 14px; }
+.tpl-stage { border-top: 1px solid var(--border); padding: 12px 0; display: grid; gap: 10px; }
+.tpl-stage h4 { margin: 0; font-size: 14px; color: var(--navy); }
+body.dark .tpl-stage h4 { color: #fff; }
+.tpl-stage > .btn { justify-self: start; }
+.tpl-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px; display: grid; gap: 8px; background: var(--bg); }
+.tpl-row { display: flex; gap: 10px; align-items: center; }
+.tpl-row input { font-weight: 700; }
+.tpl-preview { font-size: 11px; color: var(--muted); white-space: pre-wrap; line-height: 1.4; }
+.danger-link { color: #c23b3b !important; white-space: nowrap; }
+
+/* ---------- TP-108 Ficha 360 ---------- */
+.c360 { display: grid; gap: 14px; }
+.c360-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; align-items: center; }
+.c360-stats { display: grid; grid-template-columns: repeat(6, auto); gap: 6px; }
+.c360-stats div { background: var(--bg); border-radius: 10px; padding: 8px 12px; text-align: center; min-width: 86px; }
+.c360-stats b { display: block; font-size: 14px; }
+.c360-stats span { font-size: 10px; color: var(--muted); }
+.c360-stats .warn b { color: #b13e3e; }
+.c360-stats .ok b { color: #18815d; }
+.c360-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.c360-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.c360-tabs button { border: 0; background: transparent; color: var(--muted); font-weight: 700; padding: 9px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.c360-tabs button.active { color: var(--text); border-bottom-color: var(--teal); }
+.c360-pane { display: grid; gap: 12px; }
+.c360-pinned { background: #fffaeb; border: 1px solid #f1d58a; border-radius: 10px; padding: 10px 12px; }
+.c360-pinned p { margin: 6px 0 0; color: var(--text); font-size: 13px; white-space: pre-wrap; }
+body.dark .c360-pinned { background: rgba(246,185,59,.08); }
+.c360-next { display: grid; gap: 6px; }
+.c360-next > b { font-size: 12px; }
+.c360-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.c360-timeline { display: grid; gap: 2px; max-height: 460px; overflow-y: auto; padding-right: 4px; }
+.c360-timeline .section-label { margin: 10px 0 4px; }
+.tl-item { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); align-items: start; }
+.tl-icon { width: 28px; height: 28px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; font-size: 14px; }
+.tl-item.payment .tl-icon { background: #e8f7ef; } .tl-item.message .tl-icon { background: #e3f7ee; } .tl-item.review .tl-icon { background: #fff5d9; } .tl-item.quote .tl-icon { background: #eaf7ff; } .tl-item.trip .tl-icon { background: #e8f8fa; }
+.tl-main { min-width: 0; }
+.tl-main[role=button] { cursor: pointer; }
+.tl-main[role=button]:hover b { color: var(--teal); }
+.tl-main b { font-size: 13px; }
+.tl-main small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.tl-body { margin: 5px 0 0; font-size: 12px; color: var(--text); background: var(--bg); border-radius: 8px; padding: 7px 9px; white-space: pre-wrap; max-height: 140px; overflow: auto; }
+.stars-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.stars-pick label { cursor: pointer; }
+.stars-pick input { position: absolute; opacity: 0; pointer-events: none; width: 1px !important; }
+.stars-pick span { display: inline-block; border: 1px solid var(--border); border-radius: 20px; padding: 6px 12px; color: #d49a1b; font-size: 15px; letter-spacing: 1px; }
+.stars-pick input:checked + span { background: #fff5d9; border-color: #d49a1b; box-shadow: inset 0 0 0 1px #d49a1b; }
+@media (max-width: 760px) { .c360-stats { grid-template-columns: repeat(3, 1fr); width: 100%; } .c360-stats div { min-width: 0; } }
+.wa-mark { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
+.wa-mark input { width: auto; margin: 0; }
+.c360-pane[hidden] { display: none; }
