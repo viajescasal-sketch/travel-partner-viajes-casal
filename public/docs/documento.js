@@ -5,6 +5,8 @@
   const D = window.TPDocs;
   const $ = (s) => document.querySelector(s);
   const params = new URLSearchParams(location.search);
+  // TP-110: liga privada para el cliente (/cotizacion/<token>): solo ver e imprimir.
+  const shareToken = (location.pathname.match(/^\/cotizacion\/([a-f0-9]{40})$/) || [])[1] || null;
   const type = params.get('tipo') === 'reserva' ? 'reserva' : 'cotizacion';
   const id = Number(params.get('id'));
   let state = null;
@@ -120,7 +122,34 @@
     waitImages().then(() => setTimeout(checkOverflow, 50));
   }
 
+  function renderPublicQuote(payload) {
+    document.body.classList.add('doc-public');
+    const back = document.querySelector('.doc-toolbar a.ghost');
+    if (back) back.remove();
+    const circuit = payload.quote.details?.kind === 'circuito';
+    $('#docStyles').href = circuit ? '/docs/circuito.css?v=tp006' : '/docs/cotizacion.css?v=tp006';
+    const model = circuit ? D.circuitModel(payload) : D.quoteModel(payload);
+    if (circuit) model.dataList = [null];
+    state = { payload, model, tab: 0 };
+    document.title = `Tu cotización ${payload.quote.folio} · ${payload.agency?.name || 'Viajes Casal'}`;
+    $('#docTitle').textContent = `Tu cotización · ${payload.quote.destination}`;
+    $('#docRoot').innerHTML = circuit ? D.renderCircuitSheet(model) : D.renderQuoteSheets(model);
+    const count = model.dataList.length;
+    $('#docTabs').innerHTML = count > 1 ? model.dataList.map((d, i) => `<button type="button" data-tab="${i}">Opción ${i + 1} · ${D.esc(D.optionLabel(model.g.varying, d))}</button>`).join('') : '';
+    $('#docTabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(Number(b.dataset.tab)); };
+    showTab(0);
+    button('Descargar PDF', '', async () => { await waitImages(); window.print(); });
+    const sellerPhone = payload.seller?.phone || payload.agency?.whatsapp;
+    const wa = D.waLink(sellerPhone, `Hola, vi la cotización ${payload.quote.folio} para ${payload.quote.destination} y tengo una pregunta.`);
+    if (wa) button('Escribir a mi Travel Partner', 'wa', null, { href: wa });
+  }
+
   async function init() {
+    if (shareToken) {
+      try { renderPublicQuote(await api(`/api/public/quote/${shareToken}`)); }
+      catch (error) { $('#docTitle').textContent = 'Cotización'; $('#docRoot').innerHTML = `<div class="doc-error"><h2>${D.esc(error.message)}</h2></div>`; }
+      return;
+    }
     if (!Number.isInteger(id) || id < 1) { $('#docRoot').innerHTML = '<div class="doc-error"><h2>Documento no encontrado</h2></div>'; return; }
     try {
       const payload = await api(`/api/documents/${type === 'reserva' ? 'trip' : 'quote'}/${id}`);
