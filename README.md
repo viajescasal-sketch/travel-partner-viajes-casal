@@ -196,3 +196,13 @@ Además del formulario del CRM (`/formulario`, incrustado con `formulario-embed.
 - **Desde la ficha del lead:** botones *Programar llamada*, *Programar WhatsApp* y *Otro seguimiento*, y la lista de seguimientos del lead. La ficha del seguimiento trae atajos de fecha (en 1 hora, mañana 10:00, lunes…), *Abrir WhatsApp*, *Llamar* y *Agregar a Google Calendar*.
 - **Google Calendar (suscripción, una vía):** botón *Google Calendar* → liga privada `/calendario/<token>.ics` por usuario (`src/calendar.js`). El vendedor la agrega en Google Calendar › Agregar desde URL. Incluye seguimientos de los últimos 60 días y los próximos, con aviso 10 min antes. *Generar liga nueva* invalida la anterior. Las ligas viven en `crm_settings` (`calendar_feeds`).
 - Pendiente: sincronización completa en dos vías con la API de Google Calendar (OAuth).
+
+## Recordatorios automáticos (TP-106)
+
+Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer uso si el servidor estuvo dormido). Se configura en **Configuración › Recordatorios** (solo administrador).
+
+- **Cotización sin respuesta:** si una cotización lleva 48 h en estado *Enviada* (`sent_at`), se crea un seguimiento tipo *Cotización* para el vendedor (si no tiene ya uno pendiente) y se le avisa por campanita y correo. Una sola vez por envío (`reminder_at`); si la cotización cambia de estado y se vuelve a enviar, el tiempo se reinicia.
+- **Lead sin contacto:** los leads que llegan solos (bot, formulario) o que asigna otra persona tienen 2 h **laborales** (09:00–20:00, configurable) para el primer contacto (`assigned_at`). Al vencer, aviso al vendedor (`contact_alert_at`); 2 h laborales después, aviso a los administradores (`contact_escalated_at`).
+- **Cuenta como contactado** (`contacted_at`): salir de *Nuevo*, completar un seguimiento del lead, o el botón **✅ Ya lo contacté** (ficha del lead y tablero; `POST /api/leads/:id/contacted`). Los leads que registra su propio vendedor ya cuentan como contactados. Reasignar un lead sin contacto reinicia su tiempo.
+- Lo que ya existía antes de activar la función no dispara alertas de golpe (`reminders_state.startedAt`); las cotizaciones enviadas antes cuentan sus 48 h desde la activación.
+- API (admin): `GET|PUT /api/reminders`, `POST /api/reminders/run` (revisar ahora).

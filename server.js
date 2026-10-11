@@ -21,6 +21,7 @@ const { createBotRouter, createBotAdminRouter } = require('./src/bot-routes');
 const { createWebform, createWebformAdminRouter } = require('./src/webform');
 const { createCalendarFeed } = require('./src/calendar');
 const { createAssignment, createAssignmentRouter } = require('./src/assignment');
+const { createReminders, createRemindersRouter } = require('./src/reminders');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -247,6 +248,9 @@ async function createApp(options = {}) {
   const bot = createBotRouter(dataStore, { assignment });
   app.use('/api', bot.router);
   // Formulario web público (sitio y landings): crea el lead sin sesión.
+  // Recordatorios automáticos (TP-106): cotizaciones sin respuesta y leads sin contacto.
+  const reminders = createReminders(dataStore, assignment, process.env);
+  if (!options.skipPurgeTimer && !options.skipReminderTimer) reminders.start();
   const webform = createWebform(dataStore, mailer, process.env, { assignment });
   app.use('/api', webform.router);
   // Calendario de seguimientos por suscripción (Google Calendar): liga privada sin sesión.
@@ -259,6 +263,7 @@ async function createApp(options = {}) {
     if (!options.skipPurgeTimer && Date.now() - lastBackupCheck > 5 * 60 * 1000) {
       lastBackupCheck = Date.now();
       backupService.runIfDue().catch((error) => console.error('Respaldo automático falló:', error.message));
+      reminders.run();
     }
     next();
   });
@@ -276,6 +281,7 @@ async function createApp(options = {}) {
   app.use('/api', createBotAdminRouter(dataStore, bot, { requireRole }));
   app.use('/api', createWebformAdminRouter(dataStore, webform, { requireRole }));
   app.use('/api', createAssignmentRouter(dataStore, assignment, { requireRole }));
+  app.use('/api', createRemindersRouter(dataStore, reminders, { requireRole }));
   app.use('/api', calendarFeed.apiRouter);
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
@@ -310,6 +316,7 @@ async function createApp(options = {}) {
   app.locals.dataStore = dataStore;
   app.locals.mailer = mailer;
   app.locals.backupService = backupService;
+  app.locals.reminders = reminders;
   return app;
 }
 
