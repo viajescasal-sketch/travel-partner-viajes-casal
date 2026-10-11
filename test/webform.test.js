@@ -156,3 +156,40 @@ test('el formulario web crea el lead calificado, avisa y se puede incrustar', as
   assert.equal(paused.body.whatsapp, '529983921530');
   assert.equal((await visitor('POST', '/api/public/lead', payload)).status, 403);
 });
+
+test('las encuestas propias del sitio (paquetes, tours) llegan al CRM desde viajescasal.com', async (context) => {
+  const mailer = { configured: false, from: 'x@example.test', async send() { return {}; } };
+  const baseUrl = await startApp(context, mailer);
+  const admin = clientFor(baseUrl);
+  await admin.login('admin@example.test', 'AdminTemporal123', 'AdminNueva2026x');
+
+  // El puente se puede cargar desde otros sitios
+  const bridge = await fetch(`${baseUrl}/puente-encuestas.js`);
+  assert.equal(bridge.status, 200);
+  assert.equal(bridge.headers.get('cross-origin-resource-policy'), 'cross-origin');
+  assert.match(await (await fetch(`${baseUrl}/formulario-embed.js`)).text(), /puente-encuestas\.js/);
+
+  // CORS: solo los sitios permitidos
+  const pre = await fetch(`${baseUrl}/api/public/lead`, { method: 'OPTIONS', headers: { origin: 'https://viajescasal.com', 'access-control-request-method': 'POST' } });
+  assert.equal(pre.status, 204);
+  assert.equal(pre.headers.get('access-control-allow-origin'), 'https://viajescasal.com');
+  const evil = await fetch(`${baseUrl}/api/public/form`, { headers: { origin: 'https://otro-sitio.example' } });
+  assert.equal(evil.headers.get('access-control-allow-origin'), null);
+
+  const today = (await (await fetch(`${baseUrl}/api/public/form`)).json()).today;
+  const send = (body) => fetch(`${baseUrl}/api/public/lead`, { method: 'POST', headers: { origin: 'https://viajescasal.com', 'content-type': 'text/plain;charset=UTF-8' }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+
+  assert.equal((await send('{no es json')).status, 400);
+  const tour = await send({
+    encuesta: 'Encuesta de tours (Solicitar información)', origen: 'encuesta-tours-viajescasal', nombre: 'Laura Pérez', whatsapp: '+529981112233',
+    servicio: 'tours', destino: 'Tour Xcaret', llegada: addDays(today, 10), fechas: FORM.fechas[0], adultos: 2, ninos: 1, etapa: FORM.etapa[2], elapsed: 30000,
+    pagina: 'viajescasal.com/', respuestas: [['¿Qué tour te interesa?', 'Xcaret'], ['¿Necesitas transporte al tour?', 'Sí'], ['', 'vacío'], 'basura']
+  });
+  assert.equal(tour.status, 201);
+  assert.equal(tour.headers.get('access-control-allow-origin'), 'https://viajescasal.com');
+  const lead = (await admin('GET', '/api/crm')).body.leads.find((l) => l.destination === 'Tour Xcaret');
+  assert.ok(lead, 'el lead de la encuesta de tours existe');
+  assert.equal(lead.travelers, 3);
+  assert.match(lead.notes, /Encuesta: Encuesta de tours[\s\S]*› ¿Necesitas transporte al tour\?: Sí[\s\S]*Origen: encuesta-tours-viajescasal · viajescasal.com\//);
+  assert.doesNotMatch(lead.notes, /vacío|basura/);
+});
