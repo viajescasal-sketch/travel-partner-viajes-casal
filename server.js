@@ -23,6 +23,7 @@ const { createCalendarFeed } = require('./src/calendar');
 const { createPublicQuote } = require('./src/public-quote');
 const { createAssignment, createAssignmentRouter } = require('./src/assignment');
 const { createReminders, createRemindersRouter } = require('./src/reminders');
+const { createPayments } = require('./src/payments');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -250,7 +251,10 @@ async function createApp(options = {}) {
   app.use('/api', bot.router);
   // Formulario web público (sitio y landings): crea el lead sin sesión.
   // Recordatorios automáticos (TP-106): cotizaciones sin respuesta y leads sin contacto.
-  const reminders = createReminders(dataStore, assignment, process.env);
+  // TP-201/202: plan de pagos, liga de pago (Mercado Pago opcional) y recordatorios de saldo.
+  const payments = createPayments(dataStore, { assignment, mailer, env: process.env, mercadoPago: options.mercadoPago, publicDirectory, ...(options.paymentsNow ? { now: options.paymentsNow } : {}) });
+  app.use(payments.publicRouter);
+  const reminders = createReminders(dataStore, assignment, process.env, { payments });
   if (!options.skipPurgeTimer && !options.skipReminderTimer) reminders.start();
   const webform = createWebform(dataStore, mailer, process.env, { assignment });
   app.use('/api', webform.router);
@@ -286,7 +290,8 @@ async function createApp(options = {}) {
   app.use('/api', createAssignmentRouter(dataStore, assignment, { requireRole }));
   app.use('/api', createRemindersRouter(dataStore, reminders, { requireRole }));
   app.use('/api', calendarFeed.apiRouter);
-  app.use('/api', createCrmRouter(dataStore, { requireRole, assignment }));
+  app.use('/api', payments.apiRouter);
+  app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');
   app.get(['/formulario', '/formulario.html'], (req, res) => {
@@ -320,6 +325,7 @@ async function createApp(options = {}) {
   app.locals.mailer = mailer;
   app.locals.backupService = backupService;
   app.locals.reminders = reminders;
+  app.locals.payments = payments;
   return app;
 }
 
