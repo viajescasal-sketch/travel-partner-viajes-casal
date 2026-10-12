@@ -138,6 +138,7 @@
     $('#docTabs').innerHTML = count > 1 ? model.dataList.map((d, i) => `<button type="button" data-tab="${i}">Opción ${i + 1} · ${D.esc(D.optionLabel(model.g.varying, d))}</button>`).join('') : '';
     $('#docTabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(Number(b.dataset.tab)); };
     showTab(0);
+    if (payload.payUrl) button(payload.payLabel || 'Pagar mi anticipo', '', null, { href: payload.payUrl });
     button('Descargar PDF', '', async () => { await waitImages(); window.print(); });
     const sellerPhone = payload.seller?.phone || payload.agency?.whatsapp;
     const wa = D.waLink(sellerPhone, `Hola, vi la cotización ${payload.quote.folio} para ${payload.quote.destination} y tengo una pregunta.`);

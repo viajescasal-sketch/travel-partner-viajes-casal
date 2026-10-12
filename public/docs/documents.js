@@ -564,8 +564,18 @@
       partnerDetail: documents.resPartnerDetail || '',
       emergencyPhone: documents.emergencyPhone || '', airlinePhone: '',
       showSanitation: QROO.test(trip.destination || ''),
-      paymentStatus: 'Pendiente de pago', paymentTotal: quote?.price ? String(quote.price) : '', paymentPaid: '', paymentSchedule: ''
+      ...planPayment(quote)
     };
+  }
+
+  // TP-201: si la venta tiene plan de pagos, la confirmación toma lo pagado y lo pendiente.
+  function planPayment(quote) {
+    const plan = quote?.status === 'Aceptada' ? quote.payment_plan : null;
+    if (!plan || !Array.isArray(plan.installments)) return { paymentStatus: 'Pendiente de pago', paymentTotal: quote?.price ? String(quote.price) : '', paymentPaid: '', paymentSchedule: '' };
+    const M = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const fmt = (n) => `$${Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 2 })}`;
+    const schedule = plan.installments.filter((i) => i.status !== 'pagado').map((i) => `${i.label}: ${fmt(i.amount - (i.paid || 0))} antes del ${Number(String(i.due).slice(8, 10))} de ${M[Number(String(i.due).slice(5, 7)) - 1]}`).join(' · ');
+    return { paymentStatus: plan.status === 'pagado' ? 'Pagado por completo' : plan.paid > 0 ? 'Pago parcial' : 'Pendiente de pago', paymentTotal: String(plan.total), paymentPaid: plan.paid ? String(plan.paid) : '', paymentSchedule: schedule };
   }
 
   function mergeConfirmation(saved, defaults) {
