@@ -41,7 +41,7 @@ test('plan de pagos: se arma con el anticipo de la cotización y la liquidación
 
 test('plantillas: las nuevas de cobro aparecen también en listas personalizadas', () => {
   const ids = readTemplates({ templates: [{ id: 'pc1', stage: 'primer_contacto', name: 'Hola', body: 'Hola' }] }).templates.map((t) => t.id);
-  assert.deepEqual(ids, ['pc1', 'ci3', 'ci4']);
+  assert.deepEqual(ids, ['pc1', 'ci3', 'ci4', 'ci5']);
   const ids2 = readTemplates({ templates: [{ id: 'pc1', stage: 'primer_contacto', name: 'Hola', body: 'Hola' }], known: require('../src/templates').DEFAULT_TEMPLATES.map((t) => t.id) }).templates.map((t) => t.id);
   assert.deepEqual(ids2, ['pc1'], 'si el administrador las borró no regresan');
 });

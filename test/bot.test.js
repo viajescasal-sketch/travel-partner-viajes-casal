@@ -120,7 +120,7 @@ test('el bot de WhatsApp crea y actualiza leads', async (context) => {
   assert.ok(hist[0].changes.some((c) => c.label === 'Destino' && c.to === 'Riviera Maya'));
 
   // Lead cerrado: la siguiente conversación abre uno nuevo
-  await admin('PATCH', `/api/leads/${lead.id}`, { stage: 'Perdido' });
+  await admin('PATCH', `/api/leads/${lead.id}`, { stage: 'Perdido', lost_reason: 'No respondió' });
   const third = await bot('POST', '/api/integrations/botpress/lead', { ...payload, destino: 'Madrid' }, headers);
   assert.equal(third.body.action, 'created');
 

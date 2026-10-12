@@ -89,7 +89,7 @@ test('asignación por turnos con disponibilidad, cliente de siempre y avisos', a
   const c3 = snap.clients.find((c) => c.name === 'Cliente 3');
   const lead3 = snap.leads.find((l) => l.client_id === c3.id);
   assert.equal(lead3.owner_id, ids.bruno);
-  await admin('PATCH', `/api/leads/${lead3.id}`, { stage: 'Perdido' });
+  await admin('PATCH', `/api/leads/${lead3.id}`, { stage: 'Perdido', lost_reason: 'Precio' });
   const again = await send(3);
   assert.equal(again.body.action, 'created');
   assert.equal((await crm()).leads.find((l) => l.id === again.body.leadId).owner_id, ids.bruno);
