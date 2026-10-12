@@ -375,15 +375,50 @@ function moveMenu(id) {
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button></div></div>`);
   $('#modalBody').querySelectorAll('[data-move-to]').forEach((b) => { b.onclick = () => { close(); moveLead(lead.id, b.dataset.moveTo); }; });
 }
-function lostModal(lead) {
+// TP-207: motivo de pérdida (obligatorio) y recontacto programado.
+const RECONTACT = [['', 'No programar'], ['30', 'En 1 mes'], ['90', 'En 3 meses'], ['180', 'En 6 meses'], ['365', 'En 1 año']];
+const RECONTACT_BY_REASON = { 'Pospuso o canceló el viaje': '90', 'Sin disponibilidad en sus fechas': '30', Precio: '180' };
+function splitLost(text) {
+  const t = String(text || '');
+  const reason = LOST_REASONS.find((r) => t === r || t.startsWith(`${r}:`)) || (t ? 'Otro' : '');
+  const detail = reason && t.startsWith(reason) ? t.slice(reason.length).replace(/^:\s*/, '') : t;
+  return { reason, detail };
+}
+const lostCategory = (text) => splitLost(text).reason || 'Sin motivo';
+function lostFieldsHtml(lead, { hidden = false } = {}) {
+  const cur = splitLost(lead?.stage === 'Perdido' ? lead.lost_reason : '');
+  return `<div class="full lost-box${hidden ? ' hidden' : ''}" id="lostBox">
+    <p class="lost-title">¿Por qué se perdió? <small>Obligatorio · así ves en qué estás perdiendo ventas</small></p>
+    <div class="kb-reasons">${LOST_REASONS.map((r) => `<label class="kb-reason"><input type="radio" name="reason" value="${escapeHtml(r)}"${cur.reason === r ? ' checked' : ''}> ${escapeHtml(r)}</label>`).join('')}</div>
+    <div class="lost-row">${field('Detalle (opcional)', `<input name="detail" maxlength="120" placeholder="Ej. eligió un paquete de otra agencia" value="${escapeHtml(cur.detail)}">`)}
+    ${field('Volver a contactarlo', `<select name="recontact">${options(RECONTACT, '')}</select>`)}</div>
+  </div>`;
+}
+function bindLostFields(root) {
+  let touched = false;
+  const sel = root.querySelector('[name=recontact]');
+  if (!sel) return;
+  sel.addEventListener('change', () => { touched = true; });
+  root.querySelectorAll('[name=reason]').forEach((r) => r.addEventListener('change', () => { if (!touched) sel.value = RECONTACT_BY_REASON[r.value] || ''; }));
+}
+const lostReasonOf = (v) => [v.reason, String(v.detail || '').trim()].filter(Boolean).join(': ').slice(0, 160);
+async function scheduleRecontact(lead, v) {
+  if (!v.recontact) return;
+  const due = `${addDays(todayStr(), Number(v.recontact))} 10:00`;
+  await send('POST', '/api/followups', { lead_id: lead.id, type: 'WhatsApp', title: `Recontactar a ${clientName(lead.client_id)} · ${lead.destination}`.slice(0, 160), details: `Lead perdido: ${lostReasonOf(v)}. Pregúntale si ya tiene fechas o si quiere nuevas opciones.`.slice(0, 2000), due_at: due });
+}
+function lostModal(lead, extra = {}) {
   openModal('LEAD PERDIDO', `${clientName(lead.client_id)} · ${lead.destination}`, `<form class="modal-form">
-    <p class="full">¿Por qué se perdió? Así podrás ver en qué estás perdiendo ventas.</p>
-    <div class="full kb-reasons">${LOST_REASONS.map((r) => `<label class="kb-reason"><input type="radio" name="reason" value="${escapeHtml(r)}" required> ${escapeHtml(r)}</label>`).join('')}</div>
-    ${field('Detalle (opcional)', '<input name="detail" maxlength="120" placeholder="Ej. encontró un paquete más barato en otra agencia">', true)}
+    ${lostFieldsHtml(lead)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">Marcar como perdido</button></div></form>`);
-  bindForm((v) => {
-    const reason = [v.reason, v.detail].filter(Boolean).join(': ').slice(0, 160);
-    return mutate(() => send('PATCH', `/api/leads/${lead.id}`, { stage: 'Perdido', lost_reason: reason }), `${clientName(lead.client_id)} marcado como perdido`);
+  bindLostFields($('#modalBody'));
+  bindForm(async (v) => {
+    if (!v.reason) { toast('Elige el motivo de pérdida'); return false; }
+    const ok = await mutate(async () => {
+      await send('PATCH', `/api/leads/${lead.id}`, { ...extra, stage: 'Perdido', lost_reason: lostReasonOf(v) });
+      await scheduleRecontact(lead, v);
+    }, `${clientName(lead.client_id)} marcado como perdido${v.recontact ? ' · recontacto programado' : ''}`);
+    return ok;
   });
 }
 // Vendido: la venta se registra aceptando la cotización (así cuenta en Ventas y Reportes).
@@ -483,7 +518,7 @@ function startBell() {
   refreshBell();
   bell.timer = setInterval(() => { if (!document.hidden) refreshBell(); }, 60000);
 }
-const BELL_ICONS = { assigned: '🎯', lead: '🎯', lead_update: '🔄', new_lead: '🆕', reminder: '⏰', contact_alert: '⏰', contact_escalation: '⚠', quote_viewed: '👀', payment: '💰', followup_overdue: '⏰', payment_due: '💳', payment_overdue: '⚠' };
+const BELL_ICONS = { assigned: '🎯', lead: '🎯', lead_update: '🔄', new_lead: '🆕', reminder: '⏰', contact_alert: '⏰', contact_escalation: '⚠', quote_viewed: '👀', payment: '💰', followup_overdue: '⏰', payment_due: '💳', payment_overdue: '⚠', quote_accepted: '🎉' };
 function renderBellPanel() {
   const panel = $('#bellPanel');
   panel.innerHTML = `<div class="bell-head"><b>Avisos</b>${bell.unread ? '<button type="button" class="link" id="bellReadAll">Marcar todo como leído</button>' : ''}</div>
@@ -706,7 +741,7 @@ function renderQuotes() {
   $('#multiSend').classList.toggle('hidden', !editable);
   renderPayDue();
   $('#quoteGrid').innerHTML = list.length ? list.map((x) =>
-    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span>${x.status === 'Enviada' && x.reminder_at ? '<span class="contact-chip late" title="Se programó un seguimiento automático">⏰ Sin respuesta</span>' : ''}${x.viewed_at ? `<span class="contact-chip seen" title="El cliente abrió la liga ${x.view_count || 1} ${Number(x.view_count) === 1 ? 'vez' : 'veces'}">👀 Vista</span>` : ''}<h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}${payStrip(x)}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Ver PDF</button>${editable ? `<button class="btn secondary small" data-share-quote="${x.id}" title="Liga privada para el cliente">🔗 Liga</button><button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
+    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span>${x.status === 'Enviada' && x.reminder_at ? '<span class="contact-chip late" title="Se programó un seguimiento automático">⏰ Sin respuesta</span>' : ''}${x.status === 'Aceptada' && x.acceptance?.by === 'cliente' ? `<span class="contact-chip seen" title="Aceptada por ${escapeHtml(x.acceptance.name)} el ${escapeHtml(fmtDue(x.acceptance.at))}">✅ En línea</span>` : ''}${x.viewed_at ? `<span class="contact-chip seen" title="El cliente abrió la liga ${x.view_count || 1} ${Number(x.view_count) === 1 ? 'vez' : 'veces'}">👀 Vista</span>` : ''}<h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}${payStrip(x)}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Ver PDF</button>${editable ? `<button class="btn secondary small" data-share-quote="${x.id}" title="Liga privada para el cliente">🔗 Liga</button><button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
     : `<p class="empty-note">${db.quotes.length ? 'Ninguna cotización coincide con la búsqueda.' : 'Aún no hay cotizaciones. Crea la primera con “+ Nueva cotización”.'}</p>`;
 }
 
@@ -1033,7 +1068,30 @@ function renderReports() {
   const stops = counts.map(([, n], i) => { const from = acc; acc += (n / total) * 100; return `${SOURCE_COLORS[i % SOURCE_COLORS.length]} ${from}% ${acc}%`; });
   $('#sourceDonut').style.background = total ? `conic-gradient(${stops.join(',')})` : 'var(--border)';
   $('#sourceTotal').textContent = total;
+  renderLostReport();
   $('#sourceLegend').innerHTML = counts.length ? counts.map(([s, n], i) => `<p><i class="swatch" style="background:${SOURCE_COLORS[i % SOURCE_COLORS.length]}"></i>${escapeHtml(s)} ${Math.round((n / total) * 100)}%</p>`).join('') : '<p>Sin leads todavía</p>';
+}
+
+// TP-207: reporte de motivos de pérdida
+function renderLostReport() {
+  const box = $('#lostReport');
+  if (!box) return;
+  const range = $('#lostRange').value;
+  const from = range === 'all' ? '' : addDays(todayStr(), -Number(range));
+  const lost = db.leads.filter((l) => l.stage === 'Perdido' && String(l.closed_at || l.updated_at || '').slice(0, 10) >= from);
+  const won = db.leads.filter((l) => l.stage === 'Vendido' && String(l.closed_at || '').slice(0, 10) >= from).length;
+  if (!lost.length) { box.innerHTML = '<p class="empty-note">Sin leads perdidos en este periodo. 🙌</p>'; return; }
+  const value = (l) => Number(boardValue(l)) || 0;
+  const group = (keyFn) => { const m = new Map(); lost.forEach((l) => { const k = keyFn(l); const g = m.get(k) || { k, n: 0, v: 0, reasons: new Map() }; g.n += 1; g.v += value(l); const r = lostCategory(l.lost_reason); g.reasons.set(r, (g.reasons.get(r) || 0) + 1); m.set(k, g); }); return [...m.values()].sort((a, b) => b.n - a.n); };
+  const byReason = group((l) => lostCategory(l.lost_reason));
+  const max = byReason[0].n;
+  const top = (g) => [...g.reasons.entries()].sort((a, b) => b[1] - a[1])[0];
+  const totalV = lost.reduce((s2, l) => s2 + value(l), 0);
+  const table = (title, rows) => `<div class="lost-table"><b>${title}</b>${rows.map((g) => { const t = top(g); return `<div><span>${escapeHtml(g.k)}</span><span>${g.n} · ${money(g.v)}</span><small>Más común: ${escapeHtml(t[0])} (${t[1]})</small></div>`; }).join('')}</div>`;
+  box.innerHTML = `<div class="lost-kpis"><div><b>${lost.length}</b><span>Leads perdidos</span></div><div><b>${money(totalV)}</b><span>Valor perdido</span></div><div><b>${won + lost.length ? Math.round((lost.length / (won + lost.length)) * 100) : 0}%</b><span>De los leads cerrados</span></div></div>
+    <div class="lost-bars">${byReason.map((g) => `<div class="lost-bar"><span>${escapeHtml(g.k)}</span><i><em style="width:${Math.max(4, Math.round((g.n / max) * 100))}%"></em></i><b>${g.n} · ${Math.round((g.n / lost.length) * 100)}%</b><small>${money(g.v)}</small></div>`).join('')}</div>
+    <div class="lost-tables">${isAdmin() ? table('Por vendedor', group((l) => userName(l.owner_id) || 'Sin asignar')) : ''}${table('Por origen', group((l) => l.source || 'Otro'))}</div>
+    <details class="lost-list"><summary>Ver los ${lost.length} leads</summary>${lost.sort((a, b) => String(b.closed_at).localeCompare(String(a.closed_at))).map((l) => `<button type="button" class="lead-fup" data-lead="${l.id}"><span>${escapeHtml(clientName(l.client_id))} · ${escapeHtml(l.destination)}</span><small>${escapeHtml(l.lost_reason || 'Sin motivo')} · ${escapeHtml(fmtDate(String(l.closed_at || '').slice(0, 10)))}</small></button>`).join('')}</details>`;
 }
 
 /* ---------- configuración ---------- */
@@ -1112,7 +1170,7 @@ function leadModal(id, presetClientId) {
     ${field('Viajeros', `<input name="travelers" type="number" min="1" max="500" value="${escapeHtml(lead?.travelers)}">`)}
     ${field('Presupuesto (MXN)', `<input name="budget" type="number" min="0" step="1" value="${escapeHtml(lead?.budget)}">`)}
     ${lead ? field('Etapa', `<select name="stage">${options(STAGES, lead.stage)}</select>`) : field('Primer seguimiento', '<input name="first_followup_at" type="datetime-local">')}
-    ${lead?.stage === 'Perdido' ? field('Motivo de pérdida', `<input name="lost_reason" maxlength="160" value="${escapeHtml(lead.lost_reason)}">`) : ''}
+    ${lead ? lostFieldsHtml(lead, { hidden: lead.stage !== 'Perdido' }) : ''}
     ${isAdmin() ? field('Vendedor asignado', `<select name="owner_id">${options([...(lead ? [] : [['auto', 'Automático (según la asignación)']]), ...sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`])], lead?.owner_id ?? currentUser.id)}</select>`) : ''}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
     ${lead ? autoScoreHtml(lead) : ''}
@@ -1125,6 +1183,11 @@ function leadModal(id, presetClientId) {
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${lead ? 'Guardar cambios' : 'Guardar lead'}</button></div></form>`;
   openModal('REGISTRO COMERCIAL', lead ? `Lead de ${client?.name || ''}` : 'Nuevo lead', html);
   bindQualification();
+  if (lead) {
+    bindLostFields($('#modalBody'));
+    const stageSel = $('#modalBody [name=stage]');
+    stageSel.addEventListener('change', () => $('#lostBox').classList.toggle('hidden', stageSel.value !== 'Perdido'));
+  }
   if (!client) { const f = $('#modalBody form'); f.dataset.kind = 'lead'; bindDuplicateCheck(f); }
   bindForm(async (v, form) => {
     const body = clean({
@@ -1135,7 +1198,11 @@ function leadModal(id, presetClientId) {
     if (v.owner_id) body.owner_id = v.owner_id === 'auto' ? 'auto' : Number(v.owner_id);
     if (lead) {
       const reassigned = body.owner_id && body.owner_id !== lead.owner_id;
-      if (v.lost_reason !== undefined) body.lost_reason = v.lost_reason || null;
+      if (v.stage === 'Perdido') {
+        if (!v.reason) { toast('Elige el motivo de pérdida'); return false; }
+        body.lost_reason = lostReasonOf(v);
+        return mutate(async () => { await send('PATCH', `/api/leads/${lead.id}`, { ...body, stage: v.stage }); await scheduleRecontact(lead, v); }, lead.stage === 'Perdido' ? 'Lead actualizado' : `${clientName(lead.client_id)} marcado como perdido${v.recontact ? ' · recontacto programado' : ''}`);
+      }
       return mutate(() => send('PATCH', `/api/leads/${lead.id}`, { ...body, stage: v.stage }), reassigned ? `Lead reasignado a ${userName(body.owner_id)}` : 'Lead actualizado');
     }
     if (client) body.client_id = client.id;
@@ -1581,7 +1648,7 @@ function tripModal(id, preset = {}) {
     ${field('Regreso*', `<input name="end_date" type="date" required value="${escapeHtml(t?.end_date ?? fromLead?.end_date)}">`)}
     ${field('Estado', `<select name="status">${options(TRIP_STATUSES, t?.status || 'Confirmado')}</select>`, true)}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(t?.notes)}</textarea>`, true)}
-    ${t ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-confirmation="${t.id}">${t.confirmation ? 'Editar confirmación de servicios' : 'Preparar confirmación de servicios'}</button><button type="button" class="btn secondary small" data-res-pdf="${t.id}">Ver PDF de confirmación</button><button type="button" class="btn secondary small" data-wa-trip="${t.id}">💬 WhatsApp</button>${t.confirmation ? '<small>✓ Confirmación lista</small>' : ''}</div>` : ''}
+    ${t ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-confirmation="${t.id}">${t.confirmation ? 'Editar confirmación de servicios' : 'Preparar confirmación de servicios'}</button><button type="button" class="btn secondary small" data-res-pdf="${t.id}">Ver PDF de confirmación</button><button type="button" class="btn secondary small" data-itinerary="${t.id}">📱 Itinerario digital</button><button type="button" class="btn secondary small" data-wa-trip="${t.id}">💬 WhatsApp</button>${t.confirmation ? '<small>✓ Confirmación lista</small>' : ''}</div>` : ''}
     ${t ? historyButton('trips', t.id) : ''}
     ${deleteBlock('viaje', t?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${t ? 'Guardar cambios' : 'Guardar viaje'}</button></div></form>`;
@@ -1683,7 +1750,8 @@ function templateVars({ client, lead, quote, trip }) {
     precio: quote ? `${money(quote.price)}${quote.mode && quote.mode !== 'Total' ? ` ${quote.mode.toLowerCase()}` : ''}` : '',
     vigencia: quote?.valid_until ? fmtLongRange(quote.valid_until) : '', vendedor: String(currentUser?.name || '').trim(),
     agencia: db.agency?.name || 'Viajes Casal', liga_resenas: db.templates?.reviewLink || '', liga_cotizacion: quote ? db.shareUrls?.[quote.id] || '' : '',
-    ...payVars(quote)
+    ...payVars(quote),
+    liga_itinerario: trip?.share_token ? `${location.origin}/viaje/${trip.share_token}` : ''
   };
 }
 // Reemplaza {variable}; lo que falta queda como [variable] para que el vendedor lo complete.
@@ -2065,7 +2133,7 @@ async function shareModal(quoteId) {
   let r;
   try { r = await send('POST', `/api/quotes/${q.id}/share`, {}); db.shareUrls[q.id] = r.url; } catch (error) { toast(error.message); return; }
   openModal('COTIZACIÓN', `Liga para ${clientName(q.client_id)}`, `<div class="gcal">
-    <p>Tu cliente ve la cotización <b>${escapeHtml(q.folio)}</b> con el mismo diseño del PDF, sin cuenta ni contraseña, y puede descargarla. Cuando la abra te llega un aviso en la campanita 🔔.</p>
+    <p>Tu cliente ve la cotización <b>${escapeHtml(q.folio)}</b> con el mismo diseño del PDF, sin cuenta ni contraseña, puede descargarla y <b>elegir una opción y aceptarla en línea</b> (si sigue vigente). Al aceptar se arma su plan de pagos y te llega un aviso. Cuando la abra te llega un aviso en la campanita 🔔.</p>
     <label class="gcal-url">Liga privada<span><input id="shareUrl" readonly value="${escapeHtml(r.url)}"><button type="button" class="btn primary small" id="shareCopy">Copiar</button></span></label>
     <p class="muted-note">${q.viewed_at ? `👀 El cliente la ha abierto ${q.view_count || 1} ${Number(q.view_count) === 1 ? 'vez' : 'veces'} · última: ${escapeHtml(fmtDue(q.viewed_at))}` : 'Aún no la ha abierto.'} La plantilla “Envío de cotización” incluye esta liga con <b>{liga_cotizacion}</b>.</p>
     <div class="modal-actions"><button type="button" class="btn secondary small" id="shareOff">Desactivar liga</button><a class="btn secondary small" href="${escapeHtml(r.url)}" target="_blank" rel="noopener">Ver como cliente</a><button type="button" class="btn primary close">Listo</button></div></div>`);
@@ -2292,6 +2360,82 @@ async function renderPaymentsSettings() {
       } catch (error) { toast(error.message, 6000); }
     };
   } catch (error) { box.innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`; }
+}
+
+/* ---------- TP-301: itinerario digital para el celular ---------- */
+const fmtSize = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+const IT_WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const dayLabel = (iso) => `${IT_WEEKDAYS[new Date(`${iso}T12:00:00Z`).getUTCDay()]} ${fmtDate(iso)}`;
+async function itineraryModal(tripId) {
+  const t = tripById(tripId);
+  if (!t) return;
+  let share, payload;
+  try { [share, payload] = await Promise.all([send('POST', `/api/trips/${t.id}/share`, {}), api(`/api/documents/trip/${t.id}`)]); } catch (error) { toast(error.message); return; }
+  t.share_token = share.url.split('/').pop();
+  const c = TPDocs.mergeConfirmation(payload.trip.confirmation, TPDocs.confirmationDefaults(payload));
+  const auto = () => TPDocs.buildItinerary(c, payload);
+  const saved = Array.isArray(t.itinerary?.days) && t.itinerary.days.length;
+  let days = (saved ? t.itinerary.days : auto()).map((d) => ({ date: d.date, title: d.title || '', text: d.text || '', place: d.place || '' }));
+  let vouchers = share.vouchers || [];
+  const client = clientById(t.client_id);
+  const stale = saved && (days[0]?.date !== t.start_date || days[days.length - 1]?.date !== t.end_date);
+  const paintVouchers = () => {
+    $('#itVouchers').innerHTML = vouchers.length ? vouchers.map((v) => `<div class="it-doc"><span>${v.mime === 'application/pdf' ? '📄' : '🖼'} <b>${escapeHtml(v.name)}</b> <small>${fmtSize(v.size)}</small></span><span><a class="link" href="/api/media/${v.id}" target="_blank" rel="noopener">Ver</a><button type="button" class="link danger-link" data-it-del="${v.id}">Quitar</button></span></div>`).join('') : '<p class="muted-note">Aún no hay documentos. Sube vouchers, boletos de avión, pólizas o reservaciones de tours.</p>';
+  };
+  const dayHtml = (d, i) => `<div class="it-day" data-i="${i}"><div class="it-day-head"><b>Día ${i + 1}</b><span>${escapeHtml(dayLabel(d.date))}</span></div>
+    <input data-f="title" maxlength="80" placeholder="Título del día" value="${escapeHtml(d.title)}">
+    <textarea data-f="text" rows="3" maxlength="1500" placeholder="Una actividad por renglón. Empieza con la hora si aplica: 10:00 Tour a Isla Mujeres">${escapeHtml(d.text)}</textarea>
+    <input data-f="place" maxlength="120" placeholder="Lugar para el mapa (opcional): hotel, parque, restaurante…" value="${escapeHtml(d.place)}"></div>`;
+  openModal('ITINERARIO DIGITAL', `${client?.name || ''} · ${t.destination}`, `<div class="it">
+    <label class="gcal-url">Liga para el celular del cliente<span><input id="itUrl" readonly value="${escapeHtml(share.url)}"><button type="button" class="btn secondary small" id="itCopy">Copiar</button></span></label>
+    <p class="muted-note">Incluye el día por día, vuelos, hotel con mapa, traslados, los documentos que subas, su saldo pendiente con la liga de pago y tus datos de contacto. ${share.viewed_at ? `👀 El cliente lo abrió el ${escapeHtml(fmtDue(share.viewed_at))}.` : 'Aún no lo abre.'}</p>
+    <div class="it-acts"><a class="btn secondary small" href="${escapeHtml(share.url)}" target="_blank" rel="noopener">Ver como cliente</a>${client?.phone ? '<button type="button" class="btn primary small" id="itWa">💬 Enviar por WhatsApp</button>' : ''}<button type="button" class="btn secondary small" id="itOff">Desactivar liga</button></div>
+    <h4 class="it-h">Documentos de viaje</h4>
+    <div id="itVouchers"></div>
+    <label class="btn secondary small it-upload">⬆ Subir PDF o foto<input type="file" id="itFile" accept="application/pdf,image/jpeg,image/png,image/webp" multiple hidden></label>
+    <h4 class="it-h">Día por día ${saved ? '' : '<small>· armado automático con la confirmación</small>'}</h4>
+    ${stale ? '<p class="note-warn">Las fechas del viaje cambiaron. Toca “Regenerar desde la confirmación” para ajustar los días.</p>' : ''}
+    ${t.confirmation ? '' : '<p class="muted-note">Tip: completa la Confirmación de servicios (vuelos, hotel, traslados) y el itinerario se llena solo.</p>'}
+    <div id="itDays">${days.map(dayHtml).join('')}</div>
+    <div class="modal-actions"><button type="button" class="btn secondary" id="itRegen">↺ Regenerar desde la confirmación</button><button type="button" class="btn secondary close">Cerrar</button><button type="button" class="btn primary" id="itSave">Guardar itinerario</button></div>
+  </div>`, { wide: true });
+  paintVouchers();
+  const body = $('#modalBody');
+  body.oninput = (e) => { const row = e.target.closest('[data-i]'); if (row && e.target.dataset.f) days[Number(row.dataset.i)][e.target.dataset.f] = e.target.value; };
+  body.onclick = async (e) => {
+    const del = e.target.closest('[data-it-del]');
+    if (!del) return;
+    if (!confirm('¿Quitar este documento del itinerario?')) return;
+    try { vouchers = (await send('DELETE', `/api/trips/${t.id}/vouchers/${del.dataset.itDel}`)).vouchers; paintVouchers(); toast('Documento quitado'); } catch (error) { toast(error.message); }
+  };
+  $('#itCopy').onclick = async () => { try { await navigator.clipboard.writeText(share.url); } catch { $('#itUrl').select(); document.execCommand('copy'); } toast('Liga copiada'); };
+  if ($('#itWa')) $('#itWa').onclick = async () => { await loadAll(); waModal({ clientId: t.client_id, tripId: t.id, quoteId: t.quote_id || '', stage: 'cierre', templateId: 'ci5' }); };
+  $('#itOff').onclick = async () => {
+    if (!confirm('¿Desactivar la liga? El cliente ya no podrá abrir su itinerario; si la vuelves a activar se genera una nueva.')) return;
+    try { await send('POST', `/api/trips/${t.id}/share`, { enabled: false }); t.share_token = null; toast('Liga desactivada'); close(); } catch (error) { toast(error.message); }
+  };
+  $('#itFile').onchange = async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    for (const file of files) {
+      if (file.size > 4 * 1024 * 1024) { toast(`${file.name} pesa más de 4 MB`); continue; }
+      try {
+        const r = await fetch(`/api/trips/${t.id}/vouchers`, { method: 'POST', headers: { 'content-type': file.type, 'x-file-name': encodeURIComponent(file.name) }, body: file });
+        const out = await r.json();
+        if (!r.ok) throw new Error(out.error || 'No se pudo subir');
+        vouchers = out.vouchers; paintVouchers(); toast(`Subido: ${file.name}`);
+      } catch (error) { toast(`${file.name}: ${error.message}`, 6000); }
+    }
+  };
+  $('#itRegen').onclick = () => {
+    if (!confirm('¿Volver a armar el día por día con la confirmación del viaje? Se reemplazan los cambios que no hayas guardado.')) return;
+    days = auto().map((d) => ({ date: d.date, title: d.title, text: d.text, place: d.place || '' }));
+    $('#itDays').innerHTML = days.map(dayHtml).join('');
+  };
+  $('#itSave').onclick = async () => {
+    const ok = await mutate(() => send('PATCH', `/api/trips/${t.id}`, { itinerary: { days, updated_at: nowLocalStr() } }), 'Itinerario guardado');
+    if (ok) close();
+  };
 }
 
 /* ---------- TP-111 Duplicados ---------- */
@@ -3297,6 +3441,7 @@ document.addEventListener('click', (e) => {
   if ((el = hit('[data-new-followup-lead]'))) { followupModal(null, { leadId: Number(el.dataset.newFollowupLead), type: el.dataset.followupType }); return; }
   if ((el = hit('[data-new-lead-client]'))) { leadModal(null, Number(el.dataset.newLeadClient)); return; }
   if ((el = hit('[data-new-trip-client]'))) { tripModal(null, { clientId: Number(el.dataset.newTripClient) }); return; }
+  if ((el = hit('[data-itinerary]'))) { itineraryModal(Number(el.dataset.itinerary)); return; }
   if ((el = hit('[data-pay-plan]'))) { payPlanModal(Number(el.dataset.payPlan)); return; }
   if ((el = hit('[data-trip-from-quote]'))) { tripModal(null, { quoteId: Number(el.dataset.tripFromQuote) }); return; }
   if ((el = hit('[data-history]'))) { const [entity, id] = el.dataset.history.split(':'); historyModal(entity, Number(id)); return; }
@@ -3365,6 +3510,7 @@ $('#testMail').onclick = async () => {
 $('#exportLeads').onclick = () => exportModal('leads');
 $('#exportBtn').onclick = () => exportModal();
 $('#quoteSearch').oninput = (e) => { ui.quoteQuery = e.target.value; renderQuotes(); };
+$('#lostRange').onchange = () => renderLostReport();
 $('#clientSearch').oninput = (e) => { ui.clientQuery = e.target.value; renderClients(); };
 $('#funnelRange').onchange = (e) => { ui.funnelRange = e.target.value; renderDashboard(); };
 $('#globalSearch').onkeydown = (e) => {

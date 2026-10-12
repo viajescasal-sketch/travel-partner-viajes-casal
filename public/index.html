@@ -11,7 +11,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css?v=tp106" />
-    <link rel="stylesheet" href="/tp006.css?v=tp202" />
+    <link rel="stylesheet" href="/tp006.css?v=tp301" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -477,6 +477,11 @@
                 </div>
               </article>
             </div>
+            <article class="panel lost-report">
+              <div class="panel-head"><div><h3>Motivos de pérdida</h3><p class="panel-sub">Por qué se pierden las ventas, quién y de dónde</p></div>
+                <select id="lostRange" aria-label="Periodo"><option value="30">Últimos 30 días</option><option value="90" selected>Últimos 90 días</option><option value="365">Último año</option><option value="all">Todo</option></select></div>
+              <div id="lostReport"></div>
+            </article>
           </section>
           <section id="activity" class="page">
             <div class="heading">
@@ -828,7 +833,7 @@
         cursor: wait;
       }
     </style>
-    <script src="/docs/documents.js?v=tp201"></script>
-    <script src="/app.js?v=tp202"></script>
+    <script src="/docs/documents.js?v=tp301"></script>
+    <script src="/app.js?v=tp301"></script>
   </body>
 </html>

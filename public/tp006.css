@@ -560,3 +560,25 @@ body.dark .dupe-banner { background: rgba(246,185,59,.1); }
 .pp-due-item b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pp-due-item small{color:var(--muted);font-size:11px}.pp-due-item.late{border-color:#e9a3a3}.pp-due-item.late small{color:#b13e3e;font-weight:700}
 .pp-mp{display:grid;gap:4px;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.5}.pp-mp.on{background:#e8f7ef;color:#0f6247}.pp-mp.off{background:#fff5d9;color:#6b4a00}.pp-mp code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:5px;word-break:break-all}
 @media(max-width:640px){.pp-edit-head{display:none}.pp-edit-row{grid-template-columns:1fr 1fr;border:1px solid var(--border);border-radius:10px;padding:8px}.pp-edit-row input[data-f="link_url"]{grid-column:1/-1}.pp-sum b{font-size:15px}}
+
+/* TP-207: motivo de pérdida */
+.lost-box{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--bg)}.lost-title{margin:0 0 8px;font-weight:700;color:var(--text);font-size:13px}.lost-title small{font-weight:400;color:var(--muted);margin-left:6px}
+.lost-row{display:grid;grid-template-columns:1.4fr 1fr;gap:10px;margin-top:10px}
+.lost-report{margin-top:18px}.lost-report select{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:9px;padding:7px}
+.lost-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.lost-kpis div{background:var(--bg);border-radius:10px;padding:10px;text-align:center}.lost-kpis b{display:block;font-size:20px}.lost-kpis span{font-size:11px;color:var(--muted)}
+.lost-bars{display:grid;gap:8px}.lost-bar{display:grid;grid-template-columns:minmax(120px,210px) 1fr auto auto;gap:10px;align-items:center;font-size:12px}
+.lost-bar i{display:block;height:12px;background:var(--bg);border-radius:8px;overflow:hidden}.lost-bar em{display:block;height:100%;background:linear-gradient(90deg,var(--coral),#e85d3c);border-radius:8px}.lost-bar small{color:var(--muted);min-width:70px;text-align:right}
+.lost-tables{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:16px}
+.lost-table{border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:12px}.lost-table>b{display:block;margin-bottom:6px}
+.lost-table>div{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:7px 0;border-top:1px solid var(--border)}.lost-table small{grid-column:1/-1;color:var(--muted)}
+.lost-list{margin-top:14px;font-size:12px}.lost-list summary{cursor:pointer;color:var(--teal);font-weight:700;margin-bottom:8px}.lost-list .lead-fup{width:100%}
+@media(max-width:640px){.lost-row{grid-template-columns:1fr}.lost-bar{grid-template-columns:1fr auto}.lost-bar i{grid-column:1/-1;order:3}.lost-bar small{display:none}}
+
+/* TP-301: itinerario digital */
+.it-acts{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 6px}
+.it-h{margin:18px 0 8px;font-size:14px;color:var(--navy)}body.dark .it-h{color:#fff}.it-h small{font-weight:400;color:var(--muted)}
+.it-doc{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px;font-size:12px}.it-doc span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.it-doc small{color:var(--muted)}.it-doc span:last-child{display:flex;gap:10px;flex-shrink:0}
+.it-upload{display:inline-block;cursor:pointer;margin-top:4px}
+#itDays{display:grid;gap:10px}.it-day{display:grid;gap:6px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--bg)}
+.it-day-head{display:flex;gap:8px;align-items:baseline;font-size:12px}.it-day-head b{color:var(--teal)}.it-day-head span{color:var(--muted);text-transform:capitalize}
+.it-day input,.it-day textarea{width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px}.it-day textarea{resize:vertical}
