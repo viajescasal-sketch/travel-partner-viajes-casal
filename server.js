@@ -24,6 +24,7 @@ const { createPublicQuote } = require('./src/public-quote');
 const { createAssignment, createAssignmentRouter } = require('./src/assignment');
 const { createReminders, createRemindersRouter } = require('./src/reminders');
 const { createPayments } = require('./src/payments');
+const { createItinerary } = require('./src/itinerary');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -262,7 +263,10 @@ async function createApp(options = {}) {
   const calendarFeed = createCalendarFeed(dataStore, process.env);
   app.use(calendarFeed.publicRouter);
   // TP-110: liga privada de la cotización para el cliente (sin sesión).
-  app.use(createPublicQuote(dataStore, assignment, { publicDirectory }));
+  app.use(createPublicQuote(dataStore, assignment, { publicDirectory, payments, env: process.env }));
+  // TP-301: itinerario digital para el celular (sin sesión).
+  const itinerary = createItinerary(dataStore, { publicDirectory, env: process.env });
+  app.use(itinerary.publicRouter);
   app.use('/api', authenticate);
   // Si el servidor estuvo dormido a la hora del respaldo, se revisa al primer uso (máximo cada 5 minutos).
   let lastBackupCheck = 0;
@@ -291,6 +295,7 @@ async function createApp(options = {}) {
   app.use('/api', createRemindersRouter(dataStore, reminders, { requireRole }));
   app.use('/api', calendarFeed.apiRouter);
   app.use('/api', payments.apiRouter);
+  app.use('/api', itinerary.apiRouter);
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');
