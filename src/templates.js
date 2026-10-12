@@ -15,7 +15,8 @@ const STAGES = [
 const VARIABLES = [
   ['nombre', 'Primer nombre del cliente'], ['nombre_completo', 'Nombre completo'], ['destino', 'Destino'], ['fechas', 'Fechas del viaje'],
   ['viajeros', 'Número de viajeros'], ['folio', 'Folio de la cotización'], ['hotel', 'Hotel o paquete'], ['precio', 'Precio de la cotización'],
-  ['vigencia', 'Vigencia de la cotización'], ['liga_cotizacion', 'Liga privada para ver la cotización'], ['vendedor', 'Tu nombre'], ['agencia', 'Nombre de la agencia'], ['liga_resenas', 'Liga para dejar reseña']
+  ['vigencia', 'Vigencia de la cotización'], ['liga_cotizacion', 'Liga privada para ver la cotización'], ['vendedor', 'Tu nombre'], ['agencia', 'Nombre de la agencia'], ['liga_resenas', 'Liga para dejar reseña'],
+  ['liga_pago', 'Liga de pago del cliente (plan de pagos)'], ['concepto_pago', 'Siguiente pago: Anticipo, Pago 2…'], ['monto_pago', 'Monto del siguiente pago'], ['fecha_pago', 'Fecha límite del siguiente pago'], ['saldo', 'Saldo pendiente total']
 ];
 
 const DEFAULT_TEMPLATES = [
@@ -25,6 +26,8 @@ const DEFAULT_TEMPLATES = [
   { id: 'se1', stage: 'seguimiento', name: '¿Pudiste revisarla?', body: 'Hola {nombre} 😊 ¿Pudiste revisar la cotización de {destino}? Si quieres cambiar fechas, hotel o presupuesto, lo ajustamos sin problema.' },
   { id: 'se2', stage: 'seguimiento', name: 'Vigencia por terminar', body: 'Hola {nombre}, te aviso que los precios de tu cotización {folio} para {destino} están vigentes hasta {vigencia}. ¿Quieres que te ayude a apartarlo antes de que cambien? 🙌' },
   { id: 'ci1', stage: 'cierre', name: 'Apartar el viaje', body: '¡Qué emoción, {nombre}! 🎉 Para apartar tu viaje a {destino} ({fechas}) solo necesito el anticipo. Te paso los datos de pago y en cuanto lo recibamos te envío tu confirmación.' },
+  { id: 'ci3', stage: 'cierre', name: 'Liga para apartar', body: '¡Qué emoción, {nombre}! 🎉 Para apartar tu viaje a {destino} el anticipo es de {monto_pago} y la fecha límite es el {fecha_pago}.\n\nAquí puedes pagarlo y ver tu plan de pagos: {liga_pago}\n\nEn cuanto se refleje te envío tu confirmación ✈️' },
+  { id: 'ci4', stage: 'cierre', name: 'Recordatorio de pago', body: 'Hola {nombre} 😊 Te recuerdo que tu {concepto_pago} de {monto_pago} para tu viaje a {destino} vence el {fecha_pago}.\n\nAquí puedes pagarlo y ver lo que llevas abonado: {liga_pago}\n\nSi ya lo realizaste, mándame tu comprobante por aquí. ¡Gracias!' },
   { id: 'ci2', stage: 'cierre', name: 'Reserva confirmada', body: '¡Listo, {nombre}! ✅ Tu viaje a {destino} del {fechas} quedó confirmado. Te comparto tu confirmación de servicios. Cualquier duda, aquí estoy.' },
   { id: 'pv1', stage: 'postviaje', name: '¿Cómo te fue?', body: '¡Bienvenido de vuelta, {nombre}! 🌴 ¿Qué tal estuvo {destino}? Me encantaría saber cómo te fue.' },
   { id: 'pv2', stage: 'postviaje', name: 'Pedir reseña', body: 'Gracias por viajar con {agencia}, {nombre} 💙 Si te gustó el servicio, ¿nos regalas una reseña? Nos ayuda muchísimo: {liga_resenas}' }
@@ -50,12 +53,18 @@ function sanitizeTemplates(input) {
   });
   const reviewLink = text(input?.reviewLink, 300);
   if (reviewLink && !/^https:\/\/\S+$/i.test(reviewLink)) throw new ValidationError('La liga de reseñas debe empezar con https://');
-  return { templates, reviewLink };
+  return { templates, reviewLink, known: DEFAULT_TEMPLATES.map((t) => t.id) };
 }
 
+// Plantillas que se agregaron después (TP-202): aparecen también en listas ya personalizadas,
+// a menos que el administrador las haya borrado después de verlas.
+const ORIGINAL_IDS = ['pc1', 'pc2', 'co1', 'se1', 'se2', 'ci1', 'ci2', 'pv1', 'pv2'];
 function readTemplates(saved) {
   if (!saved || !Array.isArray(saved.templates)) return { templates: DEFAULT_TEMPLATES, reviewLink: saved?.reviewLink || '', custom: false };
-  return { templates: saved.templates, reviewLink: saved.reviewLink || '', custom: true };
+  const known = new Set(Array.isArray(saved.known) ? saved.known : ORIGINAL_IDS);
+  const have = new Set(saved.templates.map((t) => t.id));
+  const added = DEFAULT_TEMPLATES.filter((t) => !known.has(t.id) && !have.has(t.id));
+  return { templates: [...saved.templates, ...added], reviewLink: saved.reviewLink || '', custom: true };
 }
 
 module.exports = { STAGES, VARIABLES, DEFAULT_TEMPLATES, sanitizeTemplates, readTemplates };

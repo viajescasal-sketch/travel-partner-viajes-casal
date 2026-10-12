@@ -57,7 +57,7 @@ function translateDbError(error) {
   return error;
 }
 
-function createCrmRouter(dataStore, { requireRole, assignment = null }) {
+function createCrmRouter(dataStore, { requireRole, assignment = null, payments = null }) {
   const router = express.Router();
   const adminOnly = requireRole('admin');
 
@@ -184,6 +184,10 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
         if (updated && req) await audit(req, 'update', 'leads', lead, updated, { note: `Automático por la cotización ${quote.folio}` });
       }
     }
+    // TP-201: al aceptarse se arma el plan de pagos (anticipo + parcialidades) y la liga de pago.
+    if (payments && quote.status === 'Aceptada' && !quote.payment_plan) {
+      try { quote = await payments.ensurePlan(quote); } catch (error) { console.error('Plan de pagos:', error.message); }
+    }
     return quote;
   }
 
@@ -198,6 +202,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
       documents: { ...DEFAULT_DOCUMENTS, ...(await dataStore.getSetting('documents') || {}) },
       leadQuestions: normalizeQuestions(Array.isArray(questions) ? questions : DEFAULT_LEAD_QUESTIONS),
       scoring: cleanScoring(await dataStore.getSetting('lead_scoring')),
+      payments: payments ? { ...(await payments.settings()), mercadoPago: payments.mercadoPago.configured } : null,
       reminders: (({ enabled, contactHours, quoteHours, workStart, workEnd }) => ({ enabled, contactHours, quoteHours, workStart, workEnd }))(reminderConfig(await dataStore.getSetting('reminders')))
     };
   }
@@ -403,7 +408,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null }) {
   router.post('/quotes/:id/duplicate', requireWrite('quotes'), wrap(async (req, res) => {
     const ctx = await context(req);
     const source = ctx.mustSee('quotes', parseId(req.params.id));
-    const { id, folio, accepted_at, sent_at, reminder_at, owner_id, created_at, updated_at, ...rest } = source;
+    const { id, folio, accepted_at, sent_at, reminder_at, owner_id, created_at, updated_at, share_token, viewed_at, view_count, payment_plan, pay_token, ...rest } = source;
     const record = await insertQuote({ ...rest, status: 'Borrador', accepted_at: null }, owner_id ?? ctx.user.id);
     await audit(req, 'duplicate', 'quotes', null, record, { note: `Copia de ${source.folio}` });
     res.status(201).json({ ok: true, record });

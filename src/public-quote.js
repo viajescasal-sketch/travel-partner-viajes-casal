@@ -33,7 +33,7 @@ function createPublicQuote(dataStore, assignment, { publicDirectory }) {
     const client = await dataStore.getRecord('clients', quote.client_id);
     const lead = quote.lead_id ? await dataStore.getRecord('leads', quote.lead_id) : null;
     const seller = await dataStore.findUserById(quote.owner_id || lead?.owner_id);
-    const { share_token, view_count, viewed_at, reminder_at, sent_at, owner_id, ...safeQuote } = quote;
+    const { share_token, view_count, viewed_at, reminder_at, sent_at, owner_id, payment_plan, pay_token, ...safeQuote } = quote;
     const payload = {
       ok: true,
       public: true,
@@ -42,6 +42,9 @@ function createPublicQuote(dataStore, assignment, { publicDirectory }) {
       lead: lead ? { id: lead.id, destination: lead.destination, start_date: lead.start_date, end_date: lead.end_date, travelers: lead.travelers } : null,
       seller: sellerInfo(seller),
       canEdit: false,
+      // TP-201: si ya se aceptó, botón para pagar el anticipo / ver su plan de pagos
+      payUrl: quote.status === 'Aceptada' && pay_token && payment_plan ? `/pagar/${pay_token}` : null,
+      payLabel: payment_plan ? (payment_plan.paid > 0 ? 'Ver mi plan de pagos' : 'Pagar mi anticipo') : null,
       agency: { ...DEFAULT_AGENCY, ...((await dataStore.getSetting('agency')) || {}) },
       documents: { ...DEFAULT_DOCUMENTS, ...((await dataStore.getSetting('documents')) || {}) }
     };

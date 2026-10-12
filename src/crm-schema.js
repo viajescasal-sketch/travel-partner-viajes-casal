@@ -75,7 +75,10 @@ const ENTITIES = {
       // TP-110: liga privada para que el cliente vea la cotización
       share_token: { type: 'string', max: 48, internal: true },
       viewed_at: { type: 'datetime', internal: true },
-      view_count: { type: 'int', internal: true }
+      view_count: { type: 'int', internal: true },
+      // TP-201/202: plan de pagos y liga de pago para el cliente
+      payment_plan: { type: 'json', max: 40000, internal: true },
+      pay_token: { type: 'string', max: 48, internal: true }
     }
   },
   trips: {
