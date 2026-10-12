@@ -145,6 +145,7 @@ async function loadAll() {
     db.documents = data.settings?.documents || {};
     db.leadQuestions = data.settings?.leadQuestions || [];
     db.reminders = data.settings?.reminders || null;
+    db.payments = data.settings?.payments || null;
     db.me = data.me || null;
     loaded = true;
     renderAll();
@@ -482,7 +483,7 @@ function startBell() {
   refreshBell();
   bell.timer = setInterval(() => { if (!document.hidden) refreshBell(); }, 60000);
 }
-const BELL_ICONS = { assigned: '🎯', lead: '🎯', lead_update: '🔄', new_lead: '🆕', reminder: '⏰', contact_alert: '⏰', contact_escalation: '⚠', quote_viewed: '👀', payment: '💰', followup_overdue: '⏰' };
+const BELL_ICONS = { assigned: '🎯', lead: '🎯', lead_update: '🔄', new_lead: '🆕', reminder: '⏰', contact_alert: '⏰', contact_escalation: '⚠', quote_viewed: '👀', payment: '💰', followup_overdue: '⏰', payment_due: '💳', payment_overdue: '⚠' };
 function renderBellPanel() {
   const panel = $('#bellPanel');
   panel.innerHTML = `<div class="bell-head"><b>Avisos</b>${bell.unread ? '<button type="button" class="link" id="bellReadAll">Marcar todo como leído</button>' : ''}</div>
@@ -516,6 +517,7 @@ $('#bellPanel').addEventListener('click', async (e) => {
     const id = Number(linkId);
     const open = () => {
       if (linkType === 'quote' && quoteById(id)) { navigate('quotes'); quoteModal(id); return true; }
+      if (linkType === 'payplan' && quoteById(id)) { navigate('quotes'); payPlanModal(id); return true; }
       if (linkType === 'client' && clientById(id)) { navigate('clients'); clientFile(id); return true; }
       if (linkType === 'followup' && followupById(id)) { navigate('followups'); followupModal(id); return true; }
       return false;
@@ -602,7 +604,7 @@ async function renderReminders() {
     $('#remRun').onclick = async () => {
       try {
         const r = (await send('POST', '/api/reminders/run')).result;
-        const total = r.quotes + r.contact + r.escalated;
+        const total = r.quotes + r.contact + r.escalated + (r.payments || 0);
         toast(total ? `Se enviaron ${total} avisos` : 'Revisado: no hay pendientes');
         await loadAll(); renderReminders(); refreshBell();
       } catch (error) { toast(error.message); }
@@ -702,8 +704,9 @@ function renderQuotes() {
   const list = db.quotes.filter((x) => !q || [x.folio, clientName(x.client_id), x.hotel, x.destination, x.status].join(' ').toLowerCase().includes(q));
   const editable = canWrite('quotes');
   $('#multiSend').classList.toggle('hidden', !editable);
+  renderPayDue();
   $('#quoteGrid').innerHTML = list.length ? list.map((x) =>
-    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span>${x.status === 'Enviada' && x.reminder_at ? '<span class="contact-chip late" title="Se programó un seguimiento automático">⏰ Sin respuesta</span>' : ''}${x.viewed_at ? `<span class="contact-chip seen" title="El cliente abrió la liga ${x.view_count || 1} ${Number(x.view_count) === 1 ? 'vez' : 'veces'}">👀 Vista</span>` : ''}<h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Ver PDF</button>${editable ? `<button class="btn secondary small" data-share-quote="${x.id}" title="Liga privada para el cliente">🔗 Liga</button><button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
+    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span>${x.status === 'Enviada' && x.reminder_at ? '<span class="contact-chip late" title="Se programó un seguimiento automático">⏰ Sin respuesta</span>' : ''}${x.viewed_at ? `<span class="contact-chip seen" title="El cliente abrió la liga ${x.view_count || 1} ${Number(x.view_count) === 1 ? 'vez' : 'veces'}">👀 Vista</span>` : ''}<h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}${payStrip(x)}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Ver PDF</button>${editable ? `<button class="btn secondary small" data-share-quote="${x.id}" title="Liga privada para el cliente">🔗 Liga</button><button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
     : `<p class="empty-note">${db.quotes.length ? 'Ninguna cotización coincide con la búsqueda.' : 'Aún no hay cotizaciones. Crea la primera con “+ Nueva cotización”.'}</p>`;
 }
 
@@ -1326,7 +1329,7 @@ function quoteModal(id, preset = {}) {
         ${det.proposals.map((p, i) => proposalHtml(det, p, i)).join('')}
         ${det.proposals.length < 4 ? '<div class="cz-add"><button type="button" class="btn secondary small" data-add-prop>+ Agregar otra propuesta (hasta 4)</button></div>' : ''}
       </section>`}
-      ${quote?.status === 'Aceptada' ? `<div class="quick-actions"><button type="button" class="btn secondary small" data-trip-from-quote="${quote.id}">Crear viaje con esta cotización</button></div>` : ''}
+      ${quote?.status === 'Aceptada' ? `<div class="quick-actions"><button type="button" class="btn secondary small" data-pay-plan="${quote.id}">💳 Plan de pagos y liga</button><button type="button" class="btn secondary small" data-trip-from-quote="${quote.id}">Crear viaje con esta cotización</button></div>` : ''}
       ${quote ? historyButton('quotes', quote.id) : ''}
       ${deleteBlock('cotización', quote?.id)}
       <div class="cz-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="button" class="btn secondary" data-save="0">${quote ? 'Guardar cambios' : 'Guardar cotización'}</button><button type="button" class="btn coral-btn" data-save="1">Guardar y ver PDF</button></div>
@@ -1665,6 +1668,12 @@ function suggestedStage({ lead, trip }) {
   if (trip) return 'cierre';
   return { Nuevo: 'primer_contacto', Calificado: 'cotizacion', Cotizado: 'seguimiento', 'Negociación': 'cierre', Vendido: 'cierre', Perdido: 'seguimiento' }[lead?.stage] || 'primer_contacto';
 }
+// TP-202: datos del siguiente pago para las plantillas.
+function payVars(quote) {
+  const plan = planOf(quote);
+  const n = nextInst(plan);
+  return { liga_pago: plan ? payUrlOf(quote) : '', concepto_pago: n ? n.label.toLowerCase() : '', monto_pago: n ? money(instLeft(n)) : '', fecha_pago: n ? fmtLongRange(n.due) : '', saldo: plan ? money(plan.balance) : '' };
+}
 function templateVars({ client, lead, quote, trip }) {
   const first = String(client?.name || '').trim().split(/\s+/)[0] || '';
   const dates = trip ? fmtLongRange(trip.start_date, trip.end_date) : lead?.start_date ? fmtLongRange(lead.start_date, lead.end_date) : '';
@@ -1673,7 +1682,8 @@ function templateVars({ client, lead, quote, trip }) {
     fechas: dates, viajeros: lead?.travelers ? String(lead.travelers) : '', folio: quote?.folio || '', hotel: quote?.hotel || '',
     precio: quote ? `${money(quote.price)}${quote.mode && quote.mode !== 'Total' ? ` ${quote.mode.toLowerCase()}` : ''}` : '',
     vigencia: quote?.valid_until ? fmtLongRange(quote.valid_until) : '', vendedor: String(currentUser?.name || '').trim(),
-    agencia: db.agency?.name || 'Viajes Casal', liga_resenas: db.templates?.reviewLink || '', liga_cotizacion: quote ? db.shareUrls?.[quote.id] || '' : ''
+    agencia: db.agency?.name || 'Viajes Casal', liga_resenas: db.templates?.reviewLink || '', liga_cotizacion: quote ? db.shareUrls?.[quote.id] || '' : '',
+    ...payVars(quote)
   };
 }
 // Reemplaza {variable}; lo que falta queda como [variable] para que el vendedor lo complete.
@@ -1771,7 +1781,7 @@ async function waModal(preset = {}) {
     if (state.templateId && !edited) { const keep = state.templateId; state.templateId = ''; apply(keep); } else paintList();
   };
   paintList();
-  const first = tpl.templates.find((t) => t.stage === state.stage);
+  const first = (preset.templateId && tpl.templates.find((t) => t.id === preset.templateId && t.stage === state.stage)) || tpl.templates.find((t) => t.stage === state.stage);
   if (first) apply(first.id); else paintMissing();
 
   async function record(channel) {
@@ -1913,6 +1923,7 @@ async function clientFile(id, opts = {}) {
     <div class="c360-tabs"><button type="button" data-c360-tab="timeline">Línea de tiempo</button><button type="button" data-c360-tab="data">Datos del cliente</button></div>
     <section class="c360-pane" data-pane="timeline">
       ${c.notes || c.tags ? `<div class="c360-pinned">${c.tags ? `<div class="tags">${String(c.tags).split(',').map((t) => t.trim()).filter(Boolean).map((t) => `<span>${escapeHtml(t)}</span>`).join('')}</div>` : ''}${c.notes ? `<p>📌 ${escapeHtml(c.notes)}</p>` : ''}</div>` : ''}
+      ${payPlanSummaryHtml(c.id)}
       ${upcoming.length ? `<div class="c360-next"><b>Próximos pasos</b>${upcoming.map((f) => `<button type="button" class="lead-fup${isLateFollowup(f) ? ' late' : ''}" data-followup="${f.id}"><span>${FOLLOWUP_ICONS[f.type] || ''} ${escapeHtml(f.title)}</span><small>${escapeHtml(fmtDue(f.due_at))}</small></button>`).join('')}</div>` : ''}
       <div class="c360-filters">${TL_FILTERS.map(([k, label]) => `<button type="button" class="chip-btn" data-tl-filter="${k}">${label}</button>`).join('')}</div>
       <div class="c360-timeline" id="c360Timeline"></div>
@@ -2063,6 +2074,224 @@ async function shareModal(quoteId) {
     if (!confirm('¿Desactivar la liga? El cliente ya no podrá abrirla; si la vuelves a activar se genera una nueva.')) return;
     try { await send('POST', `/api/quotes/${q.id}/share`, { enabled: false }); delete db.shareUrls[q.id]; toast('Liga desactivada'); close(); } catch (error) { toast(error.message); }
   };
+}
+
+/* ---------- TP-201/202: plan de pagos y liga de pago ---------- */
+const payUrlOf = (q) => (q?.pay_token ? `${location.origin}/pagar/${q.pay_token}` : '');
+const planOf = (q) => (q?.status === 'Aceptada' && q.payment_plan ? q.payment_plan : null);
+const nextInst = (plan) => plan?.installments?.find((i) => i.status !== 'pagado') || null;
+const daysTo = (iso) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse(`${todayStr()}T00:00:00Z`)) / 86400000);
+const instLeft = (i) => Math.round((Number(i.amount) - Number(i.paid || 0)) * 100) / 100;
+function dueText(i) {
+  if (i.status === 'pagado') return 'Pagado';
+  const d = daysTo(i.due);
+  return d < 0 ? `venció hace ${-d} ${d === -1 ? 'día' : 'días'}` : d === 0 ? 'vence hoy' : d === 1 ? 'vence mañana' : `vence en ${d} días`;
+}
+function instChip(i) {
+  if (i.status === 'pagado') return '<span class="pp-chip ok">Pagado ✓</span>';
+  const d = daysTo(i.due);
+  const cls = d < 0 ? 'late' : d <= 3 ? 'soon' : 'wait';
+  return `${i.pending ? '<span class="pp-chip soon">⏳ En proceso</span>' : ''}${i.status === 'parcial' ? `<span class="pp-chip part">Abonado ${money(i.paid)}</span>` : ''}<span class="pp-chip ${cls}">${escapeHtml(dueText(i))}</span>`;
+}
+// Tira de cobro en la tarjeta de la cotización aceptada
+function payStrip(q) {
+  if (q.status !== 'Aceptada') return '';
+  const plan = planOf(q);
+  if (!plan) return canWrite('quotes') ? `<button type="button" class="pay-strip empty" data-pay-plan="${q.id}">💳 Armar plan de pagos y liga</button>` : '';
+  const pct = plan.total ? Math.min(100, Math.round((plan.paid / plan.total) * 100)) : 0;
+  const n = nextInst(plan);
+  const late = n && daysTo(n.due) < 0;
+  return `<button type="button" class="pay-strip${late ? ' late' : ''}" data-pay-plan="${q.id}" title="Plan de pagos"><span class="pay-bar"><i style="width:${pct}%"></i></span><span class="pay-line"><b>💳 ${money(plan.paid)}</b> de ${money(plan.total)}</span><small>${n ? `${escapeHtml(n.label)} ${money(instLeft(n))} · ${escapeHtml(dueText(n))}` : '✅ Liquidado'}</small></button>`;
+}
+// Cobros vencidos y de los próximos 7 días (página de cotizaciones)
+function renderPayDue() {
+  const box = $('#payDue');
+  if (!box) return;
+  const rows = [];
+  db.quotes.forEach((q) => { const plan = planOf(q); (plan?.installments || []).forEach((i) => { if (i.status !== 'pagado' && daysTo(i.due) <= 7) rows.push({ q, i }); }); });
+  rows.sort((a, b) => a.i.due.localeCompare(b.i.due));
+  box.classList.toggle('hidden', !rows.length);
+  if (!rows.length) { box.innerHTML = ''; return; }
+  const total = rows.reduce((s, r) => s + instLeft(r.i), 0);
+  box.innerHTML = `<div class="pp-due-head"><b>💳 Por cobrar esta semana</b><span>${rows.length} ${rows.length === 1 ? 'pago' : 'pagos'} · ${money(total)}</span></div><div class="pp-due-list">${rows.slice(0, 8).map(({ q, i }) => `<button type="button" class="pp-due-item${daysTo(i.due) < 0 ? ' late' : ''}" data-pay-plan="${q.id}"><b>${escapeHtml(clientName(q.client_id))}</b><span>${escapeHtml(i.label)} · ${money(instLeft(i))}</span><small>${escapeHtml(fmtDate(i.due))} · ${escapeHtml(dueText(i))}</small></button>`).join('')}</div>`;
+}
+function payPlanSummaryHtml(clientId) {
+  const list = db.quotes.filter((q) => q.client_id === clientId && planOf(q));
+  if (!list.length) return '';
+  return `<div class="c360-next"><b>Planes de pago</b>${list.map((q) => { const p = q.payment_plan; const n = nextInst(p); return `<button type="button" class="lead-fup${n && daysTo(n.due) < 0 ? ' late' : ''}" data-pay-plan="${q.id}"><span>💳 ${escapeHtml(q.folio)} · ${money(p.paid)} de ${money(p.total)}</span><small>${n ? `${escapeHtml(n.label)} ${money(instLeft(n))} · ${escapeHtml(fmtDate(n.due))}` : '✅ Liquidado'}</small></button>`; }).join('')}</div>`;
+}
+
+async function payPlanModal(quoteId, opts = {}) {
+  let q = quoteById(quoteId);
+  if (!q) return;
+  if (q.status !== 'Aceptada') { toast('El plan de pagos se arma cuando la cotización está Aceptada'); return; }
+  const write = canWrite('quotes');
+  if (!q.payment_plan) {
+    if (!write) { toast('Esta venta aún no tiene plan de pagos'); return; }
+    try { await send('POST', `/api/quotes/${q.id}/payment-plan`, {}); await loadAll(); q = quoteById(quoteId); } catch (error) { toast(error.message); return; }
+  }
+  const plan = q.payment_plan;
+  const url = payUrlOf(q);
+  const client = clientById(q.client_id);
+  const pct = plan.total ? Math.min(100, Math.round((plan.paid / plan.total) * 100)) : 0;
+  const cfg = db.payments || {};
+  const how = cfg.mercadoPago
+    ? '✅ El cliente puede pagar en línea con <b>Mercado Pago</b> (tarjeta, OXXO o SPEI) y el pago se registra solo.'
+    : cfg.bank?.clabe || cfg.bank?.cuenta
+      ? 'La liga muestra los datos de transferencia de la agencia. Cuando el cliente te mande su comprobante, toca <b>Registrar pago</b>.'
+      : '⚠ Aún no hay forma de pago en la liga: pega una liga (Clip u otra) al editar el plan, o configura los datos bancarios en <b>Configuración › Cobros</b>.';
+  if (opts.edit && write) return payPlanEditor(q);
+  const rows = plan.installments.map((i) => `<div class="pp-row${i.status === 'pagado' ? ' done' : ''}">
+      <div class="pp-main"><b>${escapeHtml(i.label)}</b> ${instChip(i)}<small>Fecha límite: ${escapeHtml(fmtDate(i.due))}${i.link_url ? ' · con liga manual' : ''}${(i.payments || []).length ? ` · ${i.payments.map((p) => `${money(p.amount)} ${escapeHtml(p.method)}${p.provider ? ' (en línea)' : ''} el ${escapeHtml(fmtDate(String(p.at).slice(0, 10)))}`).join(', ')}` : ''}</small></div>
+      <div class="pp-amt">${money(i.amount)}</div>
+      <div class="pp-acts">${write && i.status !== 'pagado' ? `<button type="button" class="btn primary small" data-pp-pay="${i.id}">Registrar pago</button>${client?.phone ? `<button type="button" class="btn secondary small" data-pp-remind="${i.id}">💬 Recordar</button>` : ''}` : ''}${isAdmin() && (i.payments || []).length ? `<button type="button" class="link danger-link" data-pp-undo="${i.id}" title="Deshacer el último pago">Deshacer</button>` : ''}</div>
+    </div>`).join('');
+  openModal('PLAN DE PAGOS', `${q.folio} · ${client?.name || ''}`, `<div class="pp">
+    <div class="pp-sum"><div><span>Total</span><b>${money(plan.total)}</b></div><div><span>Pagado</span><b>${money(plan.paid)}</b></div><div class="${plan.balance > 0.5 ? 'warn' : 'ok'}"><span>Saldo</span><b>${money(plan.balance)}</b></div></div>
+    <div class="pay-bar big"><i style="width:${pct}%"></i></div>
+    <label class="gcal-url">Liga de pago para el cliente<span><input id="ppUrl" readonly value="${escapeHtml(url)}"><button type="button" class="btn secondary small" id="ppCopy">Copiar</button></span></label>
+    <p class="muted-note">${how} La liga muestra su plan, lo que lleva pagado y el siguiente pago. Las plantillas “Liga para apartar” y “Recordatorio de pago” la incluyen con <b>{liga_pago}</b>.</p>
+    <div class="pp-list">${rows}</div>
+    <p class="muted-note">🔔 Recordatorios automáticos: ${Number(cfg.reminderDays ?? 3)} días antes y el día de cada vencimiento te llega un aviso (y un seguimiento “Pago” en tu calendario)${cfg.emailClient !== false ? '; si el cliente tiene correo, también le llega un recordatorio con la liga' : ''}. Si se vence, se avisa también al administrador.</p>
+    <div class="modal-actions">${write ? '<button type="button" class="btn secondary" id="ppEdit">✎ Editar plan</button>' : ''}<a class="btn secondary" href="${escapeHtml(url)}" target="_blank" rel="noopener">Ver como cliente</a>${write && client?.phone && nextInst(plan) ? '<button type="button" class="btn primary" id="ppSend">💬 Enviar liga por WhatsApp</button>' : '<button type="button" class="btn primary close">Listo</button>'}</div>
+  </div>`, { wide: true });
+  $('#ppCopy').onclick = async () => { try { await navigator.clipboard.writeText(url); } catch { $('#ppUrl').select(); document.execCommand('copy'); } toast('Liga copiada'); };
+  const remind = (instId) => {
+    const anticipoPending = plan.installments[0]?.status !== 'pagado' && (!instId || instId === plan.installments[0].id);
+    waModal({ clientId: q.client_id, leadId: q.lead_id || '', quoteId: q.id, stage: 'cierre', templateId: anticipoPending ? 'ci3' : 'ci4' });
+  };
+  if ($('#ppSend')) $('#ppSend').onclick = () => remind(nextInst(plan)?.id);
+  if ($('#ppEdit')) $('#ppEdit').onclick = () => payPlanEditor(q);
+  $('#modalBody').onclick = async (e) => {
+    const pay = e.target.closest('[data-pp-pay]');
+    if (pay) { registerPayModal(q.id, pay.dataset.ppPay); return; }
+    const rem = e.target.closest('[data-pp-remind]');
+    if (rem) { remind(rem.dataset.ppRemind); return; }
+    const undo = e.target.closest('[data-pp-undo]');
+    if (undo) {
+      if (!confirm('¿Deshacer el último pago de esta parcialidad? También se quita de la ficha 360.')) return;
+      const ok = await mutate(() => send('POST', `/api/quotes/${q.id}/payment-plan/${undo.dataset.ppUndo}/undo`), 'Pago deshecho');
+      if (ok) payPlanModal(q.id);
+    }
+  };
+}
+
+function registerPayModal(quoteId, instId) {
+  const q = quoteById(quoteId);
+  const inst = q?.payment_plan?.installments.find((i) => i.id === instId);
+  if (!inst) return;
+  openModal('REGISTRAR PAGO', `${inst.label} · ${q.folio}`, `<form class="modal-form">
+    ${field('Monto recibido (MXN)*', `<input name="amount" inputmode="decimal" required value="${instLeft(inst)}">`)}
+    ${field('Forma de pago', `<select name="method">${options(PAY_METHODS, 'Transferencia')}</select>`)}
+    ${field('Fecha del pago', `<input name="date" type="date" max="${todayStr()}" value="${todayStr()}">`)}
+    ${field('Nota (opcional)', '<input name="note" maxlength="300" placeholder="Folio del comprobante, banco…">')}
+    <p class="full muted-note">Queda en la ficha 360 del cliente, se actualiza la liga de pago y la confirmación del viaje, y se avisa al administrador${db.payments?.emailClient !== false && clientById(q.client_id)?.email ? '. El cliente recibe su recibo por correo' : ''}.</p>
+    <div class="modal-actions"><button type="button" class="btn secondary" id="ppBack">Volver</button><button type="submit" class="btn primary">Registrar pago</button></div></form>`);
+  $('#ppBack').onclick = () => payPlanModal(q.id);
+  const form = $('#modalBody form');
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const v = formValues(form);
+    const amount = Number(String(v.amount).replace(/[^\d.]/g, ''));
+    if (!(amount > 0)) { toast('Escribe el monto'); return; }
+    if (amount > instLeft(inst) + 0.5 && !confirm(`El monto es mayor a lo que falta de ${inst.label} (${money(instLeft(inst))}). ¿Registrarlo de todos modos?`)) return;
+    const ok = await mutate(() => send('POST', `/api/quotes/${q.id}/payment-plan/${inst.id}/pay`, { amount, method: v.method, date: v.date, note: v.note }), `Pago registrado: ${money(amount)}`);
+    if (ok) payPlanModal(q.id);
+  };
+}
+
+function payPlanEditor(q) {
+  const plan = q.payment_plan;
+  const rows = plan.installments.map((i) => ({ ...i }));
+  const rowHtml = (i, idx) => `<div class="pp-edit-row" data-idx="${idx}">
+      <input data-f="label" maxlength="40" value="${escapeHtml(i.label)}" aria-label="Concepto">
+      <input data-f="due" type="date" value="${escapeHtml(i.due)}" aria-label="Fecha límite">
+      <input data-f="amount" inputmode="decimal" value="${escapeHtml(i.amount)}" aria-label="Monto">
+      <input data-f="link_url" maxlength="500" placeholder="Liga manual (Clip…) opcional" value="${escapeHtml(i.link_url || '')}" aria-label="Liga manual">
+      <button type="button" class="icon" data-pp-del="${idx}" title="${i.paid ? 'Tiene pagos: no se puede quitar' : 'Quitar pago'}"${i.paid ? ' disabled' : ''}>✕</button>
+    </div>`;
+  const paint = () => {
+    const sum = rows.reduce((s, r) => s + (Number(String(r.amount).replace(/[^\d.]/g, '')) || 0), 0);
+    const total = Number(String($('#ppTotal').value).replace(/[^\d.]/g, '')) || 0;
+    const diff = Math.round((total - sum) * 100) / 100;
+    $('#ppSum').className = `pp-sumline ${Math.abs(diff) <= 1 ? 'ok' : 'warn'}`;
+    $('#ppSum').textContent = Math.abs(diff) <= 1 ? `✓ Los pagos suman ${money(sum)}` : `Los pagos suman ${money(sum)} · ${diff > 0 ? `faltan ${money(diff)}` : `sobran ${money(-diff)}`}`;
+  };
+  openModal('PLAN DE PAGOS', `Editar · ${q.folio}`, `<div class="pp">
+    <div class="modal-form"><label>Total de la venta (MXN)<input id="ppTotal" inputmode="decimal" value="${escapeHtml(plan.total)}"></label><span></span></div>
+    <div class="pp-edit-head"><span>Concepto</span><span>Fecha límite</span><span>Monto</span><span>Liga manual</span><span></span></div>
+    <div id="ppRows">${rows.map(rowHtml).join('')}</div>
+    <div class="pp-edit-foot"><button type="button" class="btn secondary small" id="ppAdd">+ Agregar pago</button><span id="ppSum"></span></div>
+    <p class="muted-note">Lo ya pagado se conserva. Si cambias fecha o monto, los recordatorios de ese pago vuelven a programarse. La liga manual (Clip u otra) aparece en la liga del cliente como “Pagar con tarjeta”.</p>
+    <div class="modal-actions">${plan.paid ? '' : '<button type="button" class="btn secondary" id="ppRebuild" title="Volver a armarlo con el anticipo de la cotización">Rearmar desde la cotización</button>'}<button type="button" class="btn secondary" id="ppBack">Volver</button><button type="button" class="btn primary" id="ppSave">Guardar plan</button></div>
+  </div>`, { wide: true });
+  const body = $('#modalBody');
+  const repaint = () => { $('#ppRows').innerHTML = rows.map(rowHtml).join(''); paint(); };
+  body.oninput = (e) => {
+    const row = e.target.closest('[data-idx]');
+    if (row && e.target.dataset.f) rows[Number(row.dataset.idx)][e.target.dataset.f] = e.target.value;
+    paint();
+  };
+  body.onclick = (e) => {
+    const del = e.target.closest('[data-pp-del]');
+    if (del && !del.disabled) { rows.splice(Number(del.dataset.ppDel), 1); repaint(); }
+  };
+  $('#ppAdd').onclick = () => {
+    if (rows.length >= 12) { toast('Máximo 12 pagos'); return; }
+    const last = rows[rows.length - 1];
+    const total = Number(String($('#ppTotal').value).replace(/[^\d.]/g, '')) || 0;
+    const sum = rows.reduce((s, r) => s + (Number(String(r.amount).replace(/[^\d.]/g, '')) || 0), 0);
+    rows.push({ label: `Pago ${rows.length + 1}`, due: last ? addDays(last.due, 15) : addDays(todayStr(), 7), amount: Math.max(0, Math.round((total - sum) * 100) / 100), link_url: '', paid: 0 });
+    repaint();
+  };
+  $('#ppBack').onclick = () => payPlanModal(q.id);
+  if ($('#ppRebuild')) $('#ppRebuild').onclick = async () => {
+    if (!confirm('¿Volver a armar el plan con el anticipo y las fechas de la cotización? Se pierden los cambios que hiciste.')) return;
+    const ok = await mutate(() => send('POST', `/api/quotes/${q.id}/payment-plan`, { rebuild: true }), 'Plan rearmado');
+    if (ok) payPlanModal(q.id);
+  };
+  $('#ppSave').onclick = async () => {
+    const body = { total: $('#ppTotal').value, installments: rows.map((r) => ({ id: r.id, label: r.label, due: r.due, amount: r.amount, link_url: r.link_url })) };
+    const ok = await mutate(() => send('PUT', `/api/quotes/${q.id}/payment-plan`, body), 'Plan de pagos guardado');
+    if (ok) payPlanModal(q.id);
+  };
+  paint();
+}
+
+async function renderPaymentsSettings() {
+  const box = $('#paymentsBody');
+  if (!box) return;
+  try {
+    const st = await api('/api/payments/settings');
+    const b = st.bank || {};
+    const sel = (name, list, value) => `<select name="${name}">${list.map(([v, label]) => `<option value="${v}"${Number(v) === Number(value) ? ' selected' : ''}>${label}</option>`).join('')}</select>`;
+    box.innerHTML = `<form class="modal-form">
+      <div class="full pp-mp ${st.mercadoPago.configured ? 'on' : 'off'}">${st.mercadoPago.configured
+        ? `<b>✅ Mercado Pago conectado${st.mercadoPago.sandbox ? ' (modo de prueba)' : ''}</b><span>Tus clientes pagan en línea con tarjeta, OXXO o SPEI desde su liga y el pago se registra solo en el CRM.</span>`
+        : `<b>Mercado Pago: sin conectar</b><span>Mientras tanto la liga muestra tus datos de transferencia y la liga manual que pegue el vendedor. Para conectarlo: 1) Abre tu cuenta de Mercado Pago (negocio). 2) En <i>Tus integraciones</i> crea una aplicación de “Pagos online / Checkout Pro”. 3) Copia el <i>Access Token</i> de producción. 4) En Hostinger agrégalo como variable de entorno <code>MP_ACCESS_TOKEN</code> y reinicia la app. El aviso de pago llega solo a <code>${escapeHtml(st.mercadoPago.webhook)}</code>.</span>`}</div>
+      ${field('Anticipo cuando la cotización no lo trae', sel('anticipoPct', [[20, '20 %'], [25, '25 %'], [30, '30 %'], [40, '40 %'], [50, '50 %']], st.anticipoPct))}
+      ${field('Plazo para pagar el anticipo', sel('anticipoDays', [[1, '1 día'], [2, '2 días'], [3, '3 días'], [5, '5 días'], [7, '7 días']], st.anticipoDays))}
+      ${field('La liquidación vence', sel('saldoDaysBefore', [[15, '15 días antes de la salida'], [21, '21 días antes'], [30, '30 días antes'], [45, '45 días antes'], [60, '60 días antes']], st.saldoDaysBefore))}
+      ${field('Recordatorio antes de cada vencimiento', sel('reminderDays', [[1, '1 día antes'], [2, '2 días antes'], [3, '3 días antes'], [5, '5 días antes'], [7, '7 días antes']], st.reminderDays))}
+      <label class="full kb-check"><input type="checkbox" name="emailClient" ${st.emailClient ? 'checked' : ''}> Enviar correo al cliente: recordatorio de pago (antes y el día) y recibo cuando se registra un pago</label>
+      <p class="full section-label">Datos para transferencia (aparecen en la liga de pago)</p>
+      ${field('Banco', `<input name="banco" maxlength="60" value="${escapeHtml(b.banco)}" placeholder="BBVA">`)}
+      ${field('Titular', `<input name="titular" maxlength="120" value="${escapeHtml(b.titular)}" placeholder="Viajes Bumeran Casal">`)}
+      ${field('CLABE (18 dígitos)', `<input name="clabe" maxlength="22" inputmode="numeric" value="${escapeHtml(b.clabe)}">`)}
+      ${field('Número de cuenta (opcional)', `<input name="cuenta" maxlength="30" value="${escapeHtml(b.cuenta)}">`)}
+      ${field('Indicaciones (opcional)', `<textarea name="notas" rows="2" maxlength="400" placeholder="Usa tu folio como referencia y envía tu comprobante por WhatsApp.">${escapeHtml(b.notas)}</textarea>`, true)}
+      <div class="modal-actions"><button type="submit" class="btn primary">Guardar cobros</button></div></form>`;
+    const form = box.querySelector('form');
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const v = formValues(form);
+      try {
+        await send('PUT', '/api/payments/settings', { anticipoPct: Number(v.anticipoPct), anticipoDays: Number(v.anticipoDays), saldoDaysBefore: Number(v.saldoDaysBefore), reminderDays: Number(v.reminderDays), emailClient: Boolean(v.emailClient), bank: { banco: v.banco, titular: v.titular, clabe: v.clabe, cuenta: v.cuenta, notas: v.notas } });
+        toast('Cobros guardados');
+        await loadAll(); renderPaymentsSettings();
+      } catch (error) { toast(error.message, 6000); }
+    };
+  } catch (error) { box.innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`; }
 }
 
 /* ---------- TP-111 Duplicados ---------- */
@@ -2740,6 +2969,7 @@ function showSettingsTab(tab) {
   if (tab === 'assignmentPanel') renderAssignment();
   if (tab === 'remindersPanel') renderReminders();
   if (tab === 'templatesPanel') renderTemplatesSettings();
+  if (tab === 'paymentsPanel') renderPaymentsSettings();
 }
 async function loadMailStatus() {
   const el = $('#mailStatus'), button = $('#testMail');
@@ -3067,6 +3297,7 @@ document.addEventListener('click', (e) => {
   if ((el = hit('[data-new-followup-lead]'))) { followupModal(null, { leadId: Number(el.dataset.newFollowupLead), type: el.dataset.followupType }); return; }
   if ((el = hit('[data-new-lead-client]'))) { leadModal(null, Number(el.dataset.newLeadClient)); return; }
   if ((el = hit('[data-new-trip-client]'))) { tripModal(null, { clientId: Number(el.dataset.newTripClient) }); return; }
+  if ((el = hit('[data-pay-plan]'))) { payPlanModal(Number(el.dataset.payPlan)); return; }
   if ((el = hit('[data-trip-from-quote]'))) { tripModal(null, { quoteId: Number(el.dataset.tripFromQuote) }); return; }
   if ((el = hit('[data-history]'))) { const [entity, id] = el.dataset.history.split(':'); historyModal(entity, Number(id)); return; }
   if ((el = hit('[data-settings-tab]'))) { showSettingsTab(el.dataset.settingsTab); return; }

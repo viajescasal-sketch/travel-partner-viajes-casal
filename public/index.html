@@ -11,7 +11,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css?v=tp106" />
-    <link rel="stylesheet" href="/tp006.css?v=tp111" />
+    <link rel="stylesheet" href="/tp006.css?v=tp202" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -339,6 +339,7 @@
                 Enviar varias propuestas
               </button>
             </div>
+            <div id="payDue" class="pp-due hidden"></div>
             <div id="quoteGrid" class="cards"></div>
           </section>
           <section id="clients" class="page">
@@ -533,6 +534,7 @@
                 ><button data-settings-tab="assignmentPanel">Asignación de leads</button
                 ><button data-settings-tab="remindersPanel">Recordatorios</button
                 ><button data-settings-tab="templatesPanel">Plantillas WhatsApp</button
+                ><button data-settings-tab="paymentsPanel">Cobros</button
                 ><button data-settings-tab="integrationsPanel">Integraciones</button
                 ><button data-settings-tab="backupsPanel">Respaldos</button>
               </nav>
@@ -620,6 +622,15 @@
                   </div>
                 </div>
                 <div id="templatesBody"><p class="muted">Cargando…</p></div>
+              </article>
+              <article class="panel settings-panel" id="paymentsPanel" hidden>
+                <div class="panel-head">
+                  <div>
+                    <h3>Cobros y liga de pago</h3>
+                    <p>Plan de pagos de cada venta, la liga para que el cliente pague y los recordatorios de saldo.</p>
+                  </div>
+                </div>
+                <div id="paymentsBody"><p class="muted">Cargando…</p></div>
               </article>
               <article class="panel settings-panel" id="integrationsPanel" hidden>
                 <h3>Integraciones</h3>
@@ -817,7 +828,7 @@
         cursor: wait;
       }
     </style>
-    <script src="/docs/documents.js?v=tp104"></script>
-    <script src="/app.js?v=tp111"></script>
+    <script src="/docs/documents.js?v=tp201"></script>
+    <script src="/app.js?v=tp202"></script>
   </body>
 </html>
