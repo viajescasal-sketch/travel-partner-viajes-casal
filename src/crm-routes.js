@@ -22,6 +22,7 @@ const { buildXlsx, buildCsv, zip } = require('./xlsx');
 const { cleanConfig: reminderConfig } = require('./reminders');
 const { scoreLead, cleanScoring, sanitizeScoring, RESPONSES } = require('./scoring');
 const { newShareToken } = require('./public-quote');
+const { createQuoteEffects } = require('./quote-effects');
 const { phoneKey } = require('./data-store');
 const { STAGES: TEMPLATE_STAGES, VARIABLES: TEMPLATE_VARIABLES, DEFAULT_TEMPLATES, sanitizeTemplates, readTemplates } = require('./templates');
 
@@ -162,34 +163,12 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     return dataStore.updateRecord('leads', lead.id, { contacted_at: nowCancun() });
   }
 
-  // Ajusta etapas y fechas cuando una cotización cambia de estado.
-  async function applyQuoteEffects(quote, req) {
-    // TP-106: fecha de envío para el recordatorio de 48 h (se reinicia si se vuelve a enviar).
-    if (quote.status === 'Enviada' && !quote.sent_at) quote = await dataStore.updateRecord('quotes', quote.id, { sent_at: nowCancun(), reminder_at: null });
-    else if (quote.status !== 'Enviada' && (quote.sent_at || quote.reminder_at)) quote = await dataStore.updateRecord('quotes', quote.id, { sent_at: null, reminder_at: null });
-    if (quote.status === 'Aceptada' && !quote.accepted_at) {
-      quote = await dataStore.updateRecord('quotes', quote.id, { accepted_at: nowCancun() });
-    } else if (quote.status !== 'Aceptada' && quote.accepted_at) {
-      quote = await dataStore.updateRecord('quotes', quote.id, { accepted_at: null });
-    }
-    if (quote.lead_id) {
-      const lead = await dataStore.getRecord('leads', quote.lead_id);
-      if (lead) {
-        let updated = null;
-        if (quote.status === 'Aceptada' && lead.stage !== 'Vendido') {
-          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Vendido', closed_at: nowCancun(), stage_changed_at: nowCancun(), lost_reason: null, ...(lead.contacted_at ? {} : { contacted_at: nowCancun() }) });
-        } else if (['Nuevo', 'Calificado'].includes(lead.stage) && quote.status !== 'Rechazada') {
-          updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Cotizado', stage_changed_at: nowCancun(), ...(lead.contacted_at ? {} : { contacted_at: nowCancun() }) });
-        }
-        if (updated && req) await audit(req, 'update', 'leads', lead, updated, { note: `Automático por la cotización ${quote.folio}` });
-      }
-    }
-    // TP-201: al aceptarse se arma el plan de pagos (anticipo + parcialidades) y la liga de pago.
-    if (payments && quote.status === 'Aceptada' && !quote.payment_plan) {
-      try { quote = await payments.ensurePlan(quote); } catch (error) { console.error('Plan de pagos:', error.message); }
-    }
-    return quote;
-  }
+  // Ajusta etapas y fechas cuando una cotización cambia de estado (src/quote-effects.js).
+  const quoteEffects = createQuoteEffects(dataStore, {
+    payments,
+    onLeadUpdate: async (lead, updated, quote, req) => { if (req) await audit(req, 'update', 'leads', lead, updated, { note: `Automático por la cotización ${quote.folio}` }); }
+  });
+  const applyQuoteEffects = (quote, req) => quoteEffects(quote, req);
 
   function checkLeadMatchesClient(lead, clientId) {
     if (lead && lead.client_id !== clientId) throw new ValidationError('El lead no pertenece a ese cliente');
@@ -291,6 +270,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     if (data.qualification) data.qualification = scoreQualification(data.qualification, (await allSettings()).leadQuestions);
     if (CLOSED_STAGES.includes(data.stage)) data.closed_at = nowCancun();
     if (data.stage !== 'Perdido') data.lost_reason = null;
+    else if (!String(data.lost_reason || '').trim()) throw new ValidationError('Elige el motivo de pérdida');
     data.stage_changed_at = nowCancun();
     // TP-106: si lo registra su propio vendedor, ya está en contacto; si se lo asignaron, corre el tiempo del primer contacto.
     if (ownerId === ctx.user.id || data.stage !== 'Nuevo') data.contacted_at = nowCancun();
@@ -368,6 +348,8 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
       if (!CLOSED_STAGES.includes(data.stage)) data.closed_at = null;
       if (data.stage !== current.stage) data.stage_changed_at = nowCancun();
       if (data.stage !== 'Perdido') data.lost_reason = null;
+      // TP-207: el motivo de pérdida es obligatorio
+      else if (!String((data.lost_reason !== undefined ? data.lost_reason : current.stage === 'Perdido' ? current.lost_reason : '') || '').trim()) throw new ValidationError('Elige el motivo de pérdida');
       if (data.stage !== 'Nuevo' && !current.contacted_at) data.contacted_at = nowCancun();
     }
     let record = await dataStore.updateRecord('leads', id, data);
@@ -408,7 +390,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
   router.post('/quotes/:id/duplicate', requireWrite('quotes'), wrap(async (req, res) => {
     const ctx = await context(req);
     const source = ctx.mustSee('quotes', parseId(req.params.id));
-    const { id, folio, accepted_at, sent_at, reminder_at, owner_id, created_at, updated_at, share_token, viewed_at, view_count, payment_plan, pay_token, ...rest } = source;
+    const { id, folio, accepted_at, sent_at, reminder_at, owner_id, created_at, updated_at, share_token, viewed_at, view_count, payment_plan, pay_token, acceptance, ...rest } = source;
     const record = await insertQuote({ ...rest, status: 'Borrador', accepted_at: null }, owner_id ?? ctx.user.id);
     await audit(req, 'duplicate', 'quotes', null, record, { note: `Copia de ${source.folio}` });
     res.status(201).json({ ok: true, record });

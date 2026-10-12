@@ -11,7 +11,7 @@ const FIELD_LABELS = {
   hotel: 'Hotel / paquete', price: 'Precio', mode: 'Modalidad', valid_until: 'Vigencia', status: 'Estado', services: 'Servicios',
   type: 'Tipo', title: 'Actividad', details: 'Detalles', due_at: 'Fecha y hora', done: 'Hecho',
   owner_id: 'Vendedor', contacted_at: 'Contactado',
-  details: 'Cotizador', confirmation: 'Confirmación de servicios', qualification: 'Calificación'
+  details: 'Cotizador', confirmation: 'Confirmación de servicios', qualification: 'Calificación', itinerary: 'Itinerario digital'
 };
 
 const MAX_TEXT = 120;

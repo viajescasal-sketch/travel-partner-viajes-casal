@@ -175,7 +175,8 @@ function createReminders(dataStore, assignment, env = {}, { now = () => nowCancu
       if (String(f.due_at) < state.overdueStartedAt) continue;
       if (toMs(current) - toMs(f.due_at) < 15 * 60000) continue;
       const lead = leadById(f.lead_id);
-      if (lead && CLOSED.includes(lead.stage)) continue;
+      // Lead cerrado: solo avisa de seguimientos creados después del cierre (ej. recontactar un perdido, TP-207).
+      if (lead && CLOSED.includes(lead.stage) && !(lead.closed_at && String(f.created_at || '') >= String(lead.closed_at))) continue;
       const owner = userById(f.owner_id ?? lead?.owner_id) || null;
       const client = clientById(f.client_id);
       if (owner && assignment) {

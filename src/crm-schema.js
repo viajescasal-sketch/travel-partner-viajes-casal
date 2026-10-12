@@ -78,7 +78,9 @@ const ENTITIES = {
       view_count: { type: 'int', internal: true },
       // TP-201/202: plan de pagos y liga de pago para el cliente
       payment_plan: { type: 'json', max: 40000, internal: true },
-      pay_token: { type: 'string', max: 48, internal: true }
+      pay_token: { type: 'string', max: 48, internal: true },
+      // TP-203: aceptación en línea del cliente { by, name, option, label, at }
+      acceptance: { type: 'json', max: 4000, internal: true }
     }
   },
   trips: {
@@ -92,7 +94,12 @@ const ENTITIES = {
       end_date: { type: 'date', required: true },
       status: { type: 'enum', values: TRIP_STATUSES, default: 'Confirmado' },
       notes: { type: 'text', max: 4000 },
-      confirmation: { type: 'json', max: 60000 }
+      confirmation: { type: 'json', max: 60000 },
+      // TP-301: itinerario digital (días editables), vouchers y liga privada /viaje/<token>
+      itinerary: { type: 'json', max: 60000 },
+      vouchers: { type: 'json', max: 20000, internal: true },
+      share_token: { type: 'string', max: 48, internal: true },
+      viewed_at: { type: 'datetime', internal: true }
     }
   },
   followups: {

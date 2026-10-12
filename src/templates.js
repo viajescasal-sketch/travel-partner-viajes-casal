@@ -16,7 +16,7 @@ const VARIABLES = [
   ['nombre', 'Primer nombre del cliente'], ['nombre_completo', 'Nombre completo'], ['destino', 'Destino'], ['fechas', 'Fechas del viaje'],
   ['viajeros', 'Número de viajeros'], ['folio', 'Folio de la cotización'], ['hotel', 'Hotel o paquete'], ['precio', 'Precio de la cotización'],
   ['vigencia', 'Vigencia de la cotización'], ['liga_cotizacion', 'Liga privada para ver la cotización'], ['vendedor', 'Tu nombre'], ['agencia', 'Nombre de la agencia'], ['liga_resenas', 'Liga para dejar reseña'],
-  ['liga_pago', 'Liga de pago del cliente (plan de pagos)'], ['concepto_pago', 'Siguiente pago: Anticipo, Pago 2…'], ['monto_pago', 'Monto del siguiente pago'], ['fecha_pago', 'Fecha límite del siguiente pago'], ['saldo', 'Saldo pendiente total']
+  ['liga_pago', 'Liga de pago del cliente (plan de pagos)'], ['concepto_pago', 'Siguiente pago: Anticipo, Pago 2…'], ['monto_pago', 'Monto del siguiente pago'], ['fecha_pago', 'Fecha límite del siguiente pago'], ['saldo', 'Saldo pendiente total'], ['liga_itinerario', 'Liga del itinerario digital del viaje']
 ];
 
 const DEFAULT_TEMPLATES = [
@@ -28,6 +28,7 @@ const DEFAULT_TEMPLATES = [
   { id: 'ci1', stage: 'cierre', name: 'Apartar el viaje', body: '¡Qué emoción, {nombre}! 🎉 Para apartar tu viaje a {destino} ({fechas}) solo necesito el anticipo. Te paso los datos de pago y en cuanto lo recibamos te envío tu confirmación.' },
   { id: 'ci3', stage: 'cierre', name: 'Liga para apartar', body: '¡Qué emoción, {nombre}! 🎉 Para apartar tu viaje a {destino} el anticipo es de {monto_pago} y la fecha límite es el {fecha_pago}.\n\nAquí puedes pagarlo y ver tu plan de pagos: {liga_pago}\n\nEn cuanto se refleje te envío tu confirmación ✈️' },
   { id: 'ci4', stage: 'cierre', name: 'Recordatorio de pago', body: 'Hola {nombre} 😊 Te recuerdo que tu {concepto_pago} de {monto_pago} para tu viaje a {destino} vence el {fecha_pago}.\n\nAquí puedes pagarlo y ver lo que llevas abonado: {liga_pago}\n\nSi ya lo realizaste, mándame tu comprobante por aquí. ¡Gracias!' },
+  { id: 'ci5', stage: 'cierre', name: 'Itinerario digital', body: '¡Hola {nombre}! ✈️ Aquí tienes tu itinerario digital para tu viaje a {destino} ({fechas}): día por día, vuelos, hotel, traslados, tus vouchers y mis datos de contacto, todo en tu celular 📱\n\n{liga_itinerario}\n\nGuárdalo en favoritos y cualquier duda aquí estoy.' },
   { id: 'ci2', stage: 'cierre', name: 'Reserva confirmada', body: '¡Listo, {nombre}! ✅ Tu viaje a {destino} del {fechas} quedó confirmado. Te comparto tu confirmación de servicios. Cualquier duda, aquí estoy.' },
   { id: 'pv1', stage: 'postviaje', name: '¿Cómo te fue?', body: '¡Bienvenido de vuelta, {nombre}! 🌴 ¿Qué tal estuvo {destino}? Me encantaría saber cómo te fue.' },
   { id: 'pv2', stage: 'postviaje', name: 'Pedir reseña', body: 'Gracias por viajar con {agencia}, {nombre} 💙 Si te gustó el servicio, ¿nos regalas una reseña? Nos ayuda muchísimo: {liga_resenas}' }
