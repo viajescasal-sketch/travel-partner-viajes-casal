@@ -578,6 +578,54 @@
     return { paymentStatus: plan.status === 'pagado' ? 'Pagado por completo' : plan.paid > 0 ? 'Pago parcial' : 'Pendiente de pago', paymentTotal: String(plan.total), paymentPaid: plan.paid ? String(plan.paid) : '', paymentSchedule: schedule };
   }
 
+  /* ---------- TP-301: itinerario día por día ---------- */
+  // Quita la fecha de "20 dic 2026 | 15:00 hrs" para dejar solo la hora.
+  const timeOf = (v) => { const t = String(v || '').split('|').pop().trim(); return /\d/.test(t) && t !== String(v || '').trim() ? t : (/^\d{1,2}:\d{2}/.test(t) ? t : ''); };
+  const isoAdd = (iso, n) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  /**
+   * Días automáticos con la confirmación del viaje: llegada (vuelo, traslado, check-in), días intermedios
+   * (o los del circuito) y regreso (check-out, traslado, vuelo). Devuelve [{ date, title, text, place }].
+   */
+  function buildItinerary(c, payload) {
+    const trip = payload.trip;
+    const start = trip.start_date, end = trip.end_date;
+    if (!start || !end || end < start) return [];
+    const on = (k) => !!c.services?.[k];
+    const dest = c.destination || trip.destination || '';
+    const raw = payload.quote ? normalizeDetails(payload.quote, null) : null;
+    const circuitDays = raw?.kind === 'circuito' ? raw.circuit.days : null;
+    const days = [];
+    const total = Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000);
+    for (let i = 0; i <= Math.min(total, 60); i += 1) {
+      const date = isoAdd(start, i);
+      const lines = [];
+      let title = '', place = '';
+      if (circuitDays?.[i]) {
+        const cd = circuitDays[i];
+        title = str(cd.titulo) || `Día ${i + 1}`;
+        if (str(cd.descripcion)) lines.push(str(cd.descripcion));
+        const meals = [cd.desayuno && 'desayuno', cd.comida && 'comida', cd.cena && 'cena'].filter(Boolean);
+        if (meals.length) lines.push(`🍽 Incluye ${meals.join(', ')}`);
+      }
+      if (i === 0) {
+        title = title || `Llegada a ${dest}`;
+        if (on('flight') && (c.outboundFlight || c.airline)) lines.unshift(`${timeOf(c.outboundDeparture) ? `${timeOf(c.outboundDeparture)} ` : ''}✈️ Vuelo ${[c.airline, c.outboundFlight].filter(Boolean).join(' · ')}${timeOf(c.outboundArrival) ? ` · llegada ${timeOf(c.outboundArrival)}` : ''}`);
+        if (on('transfer')) lines.push(`${str(c.transferOutTime) ? `${str(c.transferOutTime)} ` : ''}🚐 Traslado ${[c.transferOutOrigin, c.transferOutDestination].filter(Boolean).join(' → ')}`);
+        if (on('hotel') && c.hotelName && !circuitDays) { lines.push(`${timeOf(c.checkin) ? `${timeOf(c.checkin)} ` : ''}🏨 Check-in en ${c.hotelName}`); place = c.hotelName; }
+      } else if (i === total && total > 0) {
+        title = circuitDays?.[i] ? title : `Regreso a casa`;
+        if (on('hotel') && c.hotelName && !circuitDays) { lines.push(`${timeOf(c.checkout) ? `${timeOf(c.checkout)} ` : ''}🧳 Check-out de ${c.hotelName}`); place = c.hotelName; }
+        if (on('transfer')) lines.push(`${str(c.transferBackTime) ? `${str(c.transferBackTime)} ` : ''}🚐 Traslado ${[c.transferBackOrigin, c.transferBackDestination].filter(Boolean).join(' → ')}`);
+        if (on('flight') && (c.returnFlight || c.airline)) lines.push(`${timeOf(c.returnDeparture) ? `${timeOf(c.returnDeparture)} ` : ''}✈️ Vuelo de regreso ${[c.airline, c.returnFlight].filter(Boolean).join(' · ')}${timeOf(c.returnArrival) ? ` · llegada ${timeOf(c.returnArrival)}` : ''}`);
+      } else if (!circuitDays?.[i]) {
+        title = `Día libre en ${dest}`;
+        lines.push(c.mealPlan ? `Disfruta tu hotel (${c.mealPlan}) o las actividades del destino.` : 'Disfruta el destino a tu ritmo.');
+      }
+      days.push({ date, title, text: lines.join('\n'), place });
+    }
+    return days;
+  }
+
   function mergeConfirmation(saved, defaults) {
     const c = { ...defaults, ...(saved || {}) };
     c.services = { ...defaults.services, ...(saved?.services || {}) };
@@ -689,6 +737,6 @@
     esc, safeUrl, media, waLink, waNumber, money, num, formatDateRange, formatSingleDate, shortDate, firstName, titleCase,
     SERVICES, normalizeDetails, optionLabel, quoteModel, renderQuoteSheets, buildQuoteMessage,
     CIRCUIT_SERVICES, DEFAULT_OCCUPANCIES, newCircuitDetails, circuitDesde, circuitEndDate, circuitModel, renderCircuitSheet, buildCircuitMessage,
-    QROO, confirmationDefaults, mergeConfirmation, renderReservation, buildReservationMessage
+    QROO, confirmationDefaults, mergeConfirmation, renderReservation, buildReservationMessage, buildItinerary
   };
 }(typeof window !== 'undefined' ? window : globalThis));

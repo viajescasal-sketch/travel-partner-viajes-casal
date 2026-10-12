@@ -19,3 +19,17 @@
 .hidden{display:none!important}
 .doc-error{max-width:520px;margin:60px auto;text-align:center;font-family:Arial,Helvetica,sans-serif;color:#173733}
 @media print{.doc-toolbar,.doc-tabs,.doc-msg,.doc-note,.doc-toast{display:none!important}.doc-root{padding:0}}
+/* TP-203: aceptar en línea */
+.accept-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:55;width:min(760px,calc(100% - 24px));display:flex;align-items:center;gap:14px;justify-content:space-between;background:#fff;border:1px solid #dfe6e2;border-radius:14px;padding:12px 14px;box-shadow:0 10px 30px rgba(23,55,51,.18);font-family:Arial,Helvetica,sans-serif}
+.accept-bar div{display:flex;flex-direction:column;min-width:0}.accept-bar b{color:#173733;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.accept-bar span{color:#5b6b67;font-size:12px}
+.accept-bar .doc-btn{flex-shrink:0;padding:12px 18px;font-size:14px}
+.doc-public .doc-root{padding-bottom:96px}
+.accept-modal{position:fixed;inset:0;z-index:70;background:rgba(10,30,28,.55);display:grid;place-items:center;padding:16px}
+.accept-card{background:#fff;border-radius:16px;padding:22px;width:min(460px,100%);display:grid;gap:12px;font-family:Arial,Helvetica,sans-serif;color:#173733;max-height:90vh;overflow:auto}
+.accept-card h3{margin:0;font-size:19px}.accept-card p{margin:0;font-size:14px;line-height:1.5}
+.accept-sum{display:grid;gap:2px;background:#eef7f6;border-radius:12px;padding:12px 14px}.accept-sum small{color:#4FA8A0;font-weight:700}.accept-sum span{font-size:12px;color:#5b6b67}.accept-sum strong{font-size:20px;color:#E2794F;margin-top:4px}
+.accept-card label{display:grid;gap:5px;font-size:13px;font-weight:700}.accept-card input[name=name]{padding:11px;border:1px solid #cfdcd8;border-radius:9px;font-size:15px}
+.accept-card .accept-check{display:flex;gap:8px;align-items:flex-start;font-weight:400;line-height:1.45}.accept-check input{margin-top:3px}
+.accept-err{color:#b03a2e;font-weight:700}.accept-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+@media print{.accept-bar,.accept-modal{display:none!important}}
+@media(max-width:560px){.accept-bar{flex-direction:column;align-items:stretch;text-align:center}.accept-bar .doc-btn{justify-content:center}}

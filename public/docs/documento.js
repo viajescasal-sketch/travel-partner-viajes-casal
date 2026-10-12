@@ -143,6 +143,68 @@
     const sellerPhone = payload.seller?.phone || payload.agency?.whatsapp;
     const wa = D.waLink(sellerPhone, `Hola, vi la cotización ${payload.quote.folio} para ${payload.quote.destination} y tengo una pregunta.`);
     if (wa) button('Escribir a mi Travel Partner', 'wa', null, { href: wa });
+    acceptUi(payload, count);
+  }
+
+  /* ---------- TP-203: elegir opción y aceptar en línea ---------- */
+  const fmtMoney = (n) => `$${Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 2 })}`;
+  function acceptUi(payload, count) {
+    const a = payload.accept;
+    if (!a) return;
+    document.querySelector('#acceptBar')?.remove();
+    if (a.accepted) {
+      const opt = a.options.find((o) => o.index === a.acceptedOption);
+      note(`✅ ¡Aceptaste esta cotización${opt && a.options.length > 1 ? ` (opción ${opt.index + 1}: ${opt.label})` : ''}! Tu Travel Partner ya fue avisado.${payload.payUrl ? ' Ya puedes apartar tu viaje con el anticipo.' : ''}`, 'info');
+      if (a.options.length > 1 && Number.isInteger(a.acceptedOption)) showTab(a.acceptedOption);
+      return;
+    }
+    if (a.expired) { note('La vigencia de esta cotización terminó. Escríbele a tu Travel Partner para actualizar precios y disponibilidad.'); return; }
+    if (!a.canAccept) return;
+    const bar = document.createElement('div');
+    bar.id = 'acceptBar';
+    bar.className = 'accept-bar';
+    document.body.append(bar);
+    const paint = () => {
+      const opt = a.options[count > 1 ? state.tab : 0] || a.options[0];
+      bar.innerHTML = `<div><b>${count > 1 ? `Opción ${opt.index + 1}: ` : ''}${D.esc(opt.label)}</b><span>${opt.total ? `${fmtMoney(opt.total)} MXN` : ''}${count > 1 ? ' · cambia de opción con las pestañas de arriba' : ''}</span></div><button type="button" class="doc-btn coral" id="acceptOpen">${count > 1 ? 'Elegir esta opción' : 'Aceptar cotización'}</button>`;
+      bar.querySelector('#acceptOpen').onclick = () => openAccept(payload, opt);
+    };
+    paint();
+    $('#docTabs').addEventListener('click', () => setTimeout(paint, 0));
+  }
+  function openAccept(payload, opt) {
+    const a = payload.accept;
+    const wrap = document.createElement('div');
+    wrap.className = 'accept-modal';
+    wrap.innerHTML = `<form class="accept-card">
+      <h3>Aceptar y apartar mi viaje</h3>
+      <div class="accept-sum">${a.options.length > 1 ? `<small>Opción ${opt.index + 1} de ${a.options.length}</small>` : ''}<b>${D.esc(opt.label)}</b><span>${D.esc(payload.quote.destination)} · ${D.esc(payload.quote.folio)}</span>${opt.total ? `<strong>${fmtMoney(opt.total)} MXN</strong>` : ''}</div>
+      <label>Tu nombre completo<input name="name" required minlength="3" maxlength="120" autocomplete="name" value="${D.esc(payload.client?.name || '')}"></label>
+      <label class="accept-check"><input type="checkbox" name="terms" required> Acepto esta propuesta, sus condiciones y políticas. Sé que los precios y la disponibilidad se garantizan al pagar el anticipo.</label>
+      <p class="accept-err hidden"></p>
+      <div class="accept-acts"><button type="button" class="doc-btn ghost" data-x>Cancelar</button><button type="submit" class="doc-btn coral">Aceptar cotización</button></div>
+    </form>`;
+    document.body.append(wrap);
+    const form = wrap.querySelector('form');
+    const closeIt = () => wrap.remove();
+    wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('[data-x]')) closeIt(); });
+    form.name.focus();
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('[type=submit]');
+      btn.disabled = true; btn.textContent = 'Enviando…';
+      try {
+        const r = await api(`/api/public/quote/${shareToken}/accept`, { method: 'POST', body: JSON.stringify({ option: opt.index, name: form.name.value, terms: form.terms.checked }) });
+        form.innerHTML = `<h3>🎉 ¡Listo, cotización aceptada!</h3><p>Tu Travel Partner ya recibió el aviso y te confirmará tu reserva.</p>${r.payUrl ? `<p>Para apartar tu viaje y garantizar precio y disponibilidad, paga tu anticipo:</p><a class="doc-btn coral" href="${D.esc(r.payUrl)}">Pagar mi anticipo</a>` : ''}<div class="accept-acts"><button type="button" class="doc-btn ghost" data-x>Cerrar</button></div>`;
+        const fresh = await api(`/api/public/quote/${shareToken}`);
+        $('#docActions').innerHTML = '';
+        renderPublicQuote(fresh);
+      } catch (error) {
+        const err = form.querySelector('.accept-err');
+        err.textContent = error.message; err.classList.remove('hidden');
+        btn.disabled = false; btn.textContent = 'Aceptar cotización';
+      }
+    };
   }
 
   async function init() {
