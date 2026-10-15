@@ -159,3 +159,25 @@ body.dark .ref-box { background: rgba(0, 184, 200, .12); }
 #postventaReport { margin-top: 18px; }
 #postventaReport .comp-row small { display: block; }
 @media (max-width: 800px) { .sv-answers { grid-template-columns: repeat(2, 1fr); } }
+
+/* TP-310 Campañas de recompra · TP-311 Desempeño */
+.cv-list { display: grid; gap: 8px; }
+.cv-touch { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--surface); }
+.cv-touch.done { opacity: .65; }
+.cv-touch .cv-ico { font-size: 22px; }
+.cv-touch small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.cv-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+.cs-row { display: grid; grid-template-columns: minmax(0, 2fr) 90px auto auto auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+.cs-row input:not([type=checkbox]) { padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); width: 100%; margin: 0 !important; }
+.perf-report { margin: 18px 0; }
+.perf-ctrl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.perf-ctrl select { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; padding: 7px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); color: var(--text); padding: 7px 12px; font-weight: 600; cursor: pointer; font-size: 12px; }
+.seg button.on { background: var(--teal); color: #fff; }
+.perf-table td, .perf-table th { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.perf-table td:first-child { position: relative; min-width: 150px; }
+.perf-bar { display: block; height: 3px; border-radius: 2px; background: var(--teal); margin-top: 4px; }
+.perf-total td { border-top: 2px solid var(--border); font-weight: 700; }
+.perf-table small { color: var(--muted); }
+@media (max-width: 800px) { .cv-touch { grid-template-columns: auto minmax(0, 1fr); } .cv-acts { grid-column: 1 / -1; justify-content: flex-start; } .cs-row { grid-template-columns: 1fr 80px; } }

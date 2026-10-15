@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="/styles.css?v=tp106" />
     <link rel="stylesheet" href="/tp006.css?v=tp301" />
-    <link rel="stylesheet" href="/viaje.css?v=tp309" />
+    <link rel="stylesheet" href="/viaje.css?v=tp311" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -122,6 +122,7 @@
           ><button data-page="clients">◉ Clientes</button
           ><button data-page="trips">✈ Viajes</button
           ><button data-page="suppliers">▦ Proveedores</button
+          ><button data-page="campaigns" data-hide-ops>📣 Campañas <em id="campaignBadge" class="hidden">0</em></button
           ><button data-page="followups">◷ Seguimientos <em id="followBadge" class="hidden">0</em></button
           ><button data-page="reports" data-admin-only>▥ Reportes</button
           ><button data-page="activity" data-admin-only>☰ Bitácora</button
@@ -390,6 +391,16 @@
             </div>
             <div class="panel bk-panel" id="bookingsPanel"></div>
           </section>
+          <section id="campaigns" class="page">
+            <div class="heading">
+              <div>
+                <p class="eyebrow">RECOMPRA</p>
+                <h2>Campañas</h2>
+                <p>Clientes anteriores para contactar hoy: aniversario de su viaje, cumpleaños y temporadas.</p>
+              </div>
+            </div>
+            <div class="panel" id="campaignsBody"><p class="muted">Cargando…</p></div>
+          </section>
           <section id="suppliers" class="page">
             <div class="heading">
               <div>
@@ -496,6 +507,7 @@
                 </div>
               </article>
             </div>
+            <article class="panel perf-report" id="performanceReport"></article>
             <article class="panel lost-report">
               <div class="panel-head"><div><h3>Motivos de pérdida</h3><p class="panel-sub">Por qué se pierden las ventas, quién y de dónde</p></div>
                 <select id="lostRange" aria-label="Periodo"><option value="30">Últimos 30 días</option><option value="90" selected>Últimos 90 días</option><option value="365">Último año</option><option value="all">Todo</option></select></div>
@@ -560,6 +572,7 @@
                 ><button data-settings-tab="remindersPanel">Recordatorios</button
                 ><button data-settings-tab="templatesPanel">Plantillas WhatsApp</button
                 ><button data-settings-tab="postventaPanel">Postviaje y referidos</button
+                ><button data-settings-tab="campaignPanel">Campañas de recompra</button
                 ><button data-settings-tab="paymentsPanel">Cobros</button
                 ><button data-settings-tab="integrationsPanel">Integraciones</button
                 ><button data-settings-tab="backupsPanel">Respaldos</button>
@@ -648,6 +661,15 @@
                   </div>
                 </div>
                 <div id="postventaBody"><p class="muted">Cargando…</p></div>
+              </article>
+              <article class="panel settings-panel" id="campaignPanel" hidden>
+                <div class="panel-head">
+                  <div>
+                    <h3>Campañas de recompra</h3>
+                    <p>Cuándo aparece cada cliente en la bandeja de Campañas y si también recibe correo.</p>
+                  </div>
+                </div>
+                <div id="campaignSettingsBody"><p class="muted">Cargando…</p></div>
               </article>
               <article class="panel settings-panel" id="templatesPanel" hidden>
                 <div class="panel-head">
@@ -865,9 +887,11 @@
     </style>
     <script src="/viaje-core.js?v=tp305"></script>
     <script src="/docs/documents.js?v=tp305"></script>
-    <script src="/app.js?v=tp309"></script>
+    <script src="/reportes-core.js?v=tp311"></script>
+    <script src="/app.js?v=tp311"></script>
     <script src="/viaje.js?v=tp305"></script>
     <script src="/reservas.js?v=tp305"></script>
-    <script src="/fidelidad.js?v=tp309"></script>
+    <script src="/fidelidad.js?v=tp311"></script>
+    <script src="/campanas.js?v=tp311"></script>
   </body>
 </html>

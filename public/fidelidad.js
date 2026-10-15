@@ -139,6 +139,7 @@
     let r;
     try { r = await api('/api/postventa/stats'); } catch { box.innerHTML = ''; return; }
     const s = r.survey, f = r.referrals;
+    if ($('#repSat')) { $('#repSat').textContent = s.overall ? `${s.overall}★` : '—'; $('#repSatNote').textContent = s.answered ? `${s.answered} encuesta${s.answered === 1 ? '' : 's'} · NPS ${s.nps ?? '—'}` : 'Sin encuestas contestadas aún'; }
     box.innerHTML = `<div class="grid two">
       <article class="panel"><h3>⭐ Satisfacción postviaje</h3><p class="panel-sub">Encuestas enviadas al regreso de cada viaje</p>
         <div class="mini sv-kpis"><div>Respondidas<b>${s.answered}/${s.sent}</b><small>${s.rate}%</small></div><div>Calificación<b>${s.overall ?? '—'}${s.overall ? '★' : ''}</b></div><div>NPS<b>${s.nps ?? '—'}</b><small>${s.npsCount ? `${s.npsCount} respuesta${s.npsCount === 1 ? '' : 's'}` : ''}</small></div><div>A reseña<b>${s.reviewClicks}</b><small>${s.low ? `${s.low} bajas` : ''}</small></div></div>

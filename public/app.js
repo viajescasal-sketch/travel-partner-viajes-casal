@@ -179,6 +179,7 @@ function renderAll() {
   renderCalendar();
   renderReports();
   renderSettings();
+  if (typeof renderCampaigns === 'function') renderCampaigns(); // TP-310
   if (typeof renderReservas === 'function') renderReservas(); // TP-304/305
   if (isAdmin() && ui.settingsTab === 'usersPanel') loadUsers();
 }
@@ -547,6 +548,7 @@ $('#bellPanel').addEventListener('click', async (e) => {
   if (!item) return;
   const leadId = Number(item.dataset.bellLead);
   const [linkType, linkId] = String(item.dataset.bellLink || '').split(':');
+  if (linkType === 'campaigns') { send('POST', '/api/notifications/read', { ids: [Number(item.dataset.bellId)] }).then(refreshBell).catch(() => {}); toggleBell(false); navigate('campaigns'); return; } // TP-310
   if (linkType && Number(linkId)) {
     send('POST', '/api/notifications/read', { ids: [Number(item.dataset.bellId)] }).then(refreshBell).catch(() => {});
     toggleBell(false);
@@ -1071,6 +1073,7 @@ function renderReports() {
   $('#sourceTotal').textContent = total;
   renderLostReport();
   if (typeof renderPostventaReport === 'function') renderPostventaReport(); // TP-308/309
+  if (typeof renderPerformance === 'function') renderPerformance(); // TP-311
   $('#sourceLegend').innerHTML = counts.length ? counts.map(([s, n], i) => `<p><i class="swatch" style="background:${SOURCE_COLORS[i % SOURCE_COLORS.length]}"></i>${escapeHtml(s)} ${Math.round((n / total) * 100)}%</p>`).join('') : '<p>Sin leads todavía</p>';
 }
 
@@ -1720,7 +1723,7 @@ function followupModal(id, preset = {}) {
 }
 
 /* ---------- TP-107 Plantillas de WhatsApp por etapa ---------- */
-const WA_STAGE_ICONS = { primer_contacto: '👋', cotizacion: '📄', seguimiento: '🔁', cierre: '🤝', postviaje: '🌴' };
+const WA_STAGE_ICONS = { primer_contacto: '👋', cotizacion: '📄', seguimiento: '🔁', cierre: '🤝', postviaje: '🌴', recompra: '🎁' };
 async function loadTemplates(force = false) {
   if (db.templates && !force) return db.templates;
   db.templates = await api('/api/templates');
@@ -1747,7 +1750,7 @@ function payVars(quote) {
   const n = nextInst(plan);
   return { liga_pago: plan ? payUrlOf(quote) : '', concepto_pago: n ? n.label.toLowerCase() : '', monto_pago: n ? money(instLeft(n)) : '', fecha_pago: n ? fmtLongRange(n.due) : '', saldo: plan ? money(plan.balance) : '' };
 }
-function templateVars({ client, lead, quote, trip }) {
+function templateVars({ client, lead, quote, trip, extra }) {
   const first = String(client?.name || '').trim().split(/\s+/)[0] || '';
   const dates = trip ? fmtLongRange(trip.start_date, trip.end_date) : lead?.start_date ? fmtLongRange(lead.start_date, lead.end_date) : '';
   return {
@@ -1758,7 +1761,8 @@ function templateVars({ client, lead, quote, trip }) {
     agencia: db.agency?.name || 'Viajes Casal', liga_resenas: db.templates?.reviewLink || '', liga_cotizacion: quote ? db.shareUrls?.[quote.id] || '' : '',
     ...payVars(quote),
     liga_itinerario: trip?.share_token ? `${location.origin}/viaje/${trip.share_token}` : '',
-    ...(typeof postventaVars === 'function' ? postventaVars({ client, trip }) : {}) // TP-308/309
+    ...(typeof postventaVars === 'function' ? postventaVars({ client, trip }) : {}), // TP-308/309
+    ...(extra || {}) // TP-310: datos de la campaña
   };
 }
 // Reemplaza {variable}; lo que falta queda como [variable] para que el vendedor lo complete.
@@ -1792,7 +1796,7 @@ async function waModal(preset = {}) {
     const openLead = leads.some((l) => !CLOSED.includes(l.stage));
     state.tripId = (trips.find((t) => state.quoteId && t.quote_id === Number(state.quoteId)) || (!openLead ? trips.find((t) => t.end_date >= addDays(todayStr(), -60)) : null))?.id ?? '';
   }
-  const current = () => ({ client, lead: leadById(state.leadId), quote: quoteById(state.quoteId), trip: tripById(state.tripId) });
+  const current = () => ({ client, lead: leadById(state.leadId), quote: quoteById(state.quoteId), trip: tripById(state.tripId), extra: preset.vars || null });
   if (!state.stage) state.stage = suggestedStage(current());
   const phone = waPhone(client.phone);
   const sel = (name, list, value, blank) => `<select data-wa="${name}">${options(list, value, { blank })}</select>`;
@@ -1866,6 +1870,7 @@ async function waModal(preset = {}) {
       await send('POST', `/api/clients/${client.id}/events`, body);
       const q = quoteById(state.quoteId);
       if (!$('#waMarkWrap').classList.contains('hidden') && $('#waMark').checked && q) await send('PATCH', `/api/quotes/${q.id}`, { status: 'Enviada' });
+      if (preset.onSent) await preset.onSent(channel); // TP-310: marca el contacto de la campaña
       await loadAll();
       toast(channel === 'whatsapp' ? 'Mensaje listo en WhatsApp · registrado en la ficha' : 'Mensaje copiado · registrado en la ficha');
     } catch (error) { toast(error.message); }
@@ -2009,6 +2014,8 @@ async function clientFile(id, opts = {}) {
         ${field('WhatsApp', `<input name="phone" maxlength="40" value="${escapeHtml(c.phone)}">`)}
         ${field('Correo', `<input name="email" type="email" maxlength="254" value="${escapeHtml(c.email)}">`)}
         ${field('Preferencias (separadas por coma)', `<input name="tags" maxlength="255" placeholder="Pareja, Todo incluido" value="${escapeHtml(c.tags)}">`)}
+        ${field('Fecha de nacimiento', `<input name="birth_date" type="date" value="${escapeHtml(c.birth_date)}">`)}
+        <label class="kb-check"><input type="checkbox" name="no_marketing" ${c.no_marketing ? 'checked' : ''}> No contactar en campañas de recompra</label>
         ${field('Notas fijas del cliente', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(c.notes)}</textarea>`, true)}
         <p class="full dupe-warn hidden"></p>
         </fieldset>
@@ -2055,7 +2062,7 @@ async function clientFile(id, opts = {}) {
     else if (a === 'review') eventModal(c, 'review');
     else if (a === 'note') eventModal(c, 'note');
   };
-  bindForm((v) => mutate(() => send('PATCH', `/api/clients/${c.id}`, clean({ name: v.name, phone: v.phone || null, email: v.email || null, tags: v.tags || null, notes: v.notes || null })), 'Cliente actualizado'));
+  bindForm((v) => mutate(() => send('PATCH', `/api/clients/${c.id}`, clean({ name: v.name, phone: v.phone || null, email: v.email || null, tags: v.tags || null, notes: v.notes || null, birth_date: v.birth_date || null, no_marketing: Boolean(v.no_marketing) })), 'Cliente actualizado'));
   const dataForm = $('#modalBody form');
   bindDuplicateCheck(dataForm, c.id);
   if (isAdmin() && (c.phone || c.email)) {
@@ -3126,6 +3133,7 @@ function showSettingsTab(tab) {
   if (tab === 'templatesPanel') renderTemplatesSettings();
   if (tab === 'paymentsPanel') renderPaymentsSettings();
   if (tab === 'postventaPanel' && typeof renderPostventaSettings === 'function') renderPostventaSettings(); // TP-308/309
+  if (tab === 'campaignPanel' && typeof renderCampaignSettings === 'function') renderCampaignSettings(); // TP-310
 }
 async function loadMailStatus() {
   const el = $('#mailStatus'), button = $('#testMail');
