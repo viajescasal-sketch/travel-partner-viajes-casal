@@ -271,3 +271,21 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - Se elige al cotizar (proveedor de cada bloque del Canvas y hotel del Cotizador) y al reservar. Con comisión registrada, el costo neto se calcula solo.
 - Se precargaron HotelDO, Azabache, Grupo Xcaret y Travel Shop (una sola vez; completa contacto y comisión).
 - Tabla `crm_suppliers` (se crea sola) e incluida en el respaldo JSON. API: `GET|POST /api/suppliers`, `PATCH|DELETE /api/suppliers/:id`.
+
+## Encuesta y reseña postviaje (TP-308)
+
+- **Automática:** el motor de recordatorios (cada 5 min, en horario laboral) genera la liga privada `/encuesta/<token>` **1 día después del regreso** (configurable): correo al cliente si tiene, aviso al vendedor y seguimiento de WhatsApp con la liga; el viaje pasa a *Solicitar reseña*. Solo viajes que regresan desde que se activó la función.
+- **Encuesta (celular):** estrellas del viaje (obligatoria), hotel, traslados y Travel Partner, recomendación 0–10 y comentario (con permiso para publicarlo). Una sola respuesta por viaje.
+- **Al contestar:** reseña en la Ficha 360 (plataforma “Encuesta postviaje”), el viaje pasa a *Postventa* y aviso al vendedor. Con 4★ o más (configurable) se le ofrecen Google y TripAdvisor y su liga de referido; con 3★ o menos se avisa también al administrador (y por correo al vendedor) para recuperar al cliente.
+- **En el viaje:** botón **⭐ Encuesta** con la liga, el estado (enviada, abierta, contestada), las respuestas, **Enviar por WhatsApp** (plantilla “Encuesta postviaje”, `{liga_encuesta}`), **Enviar por correo** y **Marcar como enviada**.
+- **Reportes › Satisfacción postviaje:** respondidas/enviadas, calificación promedio, NPS, clics a reseña y últimos comentarios.
+- Configuración › **Postviaje y referidos**. Campo `crm_trips.survey` (interno). API: `POST /api/trips/:id/survey` (`{ email, markSent }`), públicas `GET|POST /api/public/survey/:token`.
+
+## Programa de referidos (TP-309)
+
+- Cada cliente tiene un **código** (`VC-` + 3 letras + 3 caracteres) y una **liga** `/r/<código>`: página con el descuento de bienvenida, botón de WhatsApp con el mensaje y el código ya escritos, y el formulario del CRM con el código.
+- **Ligar al lead:** por la liga (formulario), si el cliente escribe el código en su mensaje (bot o formulario) o a mano desde la ficha del lead (“🤝 ¿Viene recomendado?”). Nadie se refiere a sí mismo.
+- **Beneficios (configurables):** el referido tiene **$300 MXN** de descuento de bienvenida (estado *Por aplicar / Aplicado*); cuando el lead pasa a **Vendido** (cotización aceptada o tablero), quien refirió gana **$500 MXN** de crédito (*Pendiente / Aplicado / Cancelado*), una sola vez por lead, con aviso al vendedor y al administrador.
+- **Ficha 360 › Datos del cliente:** código, liga, **Invitar por WhatsApp** (plantilla “Invitar a referir”), a quién ha referido y sus créditos. La encuesta postviaje también le muestra su liga para compartir.
+- **Reportes › Referidos:** leads referidos, vendidos, créditos por aplicar y aplicados, y quién recomienda más.
+- Plantillas: `{codigo_referido}`, `{liga_referido}`, `{beneficio_referido}`, `{descuento_referido}`. Campos `crm_clients.referral` y `crm_leads.referral` (internos). API: `GET /api/clients/:id/referral`, `PATCH /api/clients/:id/referral/rewards/:id`, `PUT|PATCH /api/leads/:id/referral`, públicas `GET /api/public/ref/:código`.

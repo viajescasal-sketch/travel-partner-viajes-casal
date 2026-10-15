@@ -28,6 +28,7 @@ const { createItinerary } = require('./src/itinerary');
 const { createPassengers } = require('./src/passengers');
 const { createBookings } = require('./src/bookings');
 const { createSuppliers } = require('./src/suppliers');
+const { createPostventa } = require('./src/postventa');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -258,7 +259,10 @@ async function createApp(options = {}) {
   // TP-201/202: plan de pagos, liga de pago (Mercado Pago opcional) y recordatorios de saldo.
   const payments = createPayments(dataStore, { assignment, mailer, env: process.env, mercadoPago: options.mercadoPago, publicDirectory, ...(options.paymentsNow ? { now: options.paymentsNow } : {}) });
   app.use(payments.publicRouter);
-  const reminders = createReminders(dataStore, assignment, process.env, { payments });
+  // TP-308/309: encuesta postviaje y programa de referidos (rutas públicas /encuesta y /r).
+  const postventa = createPostventa(dataStore, { assignment, mailer, env: process.env, publicDirectory });
+  app.use(postventa.publicRouter);
+  const reminders = createReminders(dataStore, assignment, process.env, { payments, postventa });
   if (!options.skipPurgeTimer && !options.skipReminderTimer) reminders.start();
   const webform = createWebform(dataStore, mailer, process.env, { assignment });
   app.use('/api', webform.router);
@@ -302,6 +306,7 @@ async function createApp(options = {}) {
   app.use('/api', createPassengers(dataStore).router); // TP-303
   app.use('/api', createBookings(dataStore).router); // TP-304
   app.use('/api', createSuppliers(dataStore).router); // TP-305
+  app.use('/api', postventa.apiRouter); // TP-308/309
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');
@@ -337,6 +342,7 @@ async function createApp(options = {}) {
   app.locals.backupService = backupService;
   app.locals.reminders = reminders;
   app.locals.payments = payments;
+  app.locals.postventa = postventa;
   return app;
 }
 
