@@ -105,3 +105,35 @@ body.cv-noselect { user-select: none; cursor: grabbing; }
 @media (max-width: 520px) {
   .pax-grid .span2, .cv-ed-grid .span2 { grid-column: 1 / -1; }
 }
+
+/* TP-304 Reservas · TP-305 Proveedores */
+.bk-card { border-left: 5px solid var(--border); }
+.bk-card.bk-todo { border-left-color: #b13e3e; }
+.bk-card.bk-req { border-left-color: var(--gold); }
+.bk-card.bk-ok { border-left-color: #18815d; }
+.bk-card.bk-off { opacity: .6; }
+.bk-status { padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-weight: 700; }
+.bk-paid { justify-content: flex-start; }
+.bk-paid span:last-child { display: flex; gap: 6px; align-items: center; padding: 9px 0; font-weight: 600; }
+.bk-paid input { width: auto !important; }
+.bk-sup { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 12px; margin-top: 10px; }
+.bk-docs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+.bk-docs select { padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 12px; }
+.bk-panel { margin-top: 18px; }
+.bk-panel td { white-space: normal; vertical-align: top; }
+.bk-panel tr.clickable { cursor: pointer; }
+.bk-panel tr.clickable:hover td { background: var(--bg); }
+.bk-panel .pax-alert { display: inline-block; margin: 0 4px 4px 0; }
+.bk-kpis small { display: block; color: #916300; font-size: 10px; }
+.bk-kpis div { flex-direction: column; gap: 4px; }
+.bk-pill { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+.bk-pill.bk-todo { background: #fdecec; color: #b13e3e; }
+.bk-pill.bk-req { background: #fff5d9; color: #916300; }
+.bk-pill.bk-ok { background: #e8f7ef; color: #18815d; }
+.bk-pill.bk-off { background: var(--bg); color: var(--muted); }
+.sup-card.off { opacity: .55; }
+.sup-card h3 small { font-weight: 500; color: var(--muted); }
+.sup-com { color: var(--coral); font-size: 18px; }
+#suppliers .toolbar select { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; padding: 8px; }
+#suppliers .kb-check { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.bk-panel .note-warn { background: #fff5d9; color: #7a5300; border-radius: 8px; padding: 8px 10px; font-size: 12px; }

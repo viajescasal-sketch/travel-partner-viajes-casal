@@ -94,6 +94,11 @@
     if (on('activities') && lines(c.activitiesDetail).length) add('actividades', 'Actividades', `<div class="card"><ul class="list">${lines(c.activitiesDetail).map((l) => `<li>${esc(l)}</li>`).join('')}</ul></div>`);
     if (on('insurance') && (c.insuranceProvider || c.insurancePolicy || c.insuranceDetail)) add('seguro', 'Seguro', `<div class="card"><div class="kv">${c.insuranceProvider ? `<dt>Aseguradora</dt><dd>${esc(c.insuranceProvider)}</dd>` : ''}${c.insurancePolicy ? `<dt>Póliza</dt><dd>${esc(c.insurancePolicy)}</dd>` : ''}</div>${c.insuranceDetail ? `<p class="tip">${esc(c.insuranceDetail)}</p>` : ''}</div>`);
 
+    // TP-304: reservas confirmadas (proveedor y clave; nunca costos)
+    const bks = Array.isArray(trip.bookings) ? trip.bookings : [];
+    const BI = { Vuelo: '✈️', Hotel: '🏨', Traslado: '🚐', Tour: '🎟️', Seguro: '🛡️', Otro: '📌' };
+    if (bks.length) add('reservas', 'Reservas', `<div class="card">${bks.map((b) => `<div class="phone"><span>${BI[b.type] || '📌'} ${esc(b.description || b.type)}${b.supplier ? `<br><small class="muted">${esc(b.supplier)}${b.start_date ? ` · ${esc(fmt(b.start_date))}` : ''}</small>` : ''}</span><b>${esc(b.confirmation)}</b></div>`).join('')}<p class="muted" style="margin:10px 0 0">Muestra la clave de confirmación en el mostrador del hotel, la aerolínea o el operador.</p></div>`);
+
     // TP-303: viajeros (solo nombres)
     const pax = (trip.passengers?.list || []);
     if (pax.length) add('viajeros', 'Viajeros', `<div class="card"><ul class="list">${pax.map((x) => `<li>${esc(x.name)}${x.type && x.type !== 'Adulto' ? ` <span class="muted">· ${esc(x.type.toLowerCase())}</span>` : ''}${x.holder ? ' <span class="muted">· titular</span>' : ''}</li>`).join('')}</ul><p class="muted" style="margin:10px 0 0">¿Algún nombre está mal escrito? Avísale a tu Travel Partner: debe coincidir con tu identificación.</p></div>`);

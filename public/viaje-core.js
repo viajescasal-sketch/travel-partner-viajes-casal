@@ -172,7 +172,8 @@
       provider: t('provider'),
       notes: t('notes', 600),
       cost: numOr(raw.cost),
-      price: numOr(raw.price)
+      price: numOr(raw.price),
+      supplier_id: Number.isInteger(Number(raw.supplier_id)) && Number(raw.supplier_id) > 0 ? Number(raw.supplier_id) : null
     };
     if (b.type === 'vuelo') Object.assign(b, { airline: t('airline', 60), flight: t('flight', 20), from: t('from', 60), to: t('to', 60), arrival: TIME_RE.test(str(raw.arrival)) ? str(raw.arrival) : '' });
     if (b.type === 'traslado') Object.assign(b, { from: t('from', 80), to: t('to', 80) });
@@ -350,10 +351,142 @@
     return sortBlocks(c);
   }
 
+
+  /* =========================================================
+     TP-305 · CATÁLOGO DE PROVEEDORES
+     ========================================================= */
+  const SUPPLIER_TYPES = ['Hotel', 'Mayorista', 'Operador de tours', 'Traslados', 'Aerolínea', 'Seguro', 'Otro'];
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  function cleanSupplier(raw) {
+    const r = raw && typeof raw === 'object' ? raw : {};
+    const t = (k, n) => str(r[k]).slice(0, n);
+    const name = t('name', 120).replace(/\s+/g, ' ');
+    if (!name) throw Object.assign(new Error('El nombre del proveedor es obligatorio'), { status: 400, expose: true });
+    const email = t('email', 160).toLowerCase();
+    if (email && !EMAIL_RE.test(email)) throw Object.assign(new Error('El correo del proveedor no es válido'), { status: 400, expose: true });
+    const commission = r.commission === '' || r.commission == null ? '' : Number(String(r.commission).replace(/[^0-9.]/g, ''));
+    if (commission !== '' && (!Number.isFinite(commission) || commission < 0 || commission > 100)) throw Object.assign(new Error('La comisión debe estar entre 0 y 100 %'), { status: 400, expose: true });
+    const website = t('website', 200);
+    return {
+      name, type: SUPPLIER_TYPES.includes(r.type) ? r.type : 'Otro',
+      destinations: t('destinations', 200), contact_name: t('contact_name', 120), phone: t('phone', 40), whatsapp: t('whatsapp', 40), email,
+      website: website && !/^https?:\/\//i.test(website) ? `https://${website}` : website,
+      commission: commission === '' ? '' : Math.round(commission * 100) / 100,
+      rates: t('rates', 3000), payment_terms: t('payment_terms', 300), notes: t('notes', 2000),
+      active: r.active !== false
+    };
+  }
+  // Costo neto a partir del precio público y la comisión del proveedor.
+  const netFromCommission = (price, commission) => (price === '' || commission === '' || commission == null ? '' : Math.round(Number(price) * (1 - Number(commission) / 100) * 100) / 100);
+  const findSupplierByName = (suppliers, name) => { const n = str(name).toLowerCase(); return n ? (suppliers || []).find((x) => x.name.toLowerCase() === n) || null : null; };
+
+  /* =========================================================
+     TP-304 · RESERVAS CENTRALIZADAS
+     ========================================================= */
+  const BOOKING_TYPES = ['Vuelo', 'Hotel', 'Traslado', 'Tour', 'Seguro', 'Otro'];
+  const BOOKING_STATUSES = ['Por reservar', 'Solicitada', 'Confirmada', 'Cancelada'];
+  const BOOKING_ICONS = { Vuelo: '✈️', Hotel: '🏨', Traslado: '🚐', Tour: '🎟️', Seguro: '🛡️', Otro: '📌' };
+  const MAX_BOOKINGS = 40;
+  function cleanBooking(raw, i = 0) {
+    if (!raw || typeof raw !== 'object') return null;
+    const t = (k, n = 120) => str(raw[k]).slice(0, n);
+    const b = {
+      id: /^r[a-z0-9]{3,16}$/i.test(String(raw.id || '')) ? String(raw.id) : `r${Date.now().toString(36)}${i}`,
+      type: BOOKING_TYPES.includes(raw.type) ? raw.type : 'Otro',
+      status: BOOKING_STATUSES.includes(raw.status) ? raw.status : 'Por reservar',
+      supplier_id: Number.isInteger(Number(raw.supplier_id)) && Number(raw.supplier_id) > 0 ? Number(raw.supplier_id) : null,
+      supplier_name: t('supplier_name'),
+      confirmation: t('confirmation', 60),
+      description: t('description', 300),
+      start_date: isDate(raw.start_date) ? raw.start_date : '',
+      end_date: isDate(raw.end_date) ? raw.end_date : '',
+      time: TIME_RE.test(str(raw.time)) ? str(raw.time) : '',
+      cost: numOr(raw.cost), price: numOr(raw.price),
+      supplier_due: isDate(raw.supplier_due) ? raw.supplier_due : '',
+      supplier_paid: raw.supplier_paid === true,
+      voucher_ids: (Array.isArray(raw.voucher_ids) ? raw.voucher_ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 10),
+      source: /^b[a-z0-9]{3,12}$/.test(String(raw.source || '')) ? raw.source : '',
+      notes: t('notes', 1000)
+    };
+    if (b.end_date && b.start_date && b.end_date < b.start_date) b.end_date = b.start_date;
+    if (!b.description && !b.supplier_name && !b.confirmation) return null;
+    return b;
+  }
+  function cleanBookings(list) {
+    return (Array.isArray(list) ? list : []).slice(0, MAX_BOOKINGS).map(cleanBooking).filter(Boolean)
+      .sort((a, b) => (a.start_date || '9999').localeCompare(b.start_date || '9999') || (a.time || '99').localeCompare(b.time || '99'));
+  }
+  // Avisos por reserva. today = AAAA-MM-DD (Cancún).
+  function bookingAlerts(b, trip = {}, today = '') {
+    const out = [];
+    if (b.status === 'Cancelada') return out;
+    const daysTo = (d) => (isDate(d) && isDate(today) ? daysBetween(today, d) : null);
+    const toTrip = daysTo(trip.start_date);
+    if (b.status === 'Por reservar') out.push({ level: toTrip != null && toTrip <= 30 ? 'danger' : 'warn', text: toTrip != null && toTrip <= 30 ? `Sin reservar y el viaje sale en ${Math.max(toTrip, 0)} días` : 'Sin reservar' });
+    if (b.status === 'Solicitada') out.push({ level: toTrip != null && toTrip <= 15 ? 'danger' : 'info', text: 'Esperando confirmación del proveedor' });
+    if (b.status === 'Confirmada' && !b.confirmation) out.push({ level: 'warn', text: 'Confirmada sin número de confirmación' });
+    if (b.supplier_due && !b.supplier_paid) {
+      const d = daysTo(b.supplier_due);
+      if (d != null && d < 0) out.push({ level: 'danger', text: `Pago al proveedor vencido (${-d} ${d === -1 ? 'día' : 'días'})` });
+      else if (d != null && d <= 7) out.push({ level: 'warn', text: d === 0 ? 'Pagar al proveedor hoy' : `Pagar al proveedor en ${d} ${d === 1 ? 'día' : 'días'}` });
+    }
+    return out;
+  }
+  function bookingsSummary(list, trip = {}, today = '') {
+    const l = (Array.isArray(list) ? list : []).filter((b) => b.status !== 'Cancelada');
+    const confirmed = l.filter((b) => b.status === 'Confirmada').length;
+    const alerts = l.flatMap((b) => bookingAlerts(b, trip, today));
+    const sum = (k) => Math.round(l.reduce((s, b) => s + (Number(b[k]) || 0), 0) * 100) / 100;
+    const owed = Math.round(l.filter((b) => !b.supplier_paid).reduce((s, b) => s + (Number(b.cost) || 0), 0) * 100) / 100;
+    return { total: l.length, confirmed, pending: l.length - confirmed, danger: alerts.filter((a) => a.level === 'danger').length, warn: alerts.filter((a) => a.level === 'warn').length, cost: sum('cost'), price: sum('price'), owed };
+  }
+  const CANVAS_TO_BOOKING = { vuelo: 'Vuelo', hotel: 'Hotel', traslado: 'Traslado', tour: 'Tour', seguro: 'Seguro' };
+  // Reservas a partir del lienzo del viaje (una por bloque; no repite las que ya existen).
+  function bookingsFromCanvas(canvas, trip, existing = [], suppliers = []) {
+    const c = normalizeCanvas(canvas, trip);
+    const start = trip?.start_date || c.start_date;
+    const on = (day) => (isDate(start) ? addDays(start, day) : '');
+    const have = new Set((existing || []).map((b) => b.source).filter(Boolean));
+    const out = [];
+    c.blocks.filter((b) => CANVAS_TO_BOOKING[b.type] && !have.has(b.id)).forEach((b, i) => {
+      const sup = (b.supplier_id && (suppliers || []).find((x) => x.id === b.supplier_id)) || findSupplierByName(suppliers, b.provider) || (b.type === 'vuelo' ? findSupplierByName(suppliers, b.airline) : null);
+      const desc = b.type === 'vuelo' ? [b.title, b.airline, b.flight, [b.from, b.to].filter(Boolean).join(' → ')].filter(Boolean).join(' · ')
+        : b.type === 'hotel' ? [b.title, b.room, b.plan, `${b.nights} ${b.nights === 1 ? 'noche' : 'noches'}`].filter(Boolean).join(' · ')
+          : b.type === 'traslado' ? [b.title, [b.from, b.to].filter(Boolean).join(' → ')].filter(Boolean).join(' · ') : b.title;
+      const bk = cleanBooking({
+        id: `r${Date.now().toString(36)}c${i}`, type: CANVAS_TO_BOOKING[b.type], status: 'Por reservar',
+        supplier_id: sup?.id || null, supplier_name: sup?.name || b.provider || (b.type === 'vuelo' ? b.airline : '') || (b.type === 'hotel' ? b.title : ''),
+        description: desc, start_date: on(b.day), end_date: b.type === 'hotel' ? on(b.day + b.nights) : on(b.day), time: b.time,
+        cost: b.cost, price: b.price, source: b.id, notes: b.notes
+      }, i);
+      if (bk) out.push(bk);
+    });
+    return out;
+  }
+  // Sin lienzo: reservas básicas desde la confirmación de servicios.
+  function bookingsFromConfirmation(conf, trip) {
+    const c = conf || {};
+    const out = [];
+    const push = (b) => { const x = cleanBooking({ ...b, status: 'Por reservar' }, out.length); if (x) out.push(x); };
+    if (c.services?.flight !== false && (c.airline || c.outboundFlight)) {
+      push({ type: 'Vuelo', supplier_name: c.airline, description: ['Vuelo de ida', c.outboundFlight].filter(Boolean).join(' · '), start_date: trip.start_date, confirmation: c.flightBooking });
+      if (c.returnFlight || c.returnDeparture) push({ type: 'Vuelo', supplier_name: c.airline, description: ['Vuelo de regreso', c.returnFlight].filter(Boolean).join(' · '), start_date: trip.end_date, confirmation: c.flightBooking });
+    }
+    if (c.services?.hotel !== false && c.hotelName) push({ type: 'Hotel', supplier_name: c.hotelName, description: [c.hotelName, c.room, c.mealPlan].filter(Boolean).join(' · '), start_date: trip.start_date, end_date: trip.end_date });
+    if (c.services?.transfer !== false && (c.operator || c.transferOutOrigin)) push({ type: 'Traslado', supplier_name: c.operator, description: `Traslado ${[c.transferOutOrigin, c.transferOutDestination].filter(Boolean).join(' → ')}${c.transferBackOrigin ? ' y regreso' : ''}`, start_date: trip.start_date, end_date: trip.end_date });
+    if (c.services?.insurance && (c.insuranceProvider || c.insurancePolicy)) push({ type: 'Seguro', supplier_name: c.insuranceProvider, confirmation: c.insurancePolicy, description: 'Seguro de viaje', start_date: trip.start_date, end_date: trip.end_date });
+    return out;
+  }
+  // Lo que el cliente puede ver en su itinerario: solo reservas confirmadas, sin costos.
+  const publicBookings = (list) => (Array.isArray(list) ? list : []).filter((b) => b.status === 'Confirmada' && b.confirmation)
+    .map((b) => ({ type: b.type, description: b.description, supplier: b.supplier_name, confirmation: b.confirmation, start_date: b.start_date, end_date: b.end_date, time: b.time }));
+
   global.TPTrip = {
     DOC_TYPES, PAX_TYPES, MAX_PASSENGERS, ageOn, paxType, cleanPassenger, cleanPassengers, passengerAlerts, tripPassengerSummary, passengerLines, mergeCompanions, companionFrom,
     BLOCKS, BLOCK_TYPES, MAX_BLOCKS, MAX_DAYS, newBlockId, canvasDays, cleanBlock, normalizeCanvas, sortBlocks, canvasTotals, canvasToQuote, canvasToItinerary, canvasToConfirmation, canvasFromTrip,
-    shortDate, addDays, isDate
+    shortDate, addDays, isDate,
+    SUPPLIER_TYPES, cleanSupplier, netFromCommission, findSupplierByName,
+    BOOKING_TYPES, BOOKING_STATUSES, BOOKING_ICONS, MAX_BOOKINGS, cleanBooking, cleanBookings, bookingAlerts, bookingsSummary, bookingsFromCanvas, bookingsFromConfirmation, publicBookings
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.TPTrip;
 }(typeof window !== 'undefined' ? window : globalThis));

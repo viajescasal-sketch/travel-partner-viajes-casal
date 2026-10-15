@@ -140,7 +140,7 @@ const send = (method, url, body) => api(url, { method, body: body === undefined 
 async function loadAll() {
   try {
     const data = await api('/api/crm');
-    for (const key of ['clients', 'leads', 'quotes', 'trips', 'followups', 'users']) db[key] = data[key] || [];
+    for (const key of ['clients', 'leads', 'quotes', 'trips', 'followups', 'users', 'suppliers']) db[key] = data[key] || [];
     db.agency = data.settings?.agency || {};
     db.documents = data.settings?.documents || {};
     db.leadQuestions = data.settings?.leadQuestions || [];
@@ -179,6 +179,7 @@ function renderAll() {
   renderCalendar();
   renderReports();
   renderSettings();
+  if (typeof renderReservas === 'function') renderReservas(); // TP-304/305
   if (isAdmin() && ui.settingsTab === 'usersPanel') loadUsers();
 }
 
@@ -809,7 +810,7 @@ function renderClients() {
 /* ---------- viajes ---------- */
 function renderTrips() {
   const today = todayStr();
-  const card = (t, label) => `<article class="trip-card clickable" data-trip="${t.id}"><small>${escapeHtml(label)}</small><h4>${escapeHtml(t.destination)}</h4><p>${escapeHtml(clientName(t.client_id))}</p><p>${escapeHtml(t.status)}${t.confirmation ? ' · ✓ Confirmación' : ''}</p>${tripBadges(t)}</article>`;
+  const card = (t, label) => `<article class="trip-card clickable" data-trip="${t.id}"><small>${escapeHtml(label)}</small><h4>${escapeHtml(t.destination)}</h4><p>${escapeHtml(clientName(t.client_id))}</p><p>${escapeHtml(t.status)}${t.confirmation ? ' · ✓ Confirmación' : ''}</p>${tripBadges(t)}${tripBookingBadge(t)}</article>`;
   const open = db.trips.filter((t) => t.status !== 'Cerrado');
   const upcoming = open.filter((t) => t.start_date > today).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const active = open.filter((t) => t.start_date <= today && t.end_date >= today);
@@ -1310,7 +1311,7 @@ function serviceFields(det, svc, prefix) {
         ${imgField(`${prefix}.items.${n}.mediaId`, getPath(det, `${prefix}.items.${n}.mediaId`), 'Foto (opcional)')}
         ${i(`items.${n}.desc`, 'Descripción breve', 'placeholder="Snorkel, tirolesas y río subterráneo" maxlength="200"', 'full')}</div></div>`).join('')}`;
     default: return `<div class="cz-grid">
-      ${i('hotel', 'Hotel', 'placeholder="Hyatt Ziva Cancún" maxlength="120"', 'span2')}
+      ${i('hotel', 'Hotel', 'placeholder="Hyatt Ziva Cancún" maxlength="120" list="tpSupList"', 'span2')}
       ${imgField(`${prefix}.mediaId`, getPath(det, `${prefix}.mediaId`), 'Foto del hotel', { cls: 'span2' })}
       ${czSelect(det, `${prefix}.stars`, 'Estrellas', ['5', '4', '3'], { fallback: '5' })}
       ${i('room', 'Habitación', 'placeholder="Junior Suite Ocean View" maxlength="120"')}${i('plan', 'Plan', 'placeholder="Todo Incluido" maxlength="80"', 'span2')}
@@ -1650,7 +1651,7 @@ function tripModal(id, preset = {}) {
     ${field('Regreso*', `<input name="end_date" type="date" required value="${escapeHtml(t?.end_date ?? fromLead?.end_date)}">`)}
     ${field('Estado', `<select name="status">${options(TRIP_STATUSES, t?.status || 'Confirmado')}</select>`, true)}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(t?.notes)}</textarea>`, true)}
-    ${t ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-confirmation="${t.id}">${t.confirmation ? 'Editar confirmación de servicios' : 'Preparar confirmación de servicios'}</button><button type="button" class="btn secondary small" data-res-pdf="${t.id}">Ver PDF de confirmación</button><button type="button" class="btn secondary small" data-itinerary="${t.id}">📱 Itinerario digital</button><button type="button" class="btn secondary small" data-pax-trip="${t.id}">${escapeHtml(tripPaxButtonLabel(t))}</button><button type="button" class="btn secondary small" data-cv-trip="${t.id}">🧩 Canvas</button><button type="button" class="btn secondary small" data-wa-trip="${t.id}">💬 WhatsApp</button>${t.confirmation ? '<small>✓ Confirmación lista</small>' : ''}</div>` : ''}
+    ${t ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-confirmation="${t.id}">${t.confirmation ? 'Editar confirmación de servicios' : 'Preparar confirmación de servicios'}</button><button type="button" class="btn secondary small" data-res-pdf="${t.id}">Ver PDF de confirmación</button><button type="button" class="btn secondary small" data-itinerary="${t.id}">📱 Itinerario digital</button><button type="button" class="btn secondary small" data-pax-trip="${t.id}">${escapeHtml(tripPaxButtonLabel(t))}</button><button type="button" class="btn secondary small" data-cv-trip="${t.id}">🧩 Canvas</button><button type="button" class="btn secondary small" data-bk-trip="${t.id}">${escapeHtml(tripBookingLabel(t))}</button><button type="button" class="btn secondary small" data-wa-trip="${t.id}">💬 WhatsApp</button>${t.confirmation ? '<small>✓ Confirmación lista</small>' : ''}</div>` : ''}
     ${t ? historyButton('trips', t.id) : ''}
     ${deleteBlock('viaje', t?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${t ? 'Guardar cambios' : 'Guardar viaje'}</button></div></form>`;

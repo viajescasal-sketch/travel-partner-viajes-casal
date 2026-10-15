@@ -199,7 +199,7 @@
         <label>Día<select data-cf="day">${options(dayOpts, b.day)}</select></label>
         ${ed(b, 'time', b.type === 'hotel' ? 'Check-in' : b.type === 'vuelo' ? 'Sale' : 'Hora', 'type="time"')}
         ${extra}
-        ${b.type === 'nota' ? '' : ed(b, 'provider', 'Proveedor u operador', 'maxlength="120" placeholder="HotelDO, Azabache, Grupo Xcaret…"', 'span2')}
+        ${b.type === 'nota' ? '' : ed(b, 'provider', `Proveedor u operador${b.supplier_id && typeof supplierCommission === 'function' ? supplierCommission(b.supplier_id) : ''}`, 'maxlength="120" list="tpSupList" placeholder="Elige del catálogo de proveedores"', 'span2')}
         ${b.type === 'nota' ? '' : ed(b, 'cost', 'Costo neto (MXN)', 'inputmode="decimal" maxlength="14"') + ed(b, 'price', 'Precio de venta (MXN)', 'inputmode="decimal" maxlength="14"')}
         <label class="full">${b.type === 'vuelo' ? 'Equipaje y notas' : 'Notas'}<textarea data-cf="notes" rows="2" maxlength="600">${H(b.notes)}</textarea></label>
         </div></fieldset></div>`;
@@ -264,6 +264,13 @@
       else if (f === 'nights') b.nights = Math.min(Math.max(parseInt(el.value, 10) || 1, 1), 45);
       else if (f === 'cost' || f === 'price') b[f] = el.value.trim() === '' ? '' : Math.max(Number(el.value.replace(/[^0-9.]/g, '')) || 0, 0);
       else b[f] = el.value;
+      // TP-305: proveedor del catálogo y costo neto con su comisión.
+      if (f === 'provider' && typeof matchSupplier === 'function') { const sup = matchSupplier(b.provider); b.supplier_id = sup ? sup.id : null; }
+      if ((f === 'provider' || f === 'price') && b.cost === '' && b.supplier_id) {
+        const sup = (db.suppliers || []).find((x) => x.id === b.supplier_id);
+        const net = T.netFromCommission(b.price, sup?.commission);
+        if (net !== '') { b.cost = net; const c = $('#cvEditor [data-cf="cost"]'); if (c) c.value = net; }
+      }
       changed();
     };
     body.onchange = (e) => { if (e.target.dataset.cf === 'day' || e.target.dataset.cf === 'stars') body.oninput(e); };

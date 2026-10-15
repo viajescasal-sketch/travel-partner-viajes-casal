@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="/styles.css?v=tp106" />
     <link rel="stylesheet" href="/tp006.css?v=tp301" />
-    <link rel="stylesheet" href="/viaje.css?v=tp303" />
+    <link rel="stylesheet" href="/viaje.css?v=tp305" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -121,6 +121,7 @@
           ><button data-page="quotes">▤ Cotizaciones</button
           ><button data-page="clients">◉ Clientes</button
           ><button data-page="trips">✈ Viajes</button
+          ><button data-page="suppliers">▦ Proveedores</button
           ><button data-page="followups">◷ Seguimientos <em id="followBadge" class="hidden">0</em></button
           ><button data-page="reports" data-admin-only>▥ Reportes</button
           ><button data-page="activity" data-admin-only>☰ Bitácora</button
@@ -387,6 +388,23 @@
                 <div id="pastTrips"></div>
               </div>
             </div>
+            <div class="panel bk-panel" id="bookingsPanel"></div>
+          </section>
+          <section id="suppliers" class="page">
+            <div class="heading">
+              <div>
+                <p class="eyebrow">OPERACIÓN</p>
+                <h2>Proveedores</h2>
+                <p>Hoteles, mayoristas, operadores y traslados con su contacto, tarifas y comisión. Se eligen al cotizar y al reservar.</p>
+              </div>
+              <button class="btn primary hidden" id="newSupplier">+ Nuevo proveedor</button>
+            </div>
+            <div class="toolbar">
+              <div class="search grow">⌕ <input id="supSearch" placeholder="Buscar proveedor, destino o contacto..." /></div>
+              <select id="supTypeFilter"></select>
+              <label class="kb-check"><input type="checkbox" id="supInactive" /> Ver inactivos</label>
+            </div>
+            <div id="supplierGrid" class="cards"></div>
           </section>
           <section id="followups" class="page">
             <div class="heading">
@@ -834,9 +852,10 @@
         cursor: wait;
       }
     </style>
-    <script src="/viaje-core.js?v=tp303"></script>
-    <script src="/docs/documents.js?v=tp303"></script>
-    <script src="/app.js?v=tp303"></script>
-    <script src="/viaje.js?v=tp303"></script>
+    <script src="/viaje-core.js?v=tp305"></script>
+    <script src="/docs/documents.js?v=tp305"></script>
+    <script src="/app.js?v=tp305"></script>
+    <script src="/viaje.js?v=tp305"></script>
+    <script src="/reservas.js?v=tp305"></script>
   </body>
 </html>
