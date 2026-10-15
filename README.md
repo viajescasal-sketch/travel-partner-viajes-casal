@@ -253,3 +253,21 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - **Acompañantes frecuentes:** al guardar, los pasajeros se recuerdan en el cliente (`crm_clients.companions`) y se ofrecen con un clic en su siguiente viaje; se pueden quitar desde **Ficha 360 › Datos del cliente**.
 - La **confirmación de servicios** toma titular, número y lista de pasajeros de esta lista (con “menor, 8 años”). El **itinerario digital** del cliente solo muestra nombres y tipo.
 - **Privacidad:** número de documento y fecha de nacimiento solo los ve el equipo; no salen en ligas públicas ni en la bitácora (que solo anota “Pasajeros actualizados: 3”). Solo se escriben por `PUT /api/trips/:id/passengers` (`GET` para leer) y `PUT /api/clients/:id/companions`.
+
+## Reservas centralizadas (TP-304)
+
+- Botón **🧾 Reservas** en el viaje: un renglón por servicio (vuelo, hotel, traslado, tour, seguro u otro) con proveedor (del catálogo o escrito), número de confirmación, estado (*Por reservar → Solicitada → Confirmada* o *Cancelada*), fechas y hora, costo neto, precio de venta, fecha límite para pagar al proveedor, “Pagado” y notas internas.
+- **✨ Crear reservas desde el Canvas** (o desde la confirmación si no hay lienzo): un renglón por bloque, ligado al catálogo, sin repetir los que ya existen. Si el proveedor tiene comisión y no hay costo, el costo neto se calcula solo (precio − comisión).
+- **Documentos:** cada reserva puede adjuntar o ligar documentos del viaje (los mismos del itinerario digital, así que el cliente también los ve).
+- **Avisos:** sin reservar y el viaje sale en ≤ 30 días (⛔), solicitada sin confirmar a ≤ 15 días, confirmada sin clave, pago al proveedor por vencer (7 días) o vencido.
+- **Viajes › Reservas:** panel con todas las reservas de los viajes abiertos (por reservar, solicitadas, confirmadas, total por pagar a proveedores y lo que vence en 7 días), filtros por estado y proveedor, y “Solo lo que requiere atención”. La tarjeta del viaje muestra 🧾 confirmadas/total.
+- **Cliente:** su itinerario digital muestra solo las reservas **confirmadas** con proveedor y clave; nunca costos ni pagos al proveedor. La clave del vuelo confirmado llena “Reserva de vuelo” en la confirmación.
+- Campo `crm_trips.bookings` (JSON interno, máximo 40). API: `GET|PUT /api/trips/:id/bookings`. La bitácora anota altas, bajas y cambios de estado.
+
+## Catálogo de proveedores (TP-305)
+
+- Menú **Proveedores**: nombre, tipo (hotel, mayorista, operador de tours, traslados, aerolínea, seguro, otro), destinos, contacto, teléfono, WhatsApp, correo, sitio, **% de comisión**, tarifas de referencia, condiciones de pago, notas y activo/inactivo. Cada tarjeta muestra cuántas reservas tiene y cuánto se le debe.
+- Todos lo consultan; **administrador y Operaciones** lo editan; solo el administrador elimina (se recomienda marcar inactivo).
+- Se elige al cotizar (proveedor de cada bloque del Canvas y hotel del Cotizador) y al reservar. Con comisión registrada, el costo neto se calcula solo.
+- Se precargaron HotelDO, Azabache, Grupo Xcaret y Travel Shop (una sola vez; completa contacto y comisión).
+- Tabla `crm_suppliers` (se crea sola) e incluida en el respaldo JSON. API: `GET|POST /api/suppliers`, `PATCH|DELETE /api/suppliers/:id`.
