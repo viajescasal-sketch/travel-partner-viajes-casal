@@ -94,6 +94,10 @@
     if (on('activities') && lines(c.activitiesDetail).length) add('actividades', 'Actividades', `<div class="card"><ul class="list">${lines(c.activitiesDetail).map((l) => `<li>${esc(l)}</li>`).join('')}</ul></div>`);
     if (on('insurance') && (c.insuranceProvider || c.insurancePolicy || c.insuranceDetail)) add('seguro', 'Seguro', `<div class="card"><div class="kv">${c.insuranceProvider ? `<dt>Aseguradora</dt><dd>${esc(c.insuranceProvider)}</dd>` : ''}${c.insurancePolicy ? `<dt>Póliza</dt><dd>${esc(c.insurancePolicy)}</dd>` : ''}</div>${c.insuranceDetail ? `<p class="tip">${esc(c.insuranceDetail)}</p>` : ''}</div>`);
 
+    // TP-303: viajeros (solo nombres)
+    const pax = (trip.passengers?.list || []);
+    if (pax.length) add('viajeros', 'Viajeros', `<div class="card"><ul class="list">${pax.map((x) => `<li>${esc(x.name)}${x.type && x.type !== 'Adulto' ? ` <span class="muted">· ${esc(x.type.toLowerCase())}</span>` : ''}${x.holder ? ' <span class="muted">· titular</span>' : ''}</li>`).join('')}</ul><p class="muted" style="margin:10px 0 0">¿Algún nombre está mal escrito? Avísale a tu Travel Partner: debe coincidir con tu identificación.</p></div>`);
+
     // Documentos
     if (p.vouchers.length) add('documentos', 'Documentos', `<div class="card">${p.vouchers.map((v) => `<div class="doc"><span>${v.mime === 'application/pdf' ? '📄' : '🖼'} ${esc(v.name)}</span><span><a href="${esc(file(v.id))}" target="_blank" rel="noopener">Ver</a><a href="${esc(file(v.id))}?download=1">Descargar</a></span></div>`).join('')}<p class="muted" style="margin:10px 0 0">Tip: descárgalos antes de salir por si no tienes señal.</p></div>`);
 

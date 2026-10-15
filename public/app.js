@@ -809,7 +809,7 @@ function renderClients() {
 /* ---------- viajes ---------- */
 function renderTrips() {
   const today = todayStr();
-  const card = (t, label) => `<article class="trip-card clickable" data-trip="${t.id}"><small>${escapeHtml(label)}</small><h4>${escapeHtml(t.destination)}</h4><p>${escapeHtml(clientName(t.client_id))}</p><p>${escapeHtml(t.status)}${t.confirmation ? ' · ✓ Confirmación' : ''}</p></article>`;
+  const card = (t, label) => `<article class="trip-card clickable" data-trip="${t.id}"><small>${escapeHtml(label)}</small><h4>${escapeHtml(t.destination)}</h4><p>${escapeHtml(clientName(t.client_id))}</p><p>${escapeHtml(t.status)}${t.confirmation ? ' · ✓ Confirmación' : ''}</p>${tripBadges(t)}</article>`;
   const open = db.trips.filter((t) => t.status !== 'Cerrado');
   const upcoming = open.filter((t) => t.start_date > today).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const active = open.filter((t) => t.start_date <= today && t.end_date >= today);
@@ -1108,6 +1108,7 @@ function openModal(eyebrow, title, html, opts = {}) {
   const body = $('#modalBody');
   body.oninput = null; body.onchange = null; body.onclick = null;
   $('#modalBg .modal').classList.toggle('wide', Boolean(opts.wide));
+  $('#modalBg .modal').classList.toggle('xwide', Boolean(opts.xwide)); // TP-302: lienzo
   $('#modalEyebrow').textContent = eyebrow;
   $('#modalTitle').textContent = title;
   $('#modalBody').innerHTML = html;
@@ -1175,7 +1176,7 @@ function leadModal(id, presetClientId) {
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
     ${lead ? autoScoreHtml(lead) : ''}
     ${qualHtml(lead)}
-    ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn primary small" data-wa-lead="${lead.id}">💬 Plantilla WhatsApp</button><button type="button" class="btn secondary small" data-client="${lead.client_id}">Ficha 360</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="Llamada">📞 Programar llamada</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="WhatsApp">💬 Programar WhatsApp</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Otro seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
+    ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-cv-lead="${lead.id}">🧩 Armar en Canvas${lead.canvas?.blocks?.length ? ` (${lead.canvas.blocks.length})` : ''}</button><button type="button" class="btn primary small" data-wa-lead="${lead.id}">💬 Plantilla WhatsApp</button><button type="button" class="btn secondary small" data-client="${lead.client_id}">Ficha 360</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="Llamada">📞 Programar llamada</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="WhatsApp">💬 Programar WhatsApp</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Otro seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
     ${lead ? leadContactHtml(lead) : ''}
     ${lead ? leadFollowupsHtml(lead) : ''}
     ${lead ? historyButton('leads', lead.id) : ''}
@@ -1468,6 +1469,7 @@ function quoteModal(id, preset = {}) {
     CZ_SERVICES.forEach(([k]) => { if (det.services[k] && k !== det.varying && det.fixed?.[k]) out.fixed[k] = det.fixed[k]; });
     out.proposals = det.proposals.map((p) => ({ [det.varying]: p[det.varying] || {}, price: p.price || {}, pay: p.pay || { esquema: 'anticipo' } }));
     if (out.fixed.tours?.items) out.fixed.tours.items = out.fixed.tours.items.filter(Boolean);
+    if (det.canvas) out.canvas = det.canvas; // TP-302: se conserva el lienzo de origen
     out.proposals.forEach((p) => { if (p.tours?.items) p.tours.items = p.tours.items.filter(Boolean); if (p.pay.pagos) p.pay.pagos = p.pay.pagos.map((x) => x || {}); });
     return out;
   }
@@ -1648,7 +1650,7 @@ function tripModal(id, preset = {}) {
     ${field('Regreso*', `<input name="end_date" type="date" required value="${escapeHtml(t?.end_date ?? fromLead?.end_date)}">`)}
     ${field('Estado', `<select name="status">${options(TRIP_STATUSES, t?.status || 'Confirmado')}</select>`, true)}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(t?.notes)}</textarea>`, true)}
-    ${t ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-confirmation="${t.id}">${t.confirmation ? 'Editar confirmación de servicios' : 'Preparar confirmación de servicios'}</button><button type="button" class="btn secondary small" data-res-pdf="${t.id}">Ver PDF de confirmación</button><button type="button" class="btn secondary small" data-itinerary="${t.id}">📱 Itinerario digital</button><button type="button" class="btn secondary small" data-wa-trip="${t.id}">💬 WhatsApp</button>${t.confirmation ? '<small>✓ Confirmación lista</small>' : ''}</div>` : ''}
+    ${t ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-confirmation="${t.id}">${t.confirmation ? 'Editar confirmación de servicios' : 'Preparar confirmación de servicios'}</button><button type="button" class="btn secondary small" data-res-pdf="${t.id}">Ver PDF de confirmación</button><button type="button" class="btn secondary small" data-itinerary="${t.id}">📱 Itinerario digital</button><button type="button" class="btn secondary small" data-pax-trip="${t.id}">${escapeHtml(tripPaxButtonLabel(t))}</button><button type="button" class="btn secondary small" data-cv-trip="${t.id}">🧩 Canvas</button><button type="button" class="btn secondary small" data-wa-trip="${t.id}">💬 WhatsApp</button>${t.confirmation ? '<small>✓ Confirmación lista</small>' : ''}</div>` : ''}
     ${t ? historyButton('trips', t.id) : ''}
     ${deleteBlock('viaje', t?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${t ? 'Guardar cambios' : 'Guardar viaje'}</button></div></form>`;
@@ -2008,6 +2010,7 @@ async function clientFile(id, opts = {}) {
         ${historyButton('clients', c.id)}
         ${deleteBlock('cliente y todo su historial', c.id)}
         <div class="modal-actions"><button type="button" class="btn secondary close">${readonly ? 'Cerrar' : 'Cancelar'}</button>${readonly ? '' : '<button type="submit" class="btn primary">Guardar cambios</button>'}</div></form>
+      <div class="c360-companions" id="c360Companions"></div>
     </section>
   </div>`;
   $('#modalBody').innerHTML = html;
@@ -2025,6 +2028,7 @@ async function clientFile(id, opts = {}) {
   const showTab = (name) => { $$('[data-c360-tab]').forEach((b) => b.classList.toggle('active', b.dataset.c360Tab === name)); $$('.c360-pane').forEach((p) => { p.hidden = p.dataset.pane !== name; }); };
   showTab(tab);
   paintTimeline();
+  paintCompanions(c); // TP-303
   $('#modalBody').onclick = async (e) => {
     const t = e.target;
     if (t.closest('[data-c360-tab]')) { showTab(t.closest('[data-c360-tab]').dataset.c360Tab); return; }
@@ -2507,7 +2511,7 @@ async function confirmationModal(tripId) {
       <section class="cz-card"><h4>Portada y reserva</h4><p class="cz-hint">Se llenó con el viaje${payload.quote ? ` y la cotización ${escapeHtml(payload.quote.folio)}` : ''}. Revisa y completa lo que falte.</p>
         <div class="cz-grid">
           ${i('reservation', 'Número de reserva')}${i('holder', 'Titular')}${i('destination', 'Destino')}${i('travelers', 'Número de pasajeros', 'type="number" min="1" max="500"')}
-          ${a('passengers', 'Pasajeros (uno por línea)', 'rows="3"', 'span2')}
+          ${(payload.trip.passengers?.list || []).length ? `<label class="span2">Pasajeros <small>· se toman de 👥 Pasajeros del viaje</small><textarea rows="3" readonly>${escapeHtml(c.passengers)}</textarea><button type="button" class="link" data-pax-trip="${tripId}">Editar pasajeros</button></label>` : a('passengers', 'Pasajeros (uno por línea)', 'rows="3"', 'span2')}
           ${imgField('coverMediaId', c.coverMediaId, 'Imagen de portada', { cls: 'span2' })}
           <label class="cz-check full"><input type="checkbox" data-k="showSanitation" ${c.showSanitation ? 'checked' : ''}> Mostrar la cuota de saneamiento ambiental de Quintana Roo</label>
         </div></section>
@@ -2545,7 +2549,7 @@ async function confirmationModal(tripId) {
     bindImages(body, (key, id) => setPath(c, key, id));
     bindState(c, body);
     body.onclick = async (e) => {
-      if (e.target.closest('[data-reset-conf]')) { c = { ...defaults, services: { ...defaults.services } }; render(); toast('Datos tomados del viaje y la cotización. Guarda para conservarlos.'); return; }
+      if (e.target.closest('[data-reset-conf]')) { c = TPDocs.mergeConfirmation(null, defaults); render(); toast('Datos tomados del viaje y la cotización. Guarda para conservarlos.'); return; }
       const btn = e.target.closest('[data-save]');
       if (!btn) return;
       const pdf = btn.dataset.save === '1';
