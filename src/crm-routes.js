@@ -24,6 +24,7 @@ const { scoreLead, cleanScoring, sanitizeScoring, RESPONSES } = require('./scori
 const { newShareToken } = require('./public-quote');
 const { createQuoteEffects } = require('./quote-effects');
 const { phoneKey } = require('./data-store');
+const TPTrip = require('../public/viaje-core');
 const { STAGES: TEMPLATE_STAGES, VARIABLES: TEMPLATE_VARIABLES, DEFAULT_TEMPLATES, sanitizeTemplates, readTemplates } = require('./templates');
 
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
@@ -340,6 +341,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     const current = ctx.mustSee('leads', id);
     const body = req.body || {};
     const data = sanitize('leads', body, { partial: true });
+    if (data.canvas) data.canvas = TPTrip.normalizeCanvas(data.canvas, current); // TP-302
     if (data.qualification) data.qualification = scoreQualification(data.qualification, (await allSettings()).leadQuestions);
     if (data.client_id && data.client_id !== current.client_id) ctx.checkRef('clients', data.client_id);
     checkDateRange({ ...current, ...data });
@@ -438,6 +440,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
   router.post('/trips', requireWrite('trips'), wrap(async (req, res) => {
     const ctx = await context(req);
     const data = sanitize('trips', req.body);
+    if (data.canvas) data.canvas = TPTrip.normalizeCanvas(data.canvas, data); // TP-302
     checkDateRange(data);
     ctx.checkRef('clients', data.client_id);
     const quote = ctx.checkRef('quotes', data.quote_id);
@@ -452,6 +455,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     const ctx = await context(req);
     const current = ctx.mustSee('trips', id);
     const data = sanitize('trips', req.body, { partial: true });
+    if (data.canvas) data.canvas = TPTrip.normalizeCanvas(data.canvas, { ...current, ...data }); // TP-302
     checkDateRange({ ...current, ...data });
     if (data.client_id !== undefined) ctx.checkRef('clients', data.client_id);
     if (data.quote_id !== undefined) ctx.checkRef('quotes', data.quote_id);

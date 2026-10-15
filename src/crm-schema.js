@@ -21,7 +21,9 @@ const ENTITIES = {
       phone: { type: 'string', max: 40 },
       email: { type: 'email', max: 254 },
       tags: { type: 'string', max: 255 },
-      notes: { type: 'text', max: 4000 }
+      notes: { type: 'text', max: 4000 },
+      // TP-303: acompañantes frecuentes del cliente (se reutilizan en otros viajes)
+      companions: { type: 'json', max: 40000, internal: true }
     }
   },
   leads: {
@@ -50,7 +52,9 @@ const ENTITIES = {
       // TP-109: calificación automática
       score: { type: 'int', internal: true },
       response: { type: 'string', max: 20, internal: true },
-      reengaged_at: { type: 'datetime', internal: true }
+      reengaged_at: { type: 'datetime', internal: true },
+      // TP-302: viaje armado en el lienzo (Canvas) antes de cotizar
+      canvas: { type: 'json', max: 60000 }
     }
   },
   quotes: {
@@ -99,7 +103,10 @@ const ENTITIES = {
       itinerary: { type: 'json', max: 60000 },
       vouchers: { type: 'json', max: 20000, internal: true },
       share_token: { type: 'string', max: 48, internal: true },
-      viewed_at: { type: 'datetime', internal: true }
+      viewed_at: { type: 'datetime', internal: true },
+      // TP-302: lienzo del viaje · TP-303: pasajeros con documentos (solo por /api/trips/:id/passengers)
+      canvas: { type: 'json', max: 60000 },
+      passengers: { type: 'json', max: 60000, internal: true }
     }
   },
   followups: {

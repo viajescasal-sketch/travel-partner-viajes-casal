@@ -21,6 +21,8 @@ const VOUCHER_TYPES = {
   'image/webp': (b) => b.slice(0, 4).toString('latin1') === 'RIFF' && b.slice(8, 12).toString('latin1') === 'WEBP'
 };
 const DEFAULT_AGENCY = { name: 'Viajes Bumeran Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
+// TP-303: en la liga pública solo van nombre y tipo; nunca documentos ni fechas de nacimiento.
+const publicPassengers = (trip) => ({ list: (trip.passengers?.list || []).map((p) => ({ name: p.name, type: p.type, holder: Boolean(p.holder) })) });
 const newTripToken = () => crypto.randomBytes(20).toString('hex');
 const cleanName = (v) => String(v || '').replace(/[\u0000-\u001f\u007f"\\/]/g, '').trim().slice(0, 120);
 
@@ -50,7 +52,7 @@ function createItinerary(dataStore, { publicDirectory, env = {} } = {}) {
     const info = sellerInfo(seller);
     return {
       ok: true,
-      trip: { id: trip.id, destination: trip.destination, start_date: trip.start_date, end_date: trip.end_date, status: trip.status, confirmation: trip.confirmation || null, itinerary: trip.itinerary || null },
+      trip: { id: trip.id, destination: trip.destination, start_date: trip.start_date, end_date: trip.end_date, status: trip.status, confirmation: trip.confirmation || null, itinerary: trip.itinerary || null, passengers: publicPassengers(trip) },
       quote: quote ? { id: quote.id, folio: quote.folio, hotel: quote.hotel, price: quote.price, destination: quote.destination, details: quote.details, status: quote.status, payment_plan: plan } : null,
       client: { name: client?.name || '' },
       lead: lead ? { travelers: lead.travelers } : null,
