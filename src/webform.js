@@ -241,6 +241,7 @@ function createWebform(dataStore, mailer, env = {}, { assignment } = {}) {
         lead: { destination: f.destino, start: f.llegada, end: f.regreso, travelers, budget: perPerson ? perPerson * travelers : null },
         answers,
         notes,
+        ref: text(body.ref, 20), // TP-309
         followupDetails: [f.destino, datesText(f), f.presupuesto ? `Presupuesto: ${f.presupuesto}` : null, f.etapa].filter(Boolean).join(' · ')
       });
 

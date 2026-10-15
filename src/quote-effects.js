@@ -3,6 +3,7 @@
 // Efectos de cambiar el estado de una cotización (los usa el CRM y la aceptación en línea del cliente, TP-203).
 
 const { nowCancun } = require('./crm-schema');
+const hooks = require('./hooks');
 
 const str = (v) => String(v ?? '').trim();
 const num = (v) => { if (typeof v === 'number') return Number.isFinite(v) ? v : 0; const n = Number(String(v ?? '').replace(/[^\d.]/g, '')); return Number.isFinite(n) ? n : 0; };
@@ -49,6 +50,7 @@ function createQuoteEffects(dataStore, { payments = null, onLeadUpdate = null } 
           updated = await dataStore.updateRecord('leads', lead.id, { stage: 'Cotizado', stage_changed_at: nowCancun(), ...(lead.contacted_at ? {} : { contacted_at: nowCancun() }) });
         }
         if (updated && onLeadUpdate) await onLeadUpdate(lead, updated, quote, ctx);
+        if (updated?.stage === 'Vendido') await hooks.emit(dataStore, 'leadSold', updated); // TP-309
       }
     }
     // TP-201: al aceptarse se arma el plan de pagos (anticipo + parcialidades) y la liga de pago.

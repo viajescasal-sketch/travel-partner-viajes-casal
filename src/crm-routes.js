@@ -25,6 +25,7 @@ const { newShareToken } = require('./public-quote');
 const { createQuoteEffects } = require('./quote-effects');
 const { phoneKey } = require('./data-store');
 const TPTrip = require('../public/viaje-core');
+const hooks = require('./hooks');
 const { STAGES: TEMPLATE_STAGES, VARIABLES: TEMPLATE_VARIABLES, DEFAULT_TEMPLATES, sanitizeTemplates, readTemplates } = require('./templates');
 
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
@@ -357,6 +358,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     }
     let record = await dataStore.updateRecord('leads', id, data);
     await audit(req, 'update', 'leads', current, record);
+    if (record.stage === 'Vendido' && current.stage !== 'Vendido') await hooks.emit(dataStore, 'leadSold', record); // TP-309
 
     if (body.owner_id !== undefined && Number(body.owner_id) !== current.owner_id) {
       if (ctx.user.role !== 'admin') throw forbidden('Solo el administrador puede reasignar leads');
@@ -508,7 +510,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
   // ---- TP-108: ficha 360 (mensajes, pagos, reseñas y notas del cliente) ----
   const EVENT_TYPES = ['message', 'payment', 'review', 'note'];
   const PAY_METHODS = ['Transferencia', 'Depósito', 'Tarjeta', 'Efectivo', 'Liga de pago', 'Otro'];
-  const REVIEW_PLATFORMS = ['Google', 'TripAdvisor', 'Facebook', 'WhatsApp', 'Otro'];
+  const REVIEW_PLATFORMS = ['Google', 'TripAdvisor', 'Facebook', 'WhatsApp', 'Encuesta postviaje', 'Otro'];
   const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
   const plain = (v, max) => String(v ?? '').replace(/\r\n/g, '\n').replace(/[\u0000-\u0008\u000b-\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, max);
 

@@ -23,7 +23,9 @@ const ENTITIES = {
       tags: { type: 'string', max: 255 },
       notes: { type: 'text', max: 4000 },
       // TP-303: acompañantes frecuentes del cliente (se reutilizan en otros viajes)
-      companions: { type: 'json', max: 40000, internal: true }
+      companions: { type: 'json', max: 40000, internal: true },
+      // TP-309: código de referido y créditos ganados
+      referral: { type: 'json', max: 40000, internal: true }
     }
   },
   leads: {
@@ -54,7 +56,9 @@ const ENTITIES = {
       response: { type: 'string', max: 20, internal: true },
       reengaged_at: { type: 'datetime', internal: true },
       // TP-302: viaje armado en el lienzo (Canvas) antes de cotizar
-      canvas: { type: 'json', max: 60000 }
+      canvas: { type: 'json', max: 60000 },
+      // TP-309: quién lo refirió y su descuento de bienvenida
+      referral: { type: 'json', max: 4000, internal: true }
     }
   },
   quotes: {
@@ -108,7 +112,9 @@ const ENTITIES = {
       canvas: { type: 'json', max: 60000 },
       passengers: { type: 'json', max: 60000, internal: true },
       // TP-304: reservas centralizadas (solo por /api/trips/:id/bookings)
-      bookings: { type: 'json', max: 60000, internal: true }
+      bookings: { type: 'json', max: 60000, internal: true },
+      // TP-308: encuesta postviaje (liga, envío y respuestas)
+      survey: { type: 'json', max: 8000, internal: true }
     }
   },
   followups: {

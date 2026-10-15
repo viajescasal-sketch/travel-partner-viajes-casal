@@ -4,6 +4,7 @@
 // busca o crea al cliente, actualiza su lead abierto o crea uno nuevo y deja un seguimiento a 15 minutos.
 
 const { nowCancun, sanitize } = require('./crm-schema');
+const hooks = require('./hooks');
 const { summaryFor, diffChanges } = require('./audit');
 const { DEFAULT_LEAD_QUESTIONS, normalizeQuestions, scoreQualification } = require('./documents');
 
@@ -38,7 +39,7 @@ function createLeadIntake(dataStore, assignment) {
    * lead:    { destination, start, end, travelers, budget }
    * answers: { q_presupuesto: 'Más de $25 mil', ... } (etiquetas de las preguntas de calificación)
    */
-  async function intake({ channel, person, lead: data, answers = {}, notes, followupDetails = '' }) {
+  async function intake({ channel, person, lead: data, answers = {}, notes, followupDetails = '', ref = '' }) {
     const now = nowCancun();
     const qs = await questions();
     const label = channel.label;
@@ -121,6 +122,9 @@ function createLeadIntake(dataStore, assignment) {
         await assignment.notify(admin, { kind: 'new_lead', leadId: lead.id, title: `🆕 Nuevo lead (${label}): ${client.name} · ${lead.destination}`, body: seller ? `Asignado a ${seller.name}` : 'Sin vendedor asignado' });
       }
     }
+    // TP-309: código de referido (liga de referido o escrito en el mensaje del cliente).
+    await hooks.emit(dataStore, 'leadIntake', { lead, client, notes, ref, channel: label });
+    lead = (await dataStore.getRecord('leads', lead.id)) || lead;
     return { action, lead, client, followup, seller, reason: pick?.reason || null };
   }
 

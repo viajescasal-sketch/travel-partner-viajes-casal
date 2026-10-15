@@ -16,7 +16,8 @@ const VARIABLES = [
   ['nombre', 'Primer nombre del cliente'], ['nombre_completo', 'Nombre completo'], ['destino', 'Destino'], ['fechas', 'Fechas del viaje'],
   ['viajeros', 'Número de viajeros'], ['folio', 'Folio de la cotización'], ['hotel', 'Hotel o paquete'], ['precio', 'Precio de la cotización'],
   ['vigencia', 'Vigencia de la cotización'], ['liga_cotizacion', 'Liga privada para ver la cotización'], ['vendedor', 'Tu nombre'], ['agencia', 'Nombre de la agencia'], ['liga_resenas', 'Liga para dejar reseña'],
-  ['liga_pago', 'Liga de pago del cliente (plan de pagos)'], ['concepto_pago', 'Siguiente pago: Anticipo, Pago 2…'], ['monto_pago', 'Monto del siguiente pago'], ['fecha_pago', 'Fecha límite del siguiente pago'], ['saldo', 'Saldo pendiente total'], ['liga_itinerario', 'Liga del itinerario digital del viaje']
+  ['liga_pago', 'Liga de pago del cliente (plan de pagos)'], ['concepto_pago', 'Siguiente pago: Anticipo, Pago 2…'], ['monto_pago', 'Monto del siguiente pago'], ['fecha_pago', 'Fecha límite del siguiente pago'], ['saldo', 'Saldo pendiente total'], ['liga_itinerario', 'Liga del itinerario digital del viaje'],
+  ['liga_encuesta', 'Liga de la encuesta postviaje'], ['codigo_referido', 'Código de referido del cliente'], ['liga_referido', 'Liga para invitar a sus amigos'], ['beneficio_referido', 'Lo que gana quien refiere'], ['descuento_referido', 'Descuento de bienvenida del referido']
 ];
 
 const DEFAULT_TEMPLATES = [
@@ -31,7 +32,9 @@ const DEFAULT_TEMPLATES = [
   { id: 'ci5', stage: 'cierre', name: 'Itinerario digital', body: '¡Hola {nombre}! ✈️ Aquí tienes tu itinerario digital para tu viaje a {destino} ({fechas}): día por día, vuelos, hotel, traslados, tus vouchers y mis datos de contacto, todo en tu celular 📱\n\n{liga_itinerario}\n\nGuárdalo en favoritos y cualquier duda aquí estoy.' },
   { id: 'ci2', stage: 'cierre', name: 'Reserva confirmada', body: '¡Listo, {nombre}! ✅ Tu viaje a {destino} del {fechas} quedó confirmado. Te comparto tu confirmación de servicios. Cualquier duda, aquí estoy.' },
   { id: 'pv1', stage: 'postviaje', name: '¿Cómo te fue?', body: '¡Bienvenido de vuelta, {nombre}! 🌴 ¿Qué tal estuvo {destino}? Me encantaría saber cómo te fue.' },
-  { id: 'pv2', stage: 'postviaje', name: 'Pedir reseña', body: 'Gracias por viajar con {agencia}, {nombre} 💙 Si te gustó el servicio, ¿nos regalas una reseña? Nos ayuda muchísimo: {liga_resenas}' }
+  { id: 'pv2', stage: 'postviaje', name: 'Pedir reseña', body: 'Gracias por viajar con {agencia}, {nombre} 💙 Si te gustó el servicio, ¿nos regalas una reseña? Nos ayuda muchísimo: {liga_resenas}' },
+  { id: 'pv3', stage: 'postviaje', name: 'Encuesta postviaje', body: '¡Bienvenido de vuelta, {nombre}! 🌴 Espero que {destino} haya sido increíble. ¿Me ayudas con una encuesta de 1 minuto? Tu opinión me ayuda a mejorar cada viaje ⭐\n\n{liga_encuesta}' },
+  { id: 'pv4', stage: 'postviaje', name: 'Invitar a referir', body: '{nombre}, gracias por confiar en mí 💙 Si alguien de tu familia o amigos quiere viajar, compárteles tu liga: ellos reciben {descuento_referido} de descuento en su primer viaje y tú ganas {beneficio_referido} para tu próxima aventura ✈️\n\n{liga_referido}\n(Tu código: {codigo_referido})' }
 ];
 
 const text = (v, max) => String(v ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, max);

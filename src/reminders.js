@@ -72,7 +72,7 @@ function emailFor({ to, title, lines, appUrl }) {
   return { subject: title.slice(0, 180), text, html };
 }
 
-function createReminders(dataStore, assignment, env = {}, { now = () => nowCancun(), payments = null } = {}) {
+function createReminders(dataStore, assignment, env = {}, { now = () => nowCancun(), payments = null, postventa = null } = {}) {
   const appUrl = () => String(env.APP_URL || '').trim().replace(/\/+$/, '') || 'https://travelpartner.viajescasal.com';
   async function config() { return cleanConfig(await dataStore.getSetting('reminders')); }
 
@@ -194,8 +194,12 @@ function createReminders(dataStore, assignment, env = {}, { now = () => nowCancu
         result.paymentEmails = p.emails;
       } catch (error) { console.error('Recordatorios de pago fallaron:', error.message); }
     }
+    // 5) TP-308/309: encuesta postviaje (al día siguiente del regreso) y créditos de referidos.
+    if (postventa) {
+      try { const r = await postventa.runSurveys({ workStart: cfg.workStart, workEnd: cfg.workEnd }); result.surveys = r.surveys; } catch (error) { console.error('Encuesta postviaje falló:', error.message); }
+    }
 
-    const parts = [result.quotes && `${result.quotes} cotizaciones`, result.payments && `${result.payments} cobros`, result.overdue && `${result.overdue} seguimientos vencidos`, result.contact && `${result.contact} leads sin contacto`, result.escalated && `${result.escalated} avisos al administrador`].filter(Boolean);
+    const parts = [result.quotes && `${result.quotes} cotizaciones`, result.payments && `${result.payments} cobros`, result.overdue && `${result.overdue} seguimientos vencidos`, result.contact && `${result.contact} leads sin contacto`, result.escalated && `${result.escalated} avisos al administrador`, result.surveys && `${result.surveys} encuestas postviaje`].filter(Boolean);
     await dataStore.setSetting('reminders_state', { ...state, lastRunAt: current, lastResult: parts.length ? `Avisos: ${parts.join(', ')}` : 'Sin pendientes', ...(parts.length ? { lastAlertAt: current, lastAlert: parts.join(', ') } : {}) });
     return result;
   }
