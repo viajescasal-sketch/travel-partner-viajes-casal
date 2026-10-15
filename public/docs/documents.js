@@ -536,7 +536,11 @@
     const v = d.vuelo || {};
     const withTime = (date, time) => [shortDate(date), time].filter(Boolean).join(' | ');
     const travelers = Number(lead?.travelers) || 0;
+    // TP-303: si el viaje ya tiene su lista de pasajeros, manda sobre lo capturado a mano.
+    const paxList = Array.isArray(trip.passengers?.list) ? trip.passengers.list.filter((x) => x && str(x.name)) : [];
+    const paxFixed = paxList.length && global.TPTrip ? { paxList: global.TPTrip.passengerLines(paxList, start), paxCount: paxList.length, paxHolder: (paxList.find((x) => x.holder) || paxList[0]).name } : null;
     return {
+      ...(paxFixed ? { _pax: paxFixed } : {}),
       reservation: `VC-${year}-${String(trip.id).padStart(5, '0')}`,
       holder: client?.name || '',
       passengers: client?.name || '',
@@ -629,6 +633,8 @@
   function mergeConfirmation(saved, defaults) {
     const c = { ...defaults, ...(saved || {}) };
     c.services = { ...defaults.services, ...(saved?.services || {}) };
+    if (defaults._pax) { c.passengers = defaults._pax.paxList; c.travelers = defaults._pax.paxCount; c.holder = defaults._pax.paxHolder; }
+    delete c._pax;
     return c;
   }
 
