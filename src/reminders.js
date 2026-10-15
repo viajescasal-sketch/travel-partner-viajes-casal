@@ -72,7 +72,7 @@ function emailFor({ to, title, lines, appUrl }) {
   return { subject: title.slice(0, 180), text, html };
 }
 
-function createReminders(dataStore, assignment, env = {}, { now = () => nowCancun(), payments = null, postventa = null } = {}) {
+function createReminders(dataStore, assignment, env = {}, { now = () => nowCancun(), payments = null, postventa = null, recompra = null } = {}) {
   const appUrl = () => String(env.APP_URL || '').trim().replace(/\/+$/, '') || 'https://travelpartner.viajescasal.com';
   async function config() { return cleanConfig(await dataStore.getSetting('reminders')); }
 
@@ -198,8 +198,12 @@ function createReminders(dataStore, assignment, env = {}, { now = () => nowCancu
     if (postventa) {
       try { const r = await postventa.runSurveys({ workStart: cfg.workStart, workEnd: cfg.workEnd }); result.surveys = r.surveys; } catch (error) { console.error('Encuesta postviaje falló:', error.message); }
     }
+    // 6) TP-310: campañas de recompra (una vez al día).
+    if (recompra) {
+      try { const r = await recompra.runDaily({ workStart: cfg.workStart, workEnd: cfg.workEnd }); result.campaigns = r.created; } catch (error) { console.error('Campañas de recompra fallaron:', error.message); }
+    }
 
-    const parts = [result.quotes && `${result.quotes} cotizaciones`, result.payments && `${result.payments} cobros`, result.overdue && `${result.overdue} seguimientos vencidos`, result.contact && `${result.contact} leads sin contacto`, result.escalated && `${result.escalated} avisos al administrador`, result.surveys && `${result.surveys} encuestas postviaje`].filter(Boolean);
+    const parts = [result.quotes && `${result.quotes} cotizaciones`, result.payments && `${result.payments} cobros`, result.overdue && `${result.overdue} seguimientos vencidos`, result.contact && `${result.contact} leads sin contacto`, result.escalated && `${result.escalated} avisos al administrador`, result.surveys && `${result.surveys} encuestas postviaje`, result.campaigns && `${result.campaigns} contactos de recompra`].filter(Boolean);
     await dataStore.setSetting('reminders_state', { ...state, lastRunAt: current, lastResult: parts.length ? `Avisos: ${parts.join(', ')}` : 'Sin pendientes', ...(parts.length ? { lastAlertAt: current, lastAlert: parts.join(', ') } : {}) });
     return result;
   }

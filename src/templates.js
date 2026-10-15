@@ -10,14 +10,16 @@ const STAGES = [
   { id: 'cotizacion', label: 'Envío de cotización' },
   { id: 'seguimiento', label: 'Seguimiento' },
   { id: 'cierre', label: 'Cierre' },
-  { id: 'postviaje', label: 'Postviaje' }
+  { id: 'postviaje', label: 'Postviaje' },
+  { id: 'recompra', label: 'Recompra' }
 ];
 const VARIABLES = [
   ['nombre', 'Primer nombre del cliente'], ['nombre_completo', 'Nombre completo'], ['destino', 'Destino'], ['fechas', 'Fechas del viaje'],
   ['viajeros', 'Número de viajeros'], ['folio', 'Folio de la cotización'], ['hotel', 'Hotel o paquete'], ['precio', 'Precio de la cotización'],
   ['vigencia', 'Vigencia de la cotización'], ['liga_cotizacion', 'Liga privada para ver la cotización'], ['vendedor', 'Tu nombre'], ['agencia', 'Nombre de la agencia'], ['liga_resenas', 'Liga para dejar reseña'],
   ['liga_pago', 'Liga de pago del cliente (plan de pagos)'], ['concepto_pago', 'Siguiente pago: Anticipo, Pago 2…'], ['monto_pago', 'Monto del siguiente pago'], ['fecha_pago', 'Fecha límite del siguiente pago'], ['saldo', 'Saldo pendiente total'], ['liga_itinerario', 'Liga del itinerario digital del viaje'],
-  ['liga_encuesta', 'Liga de la encuesta postviaje'], ['codigo_referido', 'Código de referido del cliente'], ['liga_referido', 'Liga para invitar a sus amigos'], ['beneficio_referido', 'Lo que gana quien refiere'], ['descuento_referido', 'Descuento de bienvenida del referido']
+  ['liga_encuesta', 'Liga de la encuesta postviaje'], ['codigo_referido', 'Código de referido del cliente'], ['liga_referido', 'Liga para invitar a sus amigos'], ['beneficio_referido', 'Lo que gana quien refiere'], ['descuento_referido', 'Descuento de bienvenida del referido'],
+  ['campana', 'Nombre de la campaña (temporada)'], ['anos_viaje', 'Años desde su viaje'], ['destino_anterior', 'Destino de su viaje anterior']
 ];
 
 const DEFAULT_TEMPLATES = [
@@ -34,7 +36,10 @@ const DEFAULT_TEMPLATES = [
   { id: 'pv1', stage: 'postviaje', name: '¿Cómo te fue?', body: '¡Bienvenido de vuelta, {nombre}! 🌴 ¿Qué tal estuvo {destino}? Me encantaría saber cómo te fue.' },
   { id: 'pv2', stage: 'postviaje', name: 'Pedir reseña', body: 'Gracias por viajar con {agencia}, {nombre} 💙 Si te gustó el servicio, ¿nos regalas una reseña? Nos ayuda muchísimo: {liga_resenas}' },
   { id: 'pv3', stage: 'postviaje', name: 'Encuesta postviaje', body: '¡Bienvenido de vuelta, {nombre}! 🌴 Espero que {destino} haya sido increíble. ¿Me ayudas con una encuesta de 1 minuto? Tu opinión me ayuda a mejorar cada viaje ⭐\n\n{liga_encuesta}' },
-  { id: 'pv4', stage: 'postviaje', name: 'Invitar a referir', body: '{nombre}, gracias por confiar en mí 💙 Si alguien de tu familia o amigos quiere viajar, compárteles tu liga: ellos reciben {descuento_referido} de descuento en su primer viaje y tú ganas {beneficio_referido} para tu próxima aventura ✈️\n\n{liga_referido}\n(Tu código: {codigo_referido})' }
+  { id: 'pv4', stage: 'postviaje', name: 'Invitar a referir', body: '{nombre}, gracias por confiar en mí 💙 Si alguien de tu familia o amigos quiere viajar, compárteles tu liga: ellos reciben {descuento_referido} de descuento en su primer viaje y tú ganas {beneficio_referido} para tu próxima aventura ✈️\n\n{liga_referido}\n(Tu código: {codigo_referido})' },
+  { id: 'rc1', stage: 'recompra', name: 'Aniversario del viaje', body: '¡Hola {nombre}! 🌴 Hace {anos_viaje} estabas disfrutando {destino_anterior}. ¿Qué tal si planeamos la siguiente aventura? Cuéntame a dónde te gustaría ir y te armo opciones a tu medida ✈️' },
+  { id: 'rc2', stage: 'recompra', name: 'Cumpleaños', body: '¡Feliz cumpleaños, {nombre}! 🎉 Te deseo un año lleno de viajes y momentos increíbles. Si quieres celebrarlo con una escapada, aquí estoy para ayudarte 💙\n— {vendedor}, {agencia}' },
+  { id: 'rc3', stage: 'recompra', name: 'Temporada', body: 'Hola {nombre} 😊 Ya se acerca {campana} y los mejores hoteles y vuelos se apartan con tiempo. ¿Te ayudo a planear tu próximo viaje? Cuéntame fechas y destino y te mando opciones sin compromiso ✈️' }
 ];
 
 const text = (v, max) => String(v ?? '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, max);

@@ -52,6 +52,9 @@ function createPassengers(dataStore) {
       const skip = new Set((Array.isArray(req.body.skipCompanions) ? req.body.skipCompanions : []).map(String));
       const merged = TPTrip.mergeCompanions(client.companions?.list, list.filter((p) => !skip.has(p.id)), client.name);
       if (JSON.stringify(merged) !== JSON.stringify(client.companions?.list || [])) await dataStore.updateRecord('clients', client.id, { companions: { list: merged } });
+      // TP-310: si el cliente no tiene fecha de nacimiento, se toma la de su registro como pasajero.
+      const self = list.find((p) => p.birth_date && p.name.toLowerCase() === String(client.name || '').trim().toLowerCase());
+      if (self && !client.birth_date) await dataStore.updateRecord('clients', client.id, { birth_date: self.birth_date });
     }
     const summary = TPTrip.tripPassengerSummary(list, trip);
     await dataStore.logActivity(req.session.user.id, 'crm_trips_update', req, {

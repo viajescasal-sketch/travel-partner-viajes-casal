@@ -22,6 +22,10 @@ const ENTITIES = {
       email: { type: 'email', max: 254 },
       tags: { type: 'string', max: 255 },
       notes: { type: 'text', max: 4000 },
+      // TP-310: cumpleaños, no contactar en campañas y bandeja de campañas de recompra
+      birth_date: { type: 'date' },
+      no_marketing: { type: 'bool', default: false },
+      campaigns: { type: 'json', max: 30000, internal: true },
       // TP-303: acompañantes frecuentes del cliente (se reutilizan en otros viajes)
       companions: { type: 'json', max: 40000, internal: true },
       // TP-309: código de referido y créditos ganados
