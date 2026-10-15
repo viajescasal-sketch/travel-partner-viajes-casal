@@ -151,6 +151,17 @@ class MySQLDataStore {
       await this.pool.query(createTableSql(entityName));
     }
     await this.migrateEntities();
+    // TP-305: catálogo de proveedores (datos del proveedor en JSON).
+    await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_suppliers (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(120) NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      data MEDIUMTEXT NOT NULL,
+      created_by BIGINT UNSIGNED NULL,
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
+      INDEX idx_crm_suppliers_name (name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
     // TP-108: registros de la ficha 360 (mensajes, pagos, reseñas y notas del cliente).
     await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_client_events (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -281,6 +292,23 @@ class MySQLDataStore {
       }
     }
   }
+
+  // ---- TP-305: proveedores ----
+  async listSuppliers() {
+    const [rows] = await this.pool.query('SELECT id, data, created_at, updated_at FROM crm_suppliers ORDER BY name');
+    return rows.map((r) => ({ ...JSON.parse(r.data), id: Number(r.id), created_at: r.created_at, updated_at: r.updated_at }));
+  }
+  async insertSupplier(data, userId) {
+    const now = nowCancun();
+    const [result] = await this.pool.execute('INSERT INTO crm_suppliers (name, active, data, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [data.name, data.active !== false, JSON.stringify(data), userId ?? null, now, now]);
+    return { ...data, id: Number(result.insertId), created_at: now, updated_at: now };
+  }
+  async updateSupplier(id, data) {
+    const now = nowCancun();
+    await this.pool.execute('UPDATE crm_suppliers SET name = ?, active = ?, data = ?, updated_at = ? WHERE id = ?', [data.name, data.active !== false, JSON.stringify(data), now, id]);
+    return (await this.listSuppliers()).find((x) => x.id === Number(id)) || null;
+  }
+  async deleteSupplier(id) { await this.pool.execute('DELETE FROM crm_suppliers WHERE id = ?', [id]); }
 
   // ---- Imágenes (fotos de hotel, portada, vendedor) ----
   async createMedia({ ownerId, mime, data }) {
@@ -855,6 +883,11 @@ class MemoryDataStore {
   async listAllClientEvents() { return (this.events || []).map(normalizeEvent); }
   async moveClientEvents(fromId, toId) { (this.events || []).forEach((e) => { if (e.client_id === Number(fromId)) e.client_id = Number(toId); }); }
   async deleteClientEvent(id) { const before = (this.events || []).length; this.events = (this.events || []).filter((e) => e.id !== Number(id)); return this.events.length < before; }
+  // ---- TP-305: proveedores (memoria) ----
+  async listSuppliers() { return (this.suppliers || []).map((x) => ({ ...x })).sort((a, b) => a.name.localeCompare(b.name)); }
+  async insertSupplier(data, userId) { this.suppliers = this.suppliers || []; this.supplierSeq = (this.supplierSeq || 0) + 1; const now = nowCancun(); const row = { ...data, id: this.supplierSeq, created_by: userId ?? null, created_at: now, updated_at: now }; this.suppliers.push(row); return { ...row }; }
+  async updateSupplier(id, data) { const row = (this.suppliers || []).find((x) => x.id === Number(id)); if (!row) return null; Object.assign(row, data, { updated_at: nowCancun() }); return { ...row }; }
+  async deleteSupplier(id) { this.suppliers = (this.suppliers || []).filter((x) => x.id !== Number(id)); }
   async getSetting(key) { return this.settings.has(key) ? JSON.parse(this.settings.get(key)) : null; }
   async setSetting(key, value) { this.settings.set(key, JSON.stringify(value)); }
 }

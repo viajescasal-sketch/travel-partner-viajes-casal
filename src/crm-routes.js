@@ -220,6 +220,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
       roles: ROLE_LABELS,
       settings: await allSettings(),
       me: sellerInfo(await dataStore.findUserById(ctx.user.id)),
+      suppliers: dataStore.listSuppliers ? await dataStore.listSuppliers() : [], // TP-305
       serverTime: nowCancun()
     });
   }));

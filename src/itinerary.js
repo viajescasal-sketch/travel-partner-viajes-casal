@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const { ENTITY_ORDER, ValidationError, nowCancun } = require('./crm-schema');
 const { buildScope, isVisible, canWrite, SELLER_ROLES } = require('./access');
 const { DEFAULT_DOCUMENTS, sellerInfo } = require('./documents');
+const TPTrip = require('../public/viaje-core');
 
 const TOKEN_RE = /^[a-f0-9]{40}$/;
 const MAX_VOUCHER = 4 * 1024 * 1024;
@@ -52,7 +53,7 @@ function createItinerary(dataStore, { publicDirectory, env = {} } = {}) {
     const info = sellerInfo(seller);
     return {
       ok: true,
-      trip: { id: trip.id, destination: trip.destination, start_date: trip.start_date, end_date: trip.end_date, status: trip.status, confirmation: trip.confirmation || null, itinerary: trip.itinerary || null, passengers: publicPassengers(trip) },
+      trip: { id: trip.id, destination: trip.destination, start_date: trip.start_date, end_date: trip.end_date, status: trip.status, confirmation: trip.confirmation || null, itinerary: trip.itinerary || null, passengers: publicPassengers(trip), bookings: TPTrip.publicBookings(trip.bookings?.list) },
       quote: quote ? { id: quote.id, folio: quote.folio, hotel: quote.hotel, price: quote.price, destination: quote.destination, details: quote.details, status: quote.status, payment_plan: plan } : null,
       client: { name: client?.name || '' },
       lead: lead ? { travelers: lead.travelers } : null,

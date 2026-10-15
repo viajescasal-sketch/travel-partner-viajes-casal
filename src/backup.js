@@ -44,7 +44,9 @@ function createBackupService({ dataStore, mailer, now = nowCancun }) {
     for (const key of ['agency', 'documents', 'lead_questions', 'backup', 'webform', 'assignment', 'reminders', 'wa_templates']) settingsData[key] = await dataStore.getSetting(key);
     // TP-108: mensajes, pagos, reseñas y notas de la ficha 360
     const clientEvents = dataStore.listAllClientEvents ? await dataStore.listAllClientEvents() : [];
-    return { data, users, settings: settingsData, clientEvents };
+    // TP-305: catálogo de proveedores
+    const suppliers = dataStore.listSuppliers ? await dataStore.listSuppliers() : [];
+    return { data, users, settings: settingsData, clientEvents, suppliers };
   }
 
   async function createBackup({ kind = 'auto', userId = null } = {}) {

@@ -106,7 +106,9 @@ const ENTITIES = {
       viewed_at: { type: 'datetime', internal: true },
       // TP-302: lienzo del viaje · TP-303: pasajeros con documentos (solo por /api/trips/:id/passengers)
       canvas: { type: 'json', max: 60000 },
-      passengers: { type: 'json', max: 60000, internal: true }
+      passengers: { type: 'json', max: 60000, internal: true },
+      // TP-304: reservas centralizadas (solo por /api/trips/:id/bookings)
+      bookings: { type: 'json', max: 60000, internal: true }
     }
   },
   followups: {
