@@ -515,6 +515,8 @@
     ['activities', 'Actividades y Tours', 'icon-activities.png'], ['insurance', 'Seguro de Viaje', 'icon-insurance.png'], ['partner', 'Travel Partner<br>24/7', 'icon-partner.png']
   ];
 
+  // TP-304: clave de la reserva de vuelo confirmada (lista completa del equipo o la pública).
+  const confirmedFlight = (trip) => { const l = Array.isArray(trip?.bookings) ? trip.bookings : trip?.bookings?.list || []; const f = l.find((b) => b.type === 'Vuelo' && b.confirmation && (!b.status || b.status === 'Confirmada')); return f ? f.confirmation : ''; };
   // Valores iniciales tomados del viaje, la cotización aceptada y el vendedor.
   function confirmationDefaults(payload) {
     const { trip, quote, client = {}, lead, seller = {}, documents = {}, agency = {} } = payload;
@@ -550,7 +552,7 @@
       services: det
         ? { flight: !!s.vuelo, hotel: !!s.hotel, transfer: !!s.traslados, activities: !!s.tours, insurance: !!s.seguro, partner: true }
         : { flight: true, hotel: true, transfer: true, activities: false, insurance: false, partner: true },
-      airline: v.aerolinea || '', flightBooking: '',
+      airline: v.aerolinea || '', flightBooking: confirmedFlight(trip),
       outboundFlight: v.origen ? `${v.origen} → ${trip.destination}` : '', returnFlight: v.origen ? `${trip.destination} → ${v.origen}` : '',
       outboundDeparture: withTime(start, v.hsIda), outboundArrival: withTime(start, v.hlIda),
       returnDeparture: withTime(end, v.hsReg), returnArrival: withTime(end, v.hlReg),
