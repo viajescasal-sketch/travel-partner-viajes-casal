@@ -29,6 +29,7 @@ const { createPassengers } = require('./src/passengers');
 const { createBookings } = require('./src/bookings');
 const { createSuppliers } = require('./src/suppliers');
 const { createPostventa } = require('./src/postventa');
+const { createRecompra } = require('./src/recompra');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -262,7 +263,9 @@ async function createApp(options = {}) {
   // TP-308/309: encuesta postviaje y programa de referidos (rutas públicas /encuesta y /r).
   const postventa = createPostventa(dataStore, { assignment, mailer, env: process.env, publicDirectory });
   app.use(postventa.publicRouter);
-  const reminders = createReminders(dataStore, assignment, process.env, { payments, postventa });
+  // TP-310: campañas de recompra (bandeja diaria).
+  const recompra = createRecompra(dataStore, { assignment, mailer, env: process.env });
+  const reminders = createReminders(dataStore, assignment, process.env, { payments, postventa, recompra });
   if (!options.skipPurgeTimer && !options.skipReminderTimer) reminders.start();
   const webform = createWebform(dataStore, mailer, process.env, { assignment });
   app.use('/api', webform.router);
@@ -307,6 +310,7 @@ async function createApp(options = {}) {
   app.use('/api', createBookings(dataStore).router); // TP-304
   app.use('/api', createSuppliers(dataStore).router); // TP-305
   app.use('/api', postventa.apiRouter); // TP-308/309
+  app.use('/api', recompra.router); // TP-310
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');
@@ -343,6 +347,7 @@ async function createApp(options = {}) {
   app.locals.reminders = reminders;
   app.locals.payments = payments;
   app.locals.postventa = postventa;
+  app.locals.recompra = recompra;
   return app;
 }
 

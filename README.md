@@ -289,3 +289,19 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - **Ficha 360 › Datos del cliente:** código, liga, **Invitar por WhatsApp** (plantilla “Invitar a referir”), a quién ha referido y sus créditos. La encuesta postviaje también le muestra su liga para compartir.
 - **Reportes › Referidos:** leads referidos, vendidos, créditos por aplicar y aplicados, y quién recomienda más.
 - Plantillas: `{codigo_referido}`, `{liga_referido}`, `{beneficio_referido}`, `{descuento_referido}`. Campos `crm_clients.referral` y `crm_leads.referral` (internos). API: `GET /api/clients/:id/referral`, `PATCH /api/clients/:id/referral/rewards/:id`, `PUT|PATCH /api/leads/:id/referral`, públicas `GET /api/public/ref/:código`.
+
+## Campañas de recompra (TP-310)
+
+- **Bandeja “📣 Campañas”** (menú, con contador): cada día, en horario laboral, se agregan los clientes que toca contactar; el vendedor recibe un aviso. Cada contacto tiene **💬 WhatsApp** (abre la plantilla de la etapa *Recompra* con los datos de la campaña y al enviarse se marca solo), **✓ Enviado** y **Omitir**. Indicadores: por contactar, enviados en el mes, clientes que volvieron a cotizar después de un mensaje y omitidos.
+- **Campañas:** 🌴 *Aniversario del viaje* (30 días antes de que se cumpla un año más; con viaje anterior y sin lead abierto ni viaje próximo), 🎂 *Cumpleaños* (3 días antes) y 📅 *Temporadas* con fecha fija (el verano 15-abr, fin de año 15-sep, Semana Santa 20-ene desactivada) a clientes anteriores sin lead abierto ni viaje próximo. Un contacto sigue en la bandeja hasta 14 días después de su fecha y nunca se repite.
+- **Correo opcional** por campaña (felicitación, aniversario o temporada) si el cliente tiene correo y el SMTP está configurado.
+- **Cliente:** *Fecha de nacimiento* y *No contactar en campañas* en Ficha 360 › Datos del cliente; la fecha se llena sola con la del pasajero que se llama igual que el cliente (TP-303).
+- Configuración › **Campañas de recompra** (días de anticipación, correo, temporadas). Plantillas `rc1–rc3` con `{campana}`, `{anos_viaje}`, `{destino_anterior}`. Campo `crm_clients.campaigns` (interno). API: `GET /api/campaigns`, `PATCH /api/clients/:id/campaigns/:id`, `GET|PUT /api/campaigns/settings`, `POST /api/campaigns/run` (admin).
+
+## Reportes por vendedor y por origen (TP-311)
+
+- **Reportes › Desempeño** con **Por vendedor / Por origen**, periodo (este mes, mes anterior, 90 días, este año, todo) y **CSV**.
+- Columnas: leads, % contactados, **1ª respuesta** (mediana entre la asignación y el primer contacto), cotizaciones enviadas, ventas, ingresos (cotización aceptada), ticket, conversión de los leads del periodo, perdidos, ganadas/cerradas, días al cierre y **utilidad** (venta − costo de las reservas registradas, TP-304). Totales al final.
+- Leads, contacto y conversión cuentan los leads **creados** en el periodo; ventas, ingresos, perdidos y utilidad, los **cerrados** en el periodo. Por origen, los leads del programa de referidos (TP-309) aparecen como “Programa de referidos”.
+- La tarjeta **Satisfacción** de Reportes ya toma la calificación de las encuestas postviaje (TP-308). Las comisiones por vendedor se agregan con TP-206.
+- Cálculo en `public/reportes-core.js` (también lo usan las pruebas).
