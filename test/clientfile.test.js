@@ -46,7 +46,7 @@ test('plantillas de WhatsApp y ficha 360 del cliente', async (context) => {
   const tpl = await paulina('GET', '/api/templates');
   assert.equal(tpl.status, 200);
   assert.equal(tpl.body.custom, false);
-  assert.deepEqual(tpl.body.stages.map((s) => s.id), ['primer_contacto', 'cotizacion', 'seguimiento', 'cierre', 'postviaje']);
+  assert.deepEqual(tpl.body.stages.map((s) => s.id), ['primer_contacto', 'cotizacion', 'seguimiento', 'cierre', 'postviaje', 'recompra']);
   assert.ok(tpl.body.templates.some((t) => t.stage === 'postviaje' && t.body.includes('{liga_resenas}')));
   assert.equal((await paulina('PUT', '/api/templates', { templates: [] })).status, 403, 'solo el administrador edita');
   assert.equal((await admin('PUT', '/api/templates', { templates: [{ stage: 'otra', name: 'X', body: 'Y' }] })).status, 400);
