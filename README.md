@@ -237,3 +237,19 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 
 - Aviso al escribir WhatsApp o correo en *Nuevo cliente*, *Nuevo lead* y *Datos del cliente* (`GET /api/clients/duplicates/check`). Crear un cliente que ya existe pide confirmación (409). Un lead nuevo con un correo ya registrado se agrega a ese cliente.
 - Administrador: aviso en **Clientes** y en la ficha 360, revisión por grupos (mismo WhatsApp, correo o nombre) y **Conservar este** para fusionar (`GET /api/duplicates`, `POST /api/clients/merge`): mueve leads, cotizaciones, viajes, seguimientos y ficha 360, completa datos faltantes y elimina el duplicado.
+
+## Vista Canvas del viaje (TP-302)
+
+- **Desde el lead:** botón **🧩 Armar en Canvas** en la ficha del lead. Lienzo con un día por columna (fechas del lead) y bloques que se arrastran con mouse o con el dedo: ✈️ Vuelo, 🚐 Traslado, 🏨 Hotel (con noches), 🎟️ Tour/actividad, 🛡️ Seguro y 📝 Nota. También se puede tocar un bloque de la paleta para agregarlo al día marcado, o cambiar el día desde el editor.
+- Cada bloque lleva hora, proveedor, **costo neto** y **precio de venta**; abajo se ven costo, venta, utilidad con % de margen, precio por persona y los bloques sin precio.
+- **📄 Crear cotización:** genera una cotización en *Borrador* en el formato del Cotizador (vuelo, hotel, traslados, tours y seguro; precio = suma de ventas) y el lead pasa a *Cotizado*. Si la cotización sigue en borrador, **↻ Actualizar** la rehace con el lienzo. La cotización guarda el lienzo (`details.canvas`) aunque después se edite en el Cotizador.
+- **Desde el viaje:** botón **🧩 Canvas**. Si el viaje viene de una cotización hecha en Canvas, el lienzo se carga solo; si no, se arma uno inicial con la confirmación de servicios. **Aplicar al itinerario y confirmación** reemplaza el día por día del itinerario digital (TP-301) y llena vuelos, hotel, traslados, actividades y seguro de la confirmación, sin tocar los demás datos.
+- Reglas en `public/viaje-core.js` (compartido con el servidor); campos `crm_leads.canvas` y `crm_trips.canvas` (JSON, máximo 80 bloques y 45 días; el servidor los valida y ordena).
+
+## Pasajeros y acompañantes (TP-303)
+
+- Botón **👥 Pasajeros** en el viaje: nombre como en la identificación, fecha de nacimiento, tipo (adulto 12+, menor 2–11, infante < 2, calculado con la edad al día de salida), parentesco, documento (pasaporte, INE, visa, acta, licencia), número, vigencia, nacionalidad, celular, notas y titular de la reserva.
+- **Avisos:** documento vencido antes de salir o durante el viaje (⛔), pasaporte con menos de 6 meses de vigencia al regreso (⚠), y datos faltantes; además, cuántos viajeros faltan contra el lead. La tarjeta del viaje en **Viajes** muestra 👥 y los avisos.
+- **Acompañantes frecuentes:** al guardar, los pasajeros se recuerdan en el cliente (`crm_clients.companions`) y se ofrecen con un clic en su siguiente viaje; se pueden quitar desde **Ficha 360 › Datos del cliente**.
+- La **confirmación de servicios** toma titular, número y lista de pasajeros de esta lista (con “menor, 8 años”). El **itinerario digital** del cliente solo muestra nombres y tipo.
+- **Privacidad:** número de documento y fecha de nacimiento solo los ve el equipo; no salen en ligas públicas ni en la bitácora (que solo anota “Pasajeros actualizados: 3”). Solo se escriben por `PUT /api/trips/:id/passengers` (`GET` para leer) y `PUT /api/clients/:id/companions`.

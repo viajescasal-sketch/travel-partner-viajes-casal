@@ -25,6 +25,7 @@ const { createAssignment, createAssignmentRouter } = require('./src/assignment')
 const { createReminders, createRemindersRouter } = require('./src/reminders');
 const { createPayments } = require('./src/payments');
 const { createItinerary } = require('./src/itinerary');
+const { createPassengers } = require('./src/passengers');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -296,6 +297,7 @@ async function createApp(options = {}) {
   app.use('/api', calendarFeed.apiRouter);
   app.use('/api', payments.apiRouter);
   app.use('/api', itinerary.apiRouter);
+  app.use('/api', createPassengers(dataStore).router); // TP-303
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');
