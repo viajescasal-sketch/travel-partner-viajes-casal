@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="/styles.css?v=tp106" />
     <link rel="stylesheet" href="/tp006.css?v=tp301" />
-    <link rel="stylesheet" href="/viaje.css?v=tp305" />
+    <link rel="stylesheet" href="/viaje.css?v=tp309" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -501,6 +501,7 @@
                 <select id="lostRange" aria-label="Periodo"><option value="30">Últimos 30 días</option><option value="90" selected>Últimos 90 días</option><option value="365">Último año</option><option value="all">Todo</option></select></div>
               <div id="lostReport"></div>
             </article>
+            <div id="postventaReport"></div>
           </section>
           <section id="activity" class="page">
             <div class="heading">
@@ -558,6 +559,7 @@
                 ><button data-settings-tab="assignmentPanel">Asignación de leads</button
                 ><button data-settings-tab="remindersPanel">Recordatorios</button
                 ><button data-settings-tab="templatesPanel">Plantillas WhatsApp</button
+                ><button data-settings-tab="postventaPanel">Postviaje y referidos</button
                 ><button data-settings-tab="paymentsPanel">Cobros</button
                 ><button data-settings-tab="integrationsPanel">Integraciones</button
                 ><button data-settings-tab="backupsPanel">Respaldos</button>
@@ -637,6 +639,15 @@
                   </div>
                 </div>
                 <div id="remindersBody"><p class="muted">Cargando…</p></div>
+              </article>
+              <article class="panel settings-panel" id="postventaPanel" hidden>
+                <div class="panel-head">
+                  <div>
+                    <h3>Postviaje y referidos</h3>
+                    <p>Encuesta automática al regreso, reseñas en Google/TripAdvisor y beneficios del programa de referidos.</p>
+                  </div>
+                </div>
+                <div id="postventaBody"><p class="muted">Cargando…</p></div>
               </article>
               <article class="panel settings-panel" id="templatesPanel" hidden>
                 <div class="panel-head">
@@ -854,8 +865,9 @@
     </style>
     <script src="/viaje-core.js?v=tp305"></script>
     <script src="/docs/documents.js?v=tp305"></script>
-    <script src="/app.js?v=tp305"></script>
+    <script src="/app.js?v=tp309"></script>
     <script src="/viaje.js?v=tp305"></script>
     <script src="/reservas.js?v=tp305"></script>
+    <script src="/fidelidad.js?v=tp309"></script>
   </body>
 </html>

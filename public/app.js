@@ -1070,6 +1070,7 @@ function renderReports() {
   $('#sourceDonut').style.background = total ? `conic-gradient(${stops.join(',')})` : 'var(--border)';
   $('#sourceTotal').textContent = total;
   renderLostReport();
+  if (typeof renderPostventaReport === 'function') renderPostventaReport(); // TP-308/309
   $('#sourceLegend').innerHTML = counts.length ? counts.map(([s, n], i) => `<p><i class="swatch" style="background:${SOURCE_COLORS[i % SOURCE_COLORS.length]}"></i>${escapeHtml(s)} ${Math.round((n / total) * 100)}%</p>`).join('') : '<p>Sin leads todavía</p>';
 }
 
@@ -1178,6 +1179,7 @@ function leadModal(id, presetClientId) {
     ${lead ? autoScoreHtml(lead) : ''}
     ${qualHtml(lead)}
     ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-cv-lead="${lead.id}">🧩 Armar en Canvas${lead.canvas?.blocks?.length ? ` (${lead.canvas.blocks.length})` : ''}</button><button type="button" class="btn primary small" data-wa-lead="${lead.id}">💬 Plantilla WhatsApp</button><button type="button" class="btn secondary small" data-client="${lead.client_id}">Ficha 360</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="Llamada">📞 Programar llamada</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="WhatsApp">💬 Programar WhatsApp</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Otro seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
+    ${lead ? '<div class="full" id="leadRef"></div>' : ''}
     ${lead ? leadContactHtml(lead) : ''}
     ${lead ? leadFollowupsHtml(lead) : ''}
     ${lead ? historyButton('leads', lead.id) : ''}
@@ -1191,6 +1193,7 @@ function leadModal(id, presetClientId) {
     stageSel.addEventListener('change', () => $('#lostBox').classList.toggle('hidden', stageSel.value !== 'Perdido'));
   }
   if (!client) { const f = $('#modalBody form'); f.dataset.kind = 'lead'; bindDuplicateCheck(f); }
+  if (lead && typeof paintLeadReferral === 'function') paintLeadReferral(lead); // TP-309
   bindForm(async (v, form) => {
     const body = clean({
       destination: v.destination, source: v.source, start_date: v.start_date || null, end_date: v.end_date || null,
@@ -1651,7 +1654,7 @@ function tripModal(id, preset = {}) {
     ${field('Regreso*', `<input name="end_date" type="date" required value="${escapeHtml(t?.end_date ?? fromLead?.end_date)}">`)}
     ${field('Estado', `<select name="status">${options(TRIP_STATUSES, t?.status || 'Confirmado')}</select>`, true)}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(t?.notes)}</textarea>`, true)}
-    ${t ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-confirmation="${t.id}">${t.confirmation ? 'Editar confirmación de servicios' : 'Preparar confirmación de servicios'}</button><button type="button" class="btn secondary small" data-res-pdf="${t.id}">Ver PDF de confirmación</button><button type="button" class="btn secondary small" data-itinerary="${t.id}">📱 Itinerario digital</button><button type="button" class="btn secondary small" data-pax-trip="${t.id}">${escapeHtml(tripPaxButtonLabel(t))}</button><button type="button" class="btn secondary small" data-cv-trip="${t.id}">🧩 Canvas</button><button type="button" class="btn secondary small" data-bk-trip="${t.id}">${escapeHtml(tripBookingLabel(t))}</button><button type="button" class="btn secondary small" data-wa-trip="${t.id}">💬 WhatsApp</button>${t.confirmation ? '<small>✓ Confirmación lista</small>' : ''}</div>` : ''}
+    ${t ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-confirmation="${t.id}">${t.confirmation ? 'Editar confirmación de servicios' : 'Preparar confirmación de servicios'}</button><button type="button" class="btn secondary small" data-res-pdf="${t.id}">Ver PDF de confirmación</button><button type="button" class="btn secondary small" data-itinerary="${t.id}">📱 Itinerario digital</button><button type="button" class="btn secondary small" data-pax-trip="${t.id}">${escapeHtml(tripPaxButtonLabel(t))}</button><button type="button" class="btn secondary small" data-cv-trip="${t.id}">🧩 Canvas</button><button type="button" class="btn secondary small" data-bk-trip="${t.id}">${escapeHtml(tripBookingLabel(t))}</button><button type="button" class="btn secondary small" data-survey-trip="${t.id}">${escapeHtml(surveyLabel(t))}</button><button type="button" class="btn secondary small" data-wa-trip="${t.id}">💬 WhatsApp</button>${t.confirmation ? '<small>✓ Confirmación lista</small>' : ''}</div>` : ''}
     ${t ? historyButton('trips', t.id) : ''}
     ${deleteBlock('viaje', t?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${t ? 'Guardar cambios' : 'Guardar viaje'}</button></div></form>`;
@@ -1754,7 +1757,8 @@ function templateVars({ client, lead, quote, trip }) {
     vigencia: quote?.valid_until ? fmtLongRange(quote.valid_until) : '', vendedor: String(currentUser?.name || '').trim(),
     agencia: db.agency?.name || 'Viajes Casal', liga_resenas: db.templates?.reviewLink || '', liga_cotizacion: quote ? db.shareUrls?.[quote.id] || '' : '',
     ...payVars(quote),
-    liga_itinerario: trip?.share_token ? `${location.origin}/viaje/${trip.share_token}` : ''
+    liga_itinerario: trip?.share_token ? `${location.origin}/viaje/${trip.share_token}` : '',
+    ...(typeof postventaVars === 'function' ? postventaVars({ client, trip }) : {}) // TP-308/309
   };
 }
 // Reemplaza {variable}; lo que falta queda como [variable] para que el vendedor lo complete.
@@ -2011,6 +2015,7 @@ async function clientFile(id, opts = {}) {
         ${historyButton('clients', c.id)}
         ${deleteBlock('cliente y todo su historial', c.id)}
         <div class="modal-actions"><button type="button" class="btn secondary close">${readonly ? 'Cerrar' : 'Cancelar'}</button>${readonly ? '' : '<button type="submit" class="btn primary">Guardar cambios</button>'}</div></form>
+      <div class="c360-companions" id="c360Referral"></div>
       <div class="c360-companions" id="c360Companions"></div>
     </section>
   </div>`;
@@ -2030,6 +2035,7 @@ async function clientFile(id, opts = {}) {
   showTab(tab);
   paintTimeline();
   paintCompanions(c); // TP-303
+  if (typeof paintClientReferral === 'function') paintClientReferral(c); // TP-309
   $('#modalBody').onclick = async (e) => {
     const t = e.target;
     if (t.closest('[data-c360-tab]')) { showTab(t.closest('[data-c360-tab]').dataset.c360Tab); return; }
@@ -3119,6 +3125,7 @@ function showSettingsTab(tab) {
   if (tab === 'remindersPanel') renderReminders();
   if (tab === 'templatesPanel') renderTemplatesSettings();
   if (tab === 'paymentsPanel') renderPaymentsSettings();
+  if (tab === 'postventaPanel' && typeof renderPostventaSettings === 'function') renderPostventaSettings(); // TP-308/309
 }
 async function loadMailStatus() {
   const el = $('#mailStatus'), button = $('#testMail');

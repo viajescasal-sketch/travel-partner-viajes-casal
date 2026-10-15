@@ -202,6 +202,7 @@
       hp_check: $('#wfHp').value,
       elapsed: Date.now() - startedAt,
       origen: params.get('origen') || '',
+      ref: params.get('ref') || '', // TP-309: código de referido
       utm_source: params.get('utm_source') || '',
       utm_medium: params.get('utm_medium') || '',
       utm_campaign: params.get('utm_campaign') || '',

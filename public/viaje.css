@@ -137,3 +137,25 @@ body.cv-noselect { user-select: none; cursor: grabbing; }
 #suppliers .toolbar select { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; padding: 8px; }
 #suppliers .kb-check { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .bk-panel .note-warn { background: #fff5d9; color: #7a5300; border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+
+/* TP-308 Encuesta postviaje · TP-309 Referidos */
+.ref-box { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; background: #e8f8fa; border-radius: 12px; padding: 10px 12px; font-size: 13px; }
+body.dark .ref-box { background: rgba(0, 184, 200, .12); }
+.ref-box input { width: 140px !important; margin: 0 !important; text-transform: uppercase; }
+.ref-box select { width: auto !important; margin: 0 0 0 6px !important; padding: 5px !important; }
+.ref-welcome { display: flex !important; align-items: center; gap: 4px; font-weight: 600; }
+.ref-code { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.ref-code input { flex: 1 1 220px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); }
+.ref-code b { color: #007985; letter-spacing: 1px; }
+.ref-rewards { margin-top: 10px; }
+.ref-rewards select { padding: 5px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.sv-answers { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.sv-answers div { background: var(--bg); border-radius: 10px; padding: 8px; text-align: center; }
+.sv-answers span { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; }
+.sv-answers b { color: var(--gold); font-size: 15px; }
+.sv-answers .full { grid-column: 1 / -1; margin: 4px 0; }
+.sv-kpis div { flex-direction: column; gap: 3px; }
+.sv-kpis small { color: var(--muted); font-size: 10px; }
+#postventaReport { margin-top: 18px; }
+#postventaReport .comp-row small { display: block; }
+@media (max-width: 800px) { .sv-answers { grid-template-columns: repeat(2, 1fr); } }
