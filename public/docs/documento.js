@@ -154,7 +154,7 @@
     document.querySelector('#acceptBar')?.remove();
     if (a.accepted) {
       const opt = a.options.find((o) => o.index === a.acceptedOption);
-      note(`✅ ¡Aceptaste esta cotización${opt && a.options.length > 1 ? ` (opción ${opt.index + 1}: ${opt.label})` : ''}! Tu Travel Partner ya fue avisado.${payload.payUrl ? ' Ya puedes apartar tu viaje con el anticipo.' : ''}`, 'info');
+      note(`✅ ¡Aceptaste esta cotización${opt && a.options.length > 1 ? ` (opción ${opt.index + 1}: ${opt.label})` : ''}! Tu Travel Partner ya fue avisado.${payload.payUrl ? (/\/contrato\//.test(payload.payUrl) ? ' Firma tu contrato para apartar tu viaje con el anticipo.' : ' Ya puedes apartar tu viaje con el anticipo.') : ''}`, 'info');
       if (a.options.length > 1 && Number.isInteger(a.acceptedOption)) showTab(a.acceptedOption);
       return;
     }
@@ -195,7 +195,11 @@
       btn.disabled = true; btn.textContent = 'Enviando…';
       try {
         const r = await api(`/api/public/quote/${shareToken}/accept`, { method: 'POST', body: JSON.stringify({ option: opt.index, name: form.name.value, terms: form.terms.checked }) });
-        form.innerHTML = `<h3>🎉 ¡Listo, cotización aceptada!</h3><p>Tu Travel Partner ya recibió el aviso y te confirmará tu reserva.</p>${r.payUrl ? `<p>Para apartar tu viaje y garantizar precio y disponibilidad, paga tu anticipo:</p><a class="doc-btn coral" href="${D.esc(r.payUrl)}">Pagar mi anticipo</a>` : ''}<div class="accept-acts"><button type="button" class="doc-btn ghost" data-x>Cerrar</button></div>`;
+        // TP-204: si la agencia pide contrato, primero se firma y después se paga el anticipo.
+        const next = r.contractUrl
+          ? `<p>Para apartar tu viaje, firma tu contrato (2 minutos desde tu celular) y después paga tu anticipo:</p><a class="doc-btn coral" href="${D.esc(r.contractUrl)}">Firmar mi contrato</a>`
+          : r.payUrl ? `<p>Para apartar tu viaje y garantizar precio y disponibilidad, paga tu anticipo:</p><a class="doc-btn coral" href="${D.esc(r.payUrl)}">Pagar mi anticipo</a>` : '';
+        form.innerHTML = `<h3>🎉 ¡Listo, cotización aceptada!</h3><p>Tu Travel Partner ya recibió el aviso y te confirmará tu reserva.</p>${next}<div class="accept-acts"><button type="button" class="doc-btn ghost" data-x>Cerrar</button></div>`;
         const fresh = await api(`/api/public/quote/${shareToken}`);
         $('#docActions').innerHTML = '';
         renderPublicQuote(fresh);
