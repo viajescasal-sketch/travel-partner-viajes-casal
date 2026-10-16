@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="/styles.css?v=tp106" />
     <link rel="stylesheet" href="/tp006.css?v=tp301" />
     <link rel="stylesheet" href="/viaje.css?v=tp307" />
+    <link rel="stylesheet" href="/ui.css?v=ui2" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -116,48 +117,39 @@
           <div><b>Travel Partner</b><small>Viajes Casal</small></div>
         </div>
         <nav id="nav">
-          <button class="active" data-page="dashboard">⌂ Dashboard</button
-          ><button data-page="leads" data-hide-ops>◎ Leads <em id="leadBadge" class="hidden">0</em></button
-          ><button data-page="quotes">▤ Cotizaciones</button
-          ><button data-page="clients">◉ Clientes</button
-          ><button data-page="trips">✈ Viajes</button
-          ><button data-page="suppliers">▦ Proveedores</button
-          ><button data-page="campaigns" data-hide-ops>📣 Campañas <em id="campaignBadge" class="hidden">0</em></button
-          ><button data-page="followups">◷ Seguimientos <em id="followBadge" class="hidden">0</em></button
-          ><button data-page="reports" data-admin-only>▥ Reportes</button
-          ><button data-page="activity" data-admin-only>☰ Bitácora</button
-          ><button data-page="settings" data-admin-only>
-            ⚙ Configuración
-          </button>
+          <button class="active" data-page="dashboard"><i data-ic="home"></i><span>Dashboard</span></button
+          ><button data-page="leads" data-hide-ops><i data-ic="target"></i><span>Leads</span><em id="leadBadge" class="hidden">0</em></button
+          ><button data-page="quotes"><i data-ic="file"></i><span>Cotizaciones</span></button
+          ><button data-page="clients"><i data-ic="users"></i><span>Clientes</span></button
+          ><button data-page="trips"><i data-ic="plane"></i><span>Viajes</span></button
+          ><button data-page="suppliers"><i data-ic="building"></i><span>Proveedores</span></button
+          ><button data-page="campaigns" data-hide-ops><i data-ic="megaphone"></i><span>Campañas</span><em id="campaignBadge" class="hidden">0</em></button
+          ><button data-page="followups"><i data-ic="calendar"></i><span>Seguimientos</span><em id="followBadge" class="hidden">0</em></button
+          ><button data-page="reports" data-admin-only><i data-ic="chart"></i><span>Reportes</span></button
+          ><button data-page="activity" data-admin-only><i data-ic="history"></i><span>Bitácora</span></button
+          ><button data-page="settings" data-admin-only><i data-ic="settings"></i><span>Configuración</span></button>
         </nav>
         <div class="side-bottom">
           <div class="help">
-            💬<b>¿Necesitas ayuda?</b><small>Consulta la guía operativa.</small
-            ><button class="btn light small">Abrir guía</button>
+            <i data-ic="compass"></i><div><b>¿Necesitas ayuda?</b><small>Recorrido guiado por la plataforma.</small></div
+            ><button class="btn light small" id="tourStart" type="button">Abrir guía</button>
           </div>
           <div class="profile">
-            <span id="profileInitial">U</span>
+            <button type="button" id="profileAvatar" class="profile-avatar" title="Cambiar mi foto o avatar" aria-label="Cambiar mi foto o avatar"><span id="profileInitial">U</span><i data-ic="camera" class="av-edit"></i></button>
             <div>
               <b id="profileName">Usuario</b
               ><small id="profileRole">Sesión segura</small>
             </div>
-            <button id="myAccount" class="icon" title="Mi cuenta" aria-label="Mi cuenta">⚙</button>
-            <button
-              id="logout"
-              class="icon"
-              title="Cerrar sesión"
-              aria-label="Cerrar sesión"
-            >
-              ⇥
-            </button>
+            <button id="myAccount" class="icon" title="Mi cuenta" aria-label="Mi cuenta"><i data-ic="account"></i></button>
+            <button id="logout" class="icon" title="Cerrar sesión" aria-label="Cerrar sesión"><i data-ic="logout"></i></button>
           </div>
         </div>
       </aside>
       <main>
         <header>
-          <button id="menu" class="icon mobile">☰</button>
+          <button id="menu" class="icon mobile" aria-label="Menú"><i data-ic="menu"></i></button>
           <div class="search">
-            ⌕
+            <i data-ic="search"></i>
             <input
               id="globalSearch"
               placeholder="Buscar cliente, cotización o destino..."
@@ -165,11 +157,11 @@
           </div>
           <div class="header-actions">
             <div class="bell-wrap">
-              <button id="bellBtn" class="icon bell" title="Avisos" aria-label="Avisos" aria-haspopup="true" aria-expanded="false">🔔<em id="bellCount" class="hidden">0</em></button>
+              <button id="bellBtn" class="icon bell" title="Avisos" aria-label="Avisos" aria-haspopup="true" aria-expanded="false"><i data-ic="bell"></i><em id="bellCount" class="hidden">0</em></button>
               <div id="bellPanel" class="bell-panel hidden" role="dialog" aria-label="Avisos"></div>
             </div
-            ><button id="theme" class="icon">☾</button
-            ><button id="exportBtn" class="icon" title="Exportar a Excel o CSV" aria-label="Exportar a Excel o CSV">⤓</button
+            ><button id="theme" class="icon" title="Modo oscuro" aria-label="Cambiar modo claro u oscuro"><i data-ic="moon" class="ic-moon"></i><i data-ic="sun" class="ic-sun"></i></button
+            ><button id="exportBtn" class="icon" title="Exportar a Excel o CSV" aria-label="Exportar a Excel o CSV"><i data-ic="download"></i></button
             ><button class="btn primary" data-action="lead" data-hide-ops>
               + Nuevo lead
             </button>
@@ -193,28 +185,28 @@
             </div>
             <div class="kpis">
               <article>
-                <i class="teal">◎</i
+                <i class="teal"><i data-ic="target"></i></i
                 ><span
                   >Leads activos<b id="kpiLeads">0</b
                   ><small id="kpiLeadsNote"></small></span
                 >
               </article>
               <article>
-                <i class="blue">▤</i
+                <i class="blue"><i data-ic="send"></i></i
                 ><span
                   >Cotizaciones enviadas<b id="kpiQuotes">0</b
                   ><small id="kpiQuotesNote"></small></span
                 >
               </article>
               <article>
-                <i class="coral">✓</i
+                <i class="coral"><i data-ic="check"></i></i
                 ><span
                   >Ventas del mes<b id="kpiSales">$0</b
                   ><small id="kpiSalesNote"></small></span
                 >
               </article>
               <article>
-                <i class="gold">%</i
+                <i class="gold"><i data-ic="percent"></i></i
                 ><span
                   >Conversión<b id="kpiConv">—</b><small id="kpiConvNote"></small></span
                 >
@@ -475,24 +467,24 @@
             </div>
             <div class="kpis">
               <article>
-                <i class="teal">$</i
+                <i class="teal"><i data-ic="dollar"></i></i
                 ><span>Ingresos del mes<b id="repIncome">$0</b><small id="repIncomeNote"></small></span>
               </article>
               <article>
-                <i class="blue">#</i
+                <i class="blue"><i data-ic="ticket"></i></i
                 ><span
                   >Ticket promedio<b id="repTicket">—</b><small id="repTicketNote"></small></span
                 >
               </article>
               <article>
-                <i class="gold">⌁</i
+                <i class="gold"><i data-ic="clock"></i></i
                 ><span
                   >Tiempo de cierre<b id="repClose">—</b
                   ><small id="repCloseNote"></small></span
                 >
               </article>
               <article>
-                <i class="coral">★</i
+                <i class="coral"><i data-ic="star"></i></i
                 ><span>Satisfacción<b id="repSat">—</b><small id="repSatNote"></small></span>
               </article>
             </div>
@@ -928,6 +920,8 @@
         cursor: wait;
       }
     </style>
+    <script src="/iconos.js?v=ui1"></script>
+    <script src="/avatares.js?v=ui1"></script>
     <script src="/viaje-core.js?v=tp206"></script>
     <script src="/docs/documents.js?v=tp305"></script>
     <script src="/reportes-core.js?v=tp206"></script>
@@ -935,7 +929,7 @@
     <script src="/contrato-core.js?v=tp206"></script>
     <script src="/campos-core.js?v=tp307"></script>
     <script src="/automatizaciones-core.js?v=tp307"></script>
-    <script src="/app.js?v=tp307"></script>
+    <script src="/app.js?v=ui1"></script>
     <script src="/viaje.js?v=tp305"></script>
     <script src="/reservas.js?v=tp206"></script>
     <script src="/fidelidad.js?v=tp311"></script>
@@ -944,5 +938,6 @@
     <script src="/metas.js?v=tp206"></script>
     <script src="/campos.js?v=tp307"></script>
     <script src="/automatizaciones.js?v=tp307"></script>
+    <script src="/recorrido.js?v=ui2"></script>
   </body>
 </html>

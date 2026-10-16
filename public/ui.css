@@ -1,0 +1,125 @@
+/* Diseño: menú lateral que se ajusta a cualquier alto de pantalla, íconos uniformes, avatares y recorrido guiado. */
+
+/* ---------- Íconos ---------- */
+.ic { width: 1.15em; height: 1.15em; flex: none; vertical-align: -0.2em; }
+.icon { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; padding: 0; }
+.icon:hover { background: var(--bg); }
+.icon .ic { width: 20px; height: 20px; }
+#theme .ic-sun { display: none; }
+body.dark #theme .ic-sun { display: block; }
+body.dark #theme .ic-moon { display: none; }
+.search .ic { width: 18px; height: 18px; color: var(--muted); }
+.kpis i .ic { width: 22px; height: 22px; }
+.bell .ic { width: 21px; height: 21px; }
+
+/* ---------- Menú lateral: siempre visible completo ---------- */
+aside { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
+aside::-webkit-scrollbar { width: 6px; }
+aside::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); border-radius: 6px; }
+aside nav { flex: 0 0 auto; gap: 3px; }
+aside nav button { display: flex; align-items: center; gap: 12px; padding: 10px 12px; font-size: 14px; line-height: 1.2; }
+aside nav button .ic { width: 20px; height: 20px; opacity: .9; }
+aside nav button span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+aside nav button em { float: none; margin-left: auto; font-size: 11px; }
+aside nav button.active .ic { color: var(--teal); opacity: 1; }
+.side-bottom { padding-top: 14px; }
+.help { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 12px; }
+.help > .ic { width: 22px; height: 22px; color: var(--teal); }
+.help > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.help b { font-size: 13px; }
+.help small { font-size: 11px; }
+.help .btn { width: 100%; }
+.profile { padding: 12px 2px 4px; gap: 8px; }
+.profile .icon { color: #c8dce7; width: 34px; height: 34px; }
+.profile .icon:hover { background: rgba(255,255,255,.1); color: #fff; }
+.profile-avatar { position: relative; border: 0; padding: 0; background: transparent; cursor: pointer; border-radius: 50%; flex: none; }
+.profile-avatar #profileInitial { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--coral); color: #fff; font-weight: 800; overflow: hidden; }
+.profile-avatar #profileInitial.has-av { background: transparent; }
+.profile-avatar .av-edit { position: absolute; right: -3px; bottom: -3px; width: 18px; height: 18px; padding: 3px; border-radius: 50%; background: var(--teal); color: #fff; box-shadow: 0 0 0 2px var(--navy); opacity: 0; transition: opacity .15s; }
+.profile-avatar:hover .av-edit, .profile-avatar:focus-visible .av-edit { opacity: 1; }
+/* Pantallas bajas (laptops con zoom): menú compacto */
+@media (max-height: 820px) {
+  aside { padding: 14px 12px; }
+  .brand.side { margin-bottom: 10px; }
+  aside nav button { padding: 8px 12px; }
+  .help { padding: 8px 10px; }
+  .help > div small { display: none; }
+  .help .btn { width: auto; margin-left: auto; }
+  .help > div { flex: 1; }
+}
+@media (max-height: 660px) {
+  aside nav button { padding: 6px 12px; font-size: 13px; }
+  .help > div { display: none; }
+  .help .btn { flex: 1; }
+}
+
+/* ---------- Encabezado y páginas en pantallas medianas y chicas ---------- */
+@media (max-width: 1050px) {
+  .platform header { padding: 0 16px; gap: 10px; }
+  .content { padding: 20px; }
+}
+@media (max-width: 800px) {
+  aside { width: min(300px, 86vw); box-shadow: 0 0 40px rgba(0,0,0,.35); }
+  .platform header { height: 60px; padding: 0 12px; }
+  .search { min-width: 0; }
+  .header-actions { gap: 2px; }
+  .heading h2 { font-size: 24px; }
+}
+@media (max-width: 520px) {
+  #exportBtn { display: none; }
+  .content { padding: 14px 12px; }
+}
+.content, .page { min-width: 0; }
+.platform main { min-width: 0; overflow-x: clip; }
+
+/* ---------- Avatares ---------- */
+.av-svg, .av-img { display: block; border-radius: 50%; flex: none; }
+.av-img { object-fit: cover; background: #fff; }
+@media (prefers-reduced-motion: no-preference) {
+  .av-live .av-eyes { transform-box: fill-box; transform-origin: center; animation: av-blink 5.2s infinite; }
+  .av-live .av-body { transform-box: fill-box; transform-origin: 50% 90%; animation: av-bob 4.4s ease-in-out infinite; }
+  .av-live .av-spout { transform-box: fill-box; transform-origin: 50% 100%; animation: av-spout 2.6s ease-in-out infinite; }
+}
+@keyframes av-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+@keyframes av-bob { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-1.5px) rotate(-1.5deg); } }
+@keyframes av-spout { 0%, 100% { transform: scaleY(1); opacity: .9; } 50% { transform: scaleY(1.25); opacity: 1; } }
+.kb-owner { padding: 0; border: 0; background: transparent; border-radius: 50%; display: inline-grid; place-items: center; }
+.kb-owner .av-svg, .kb-owner .av-img { width: 24px; height: 24px; }
+.av-pick .av-current { display: flex; gap: 18px; align-items: center; margin-bottom: 8px; }
+.av-pick .av-current .av-svg, .av-pick .av-current .av-img { width: 112px; height: 112px; box-shadow: 0 6px 18px rgba(7,59,102,.15); }
+.av-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.av-actions .btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.av-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+.av-opt { border: 2px solid transparent; background: var(--bg); border-radius: 14px; padding: 10px 6px 8px; display: grid; justify-items: center; gap: 4px; cursor: pointer; color: var(--text); }
+.av-opt:hover { border-color: var(--border); }
+.av-opt.on { border-color: var(--teal); background: rgba(0,184,200,.08); }
+.av-opt small { font-size: 11px; color: var(--muted); }
+@media (max-width: 520px) { .av-pick .av-current { flex-direction: column; text-align: center; } .av-actions { justify-content: center; } }
+
+/* ---------- Recorrido guiado ---------- */
+.guide-btn { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-left: 10px; vertical-align: middle; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--teal); cursor: pointer; padding: 0; }
+.guide-btn .ic { width: 17px; height: 17px; }
+.guide-btn:hover { background: rgba(0,184,200,.1); }
+#tourLayer { position: fixed; inset: 0; z-index: 1000; }
+.tour-hole { position: fixed; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(5,22,38,.62); pointer-events: none; transition: all .25s ease; outline: 2px solid var(--teal); outline-offset: 2px; }
+.tour-card { position: fixed; width: min(360px, calc(100vw - 24px)); background: var(--surface); color: var(--text); border-radius: 16px; padding: 16px 18px; box-shadow: 0 20px 50px rgba(0,0,0,.3); transition: top .25s, left .25s; }
+.tour-top { display: flex; align-items: center; gap: 8px; color: var(--teal); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.tour-top .ic { width: 18px; height: 18px; }
+.tour-top span { flex: 1; }
+.tour-x { border: 0; background: transparent; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; padding: 0 2px; }
+.tour-card h3 { margin: 8px 0 6px; font-size: 18px; color: var(--navy); }
+body.dark .tour-card h3 { color: #fff; }
+.tour-card p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text); }
+.tour-dots { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0 4px; }
+.tour-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
+.tour-dots i.done { background: rgba(0,184,200,.45); }
+.tour-dots i.on { background: var(--teal); width: 18px; border-radius: 6px; }
+.tour-off { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 8px; cursor: pointer; }
+.tour-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.tour-admin { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-top: 16px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; }
+.tour-admin b { display: flex; align-items: center; gap: 6px; }
+.tour-admin small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; max-width: 520px; }
+
+/* Botones del encabezado y de cada página: no partir el texto en dos líneas */
+.platform header .btn, .heading .btn, .heading-actions .btn { white-space: nowrap; }
+@media (max-width: 1050px) { .heading { flex-wrap: wrap; gap: 12px; } }
