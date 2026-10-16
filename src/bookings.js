@@ -4,9 +4,11 @@
 // pago al proveedor y documentos). Solo el equipo ve costos; el cliente ve las claves confirmadas en su itinerario.
 
 const express = require('express');
-const { ENTITY_ORDER, ValidationError } = require('./crm-schema');
+const { ENTITY_ORDER, ValidationError, nowCancun } = require('./crm-schema');
 const { buildScope, isVisible, canWrite } = require('./access');
 const TPTrip = require('../public/viaje-core');
+
+const FINANCE_ROLES = ['admin', 'operaciones'];
 
 function createBookings(dataStore) {
   const router = express.Router();
@@ -35,11 +37,22 @@ function createBookings(dataStore) {
     if (req.body.list.length > TPTrip.MAX_BOOKINGS) throw new ValidationError(`Máximo ${TPTrip.MAX_BOOKINGS} reservas por viaje`);
     const suppliers = await dataStore.listSuppliers();
     const vouchers = new Set((trip.vouchers || []).map((v) => Number(v.id)));
+    const before = trip.bookings?.list || [];
+    const finance = FINANCE_ROLES.includes(req.session.user.role);
     const list = TPTrip.cleanBookings(req.body.list).map((b) => {
       const sup = b.supplier_id ? suppliers.find((s) => s.id === b.supplier_id) : null;
-      return { ...b, supplier_id: sup ? sup.id : null, supplier_name: sup ? sup.name : b.supplier_name, voucher_ids: b.voucher_ids.filter((v) => vouchers.has(v)) };
+      const out = { ...b, supplier_id: sup ? sup.id : null, supplier_name: sup ? sup.name : b.supplier_name, voucher_ids: b.voucher_ids.filter((v) => vouchers.has(v)) };
+      if (out.model === 'comision') {
+        // TP-205: fecha de cobro por omisión = fin del servicio + días del proveedor.
+        if (!out.commission_due) out.commission_due = TPTrip.commissionDueDefault(out, trip, sup);
+        // El cobro de la comisión (estado, factura, fecha) solo lo cambian el administrador y Operaciones.
+        if (!finance) {
+          const prev = before.find((x) => x.id === out.id);
+          Object.assign(out, { commission_status: prev?.model === 'comision' ? prev.commission_status : 'Pendiente', commission_invoice: prev?.commission_invoice || '', commission_paid_at: prev?.commission_paid_at || '' });
+        }
+      }
+      return out;
     });
-    const before = trip.bookings?.list || [];
     const updated = await dataStore.updateRecord('trips', trip.id, { bookings: { list, updated_at: new Date().toISOString().slice(0, 19) } });
     const changes = [];
     list.forEach((b) => {
@@ -47,6 +60,7 @@ function createBookings(dataStore) {
       if (!prev) changes.push(`+ ${b.type} ${b.supplier_name || b.description}`.trim());
       else if (prev.status !== b.status) changes.push(`${b.type} ${b.supplier_name}: ${prev.status} → ${b.status}`);
       else if (!prev.supplier_paid && b.supplier_paid) changes.push(`${b.type} ${b.supplier_name}: pagada al proveedor`);
+      else if (b.model === 'comision' && prev.commission_status !== b.commission_status) changes.push(`${b.type} ${b.supplier_name}: comisión ${b.commission_status}`);
     });
     before.filter((p) => !list.some((b) => b.id === p.id)).forEach((p) => changes.push(`− ${p.type} ${p.supplier_name || p.description}`.trim()));
     await dataStore.logActivity(req.session.user.id, 'crm_trips_update', req, {
@@ -54,6 +68,33 @@ function createBookings(dataStore) {
       note: `Reservas: ${changes.length ? changes.join(' · ').slice(0, 480) : 'sin cambios de estado'}`
     });
     res.json({ ok: true, record: updated, bookings: list });
+  }));
+
+  // TP-205: cobro de la comisión de una reserva (Pendiente → Facturada → Cobrada) desde el panel de Proveedores.
+  router.patch('/trips/:id/bookings/:bid/commission', wrap(async (req, res) => {
+    if (!FINANCE_ROLES.includes(req.session.user.role)) throw Object.assign(new Error('Solo el administrador y Operaciones registran el cobro de comisiones'), { status: 403, expose: true });
+    const { trip, client } = await visibleTrip(req, false);
+    const list = trip.bookings?.list || [];
+    const prev = list.find((b) => b.id === String(req.params.bid));
+    if (!prev || prev.model !== 'comision') throw Object.assign(new Error('Esa reserva no tiene comisión por cobrar'), { status: 404, expose: true });
+    const b = req.body || {};
+    const status = TPTrip.COMMISSION_STATUSES.includes(b.status) ? b.status : prev.commission_status;
+    const today = nowCancun().slice(0, 10);
+    const next = TPTrip.cleanBooking({
+      ...prev, commission_status: status,
+      commission_invoice: b.invoice !== undefined ? b.invoice : prev.commission_invoice,
+      commission_amount: b.amount !== undefined && b.amount !== '' ? b.amount : prev.commission_amount,
+      commission_due: b.due !== undefined ? b.due : prev.commission_due,
+      commission_paid_at: status === 'Cobrada' ? (TPTrip.isDate(b.paid_at) && b.paid_at <= today ? b.paid_at : prev.commission_paid_at || today) : ''
+    });
+    const updatedList = list.map((x) => (x.id === prev.id ? next : x));
+    const updated = await dataStore.updateRecord('trips', trip.id, { bookings: { ...(trip.bookings || {}), list: updatedList, updated_at: new Date().toISOString().slice(0, 19) } });
+    const money = (n) => `$${Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 2 })}`;
+    await dataStore.logActivity(req.session.user.id, 'crm_trips_update', req, {
+      entity: 'trips', entityId: trip.id, summary: [client?.name, trip.destination, trip.start_date].filter(Boolean).join(' · '),
+      note: `Comisión ${next.supplier_name || next.type}: ${prev.commission_status} → ${next.commission_status} · ${money(TPTrip.bookingProfit(next))}${next.commission_invoice ? ` · factura ${next.commission_invoice}` : ''}`
+    });
+    res.json({ ok: true, record: updated, booking: next });
   }));
 
   return { router };

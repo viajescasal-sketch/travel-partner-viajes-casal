@@ -27,6 +27,7 @@ const { phoneKey } = require('./data-store');
 const TPTrip = require('../public/viaje-core');
 const hooks = require('./hooks');
 const { STAGES: TEMPLATE_STAGES, VARIABLES: TEMPLATE_VARIABLES, DEFAULT_TEMPLATES, sanitizeTemplates, readTemplates } = require('./templates');
+const { goalsFor } = require('./commissions');
 
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
 const AGENCY_FIELDS = { name: 120, whatsapp: 40, email: 254, website: 200 };
@@ -222,6 +223,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
       settings: await allSettings(),
       me: sellerInfo(await dataStore.findUserById(ctx.user.id)),
       suppliers: dataStore.listSuppliers ? await dataStore.listSuppliers() : [], // TP-305
+      goals: await goalsFor(dataStore, ctx.user), // TP-206
       serverTime: nowCancun()
     });
   }));

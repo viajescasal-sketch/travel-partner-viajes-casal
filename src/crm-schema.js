@@ -92,7 +92,11 @@ const ENTITIES = {
       payment_plan: { type: 'json', max: 40000, internal: true },
       pay_token: { type: 'string', max: 48, internal: true },
       // TP-203: aceptación en línea del cliente { by, name, option, label, at }
-      acceptance: { type: 'json', max: 4000, internal: true }
+      acceptance: { type: 'json', max: 4000, internal: true },
+      // TP-204: contrato con firma electrónica { required, requested_at, signed: { name, at, ip, ua, hash, signature_id, total, doc }, waived }
+      contract: { type: 'json', max: 80000, internal: true },
+      // TP-206: comisión del vendedor ya pagada { status: 'Pagada', amount, pct, profit, paid_at, by }
+      seller_commission: { type: 'json', max: 2000, internal: true }
     }
   },
   trips: {

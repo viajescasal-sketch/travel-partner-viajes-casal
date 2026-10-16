@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const { nowCancun } = require('./crm-schema');
 const { DEFAULT_DOCUMENTS, sellerInfo } = require('./documents');
 const { createQuoteEffects, quoteOptions } = require('./quote-effects');
+const TPContract = require('../public/contrato-core');
 
 const TOKEN_RE = /^[a-f0-9]{40}$/;
 const REVIEW_GAP_MS = 60 * 60 * 1000; // un aviso por hora como máximo
@@ -45,7 +46,7 @@ function createPublicQuote(dataStore, assignment, { publicDirectory, payments = 
     const client = await dataStore.getRecord('clients', quote.client_id);
     const lead = quote.lead_id ? await dataStore.getRecord('leads', quote.lead_id) : null;
     const seller = await dataStore.findUserById(quote.owner_id || lead?.owner_id);
-    const { share_token, view_count, viewed_at, reminder_at, sent_at, owner_id, payment_plan, pay_token, acceptance, ...safeQuote } = quote;
+    const { share_token, view_count, viewed_at, reminder_at, sent_at, owner_id, payment_plan, pay_token, acceptance, contract, seller_commission, ...safeQuote } = quote;
     const st = acceptState(quote);
     const payload = {
       ok: true,
@@ -58,8 +59,9 @@ function createPublicQuote(dataStore, assignment, { publicDirectory, payments = 
       // TP-203: aceptación en línea
       accept: { ...st, options: quoteOptions(quote).map(({ index, label, total }) => ({ index, label, total })), acceptedOption: st.accepted ? (acceptance?.option ?? quote.details?.principal ?? 0) : null, acceptedName: st.accepted && acceptance ? acceptance.name : null, acceptedAt: st.accepted ? (acceptance?.at || quote.accepted_at || null) : null },
       // TP-201: si ya se aceptó, botón para pagar el anticipo / ver su plan de pagos
-      payUrl: quote.status === 'Aceptada' && pay_token && payment_plan ? `/pagar/${pay_token}` : null,
-      payLabel: payment_plan ? (payment_plan.paid > 0 ? 'Ver mi plan de pagos' : 'Pagar mi anticipo') : null,
+      // TP-204: si falta firmar el contrato, el botón lleva primero al contrato.
+      payUrl: quote.status === 'Aceptada' && pay_token && payment_plan ? (TPContract.pending(quote) ? `/contrato/${pay_token}` : `/pagar/${pay_token}`) : null,
+      payLabel: payment_plan ? (TPContract.pending(quote) ? 'Firmar mi contrato y pagar' : payment_plan.paid > 0 ? 'Ver mi plan de pagos' : 'Pagar mi anticipo') : null,
       agency: { ...DEFAULT_AGENCY, ...((await dataStore.getSetting('agency')) || {}) },
       documents: { ...DEFAULT_DOCUMENTS, ...((await dataStore.getSetting('documents')) || {}) }
     };
@@ -114,8 +116,9 @@ function createPublicQuote(dataStore, assignment, { publicDirectory, payments = 
       const quote = await findByToken(req.params.token);
       if (!quote) { res.status(404).json({ ok: false, error: 'Esta cotización ya no está disponible' }); return; }
       const payUrlOf = (q) => (q.pay_token && q.payment_plan ? `/pagar/${q.pay_token}` : null);
+      const contractUrlOf = (q) => (q.pay_token && TPContract.pending(q) ? `/contrato/${q.pay_token}` : null);
       const st = acceptState(quote);
-      if (st.accepted) { res.json({ ok: true, already: true, payUrl: payUrlOf(quote) }); return; }
+      if (st.accepted) { res.json({ ok: true, already: true, payUrl: payUrlOf(quote), contractUrl: contractUrlOf(quote) }); return; }
       if (st.expired) { res.status(400).json({ ok: false, error: 'La vigencia de esta cotización ya terminó. Escríbele a tu Travel Partner para actualizar precios y disponibilidad.' }); return; }
       if (!st.canAccept) { res.status(400).json({ ok: false, error: 'Esta cotización no se puede aceptar en línea. Escríbele a tu Travel Partner.' }); return; }
       const name = String(req.body?.name ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
@@ -143,7 +146,7 @@ function createPublicQuote(dataStore, assignment, { publicDirectory, payments = 
         const users = await dataStore.listUsers();
         const ids = new Set([lead?.owner_id, quote.owner_id, ...users.filter((u) => u.active && u.role === 'admin').map((u) => u.id)].filter(Boolean));
         const title = `🎉 ${client?.name || 'El cliente'} aceptó la cotización ${quote.folio}`;
-        const lines = [`${options.length > 1 ? `Eligió la opción ${index + 1}: ` : ''}${option.label}`, `Total: ${money(updated.price)}`, `Aceptó: ${name}`, updated.payment_plan ? `Ya puede pagar su anticipo desde la liga (${money(updated.payment_plan.installments[0]?.amount)}).` : ''].filter(Boolean);
+        const lines = [`${options.length > 1 ? `Eligió la opción ${index + 1}: ` : ''}${option.label}`, `Total: ${money(updated.price)}`, `Aceptó: ${name}`, updated.payment_plan ? (TPContract.pending(updated) ? `Primero firma su contrato y luego paga el anticipo desde la liga (${money(updated.payment_plan.installments[0]?.amount)}).` : `Ya puede pagar su anticipo desde la liga (${money(updated.payment_plan.installments[0]?.amount)}).`) : ''].filter(Boolean);
         for (const id of ids) {
           const u = users.find((x) => x.id === id && x.active);
           if (!u) continue;
@@ -153,7 +156,7 @@ function createPublicQuote(dataStore, assignment, { publicDirectory, payments = 
           });
         }
       }
-      res.json({ ok: true, payUrl: payUrlOf(updated) });
+      res.json({ ok: true, payUrl: payUrlOf(updated), contractUrl: contractUrlOf(updated) });
     } catch (error) { next(error); }
   });
 

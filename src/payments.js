@@ -12,6 +12,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { ENTITY_ORDER, ValidationError, nowCancun, sanitize } = require('./crm-schema');
 const { buildScope, isVisible, canWrite } = require('./access');
+const TPContract = require('../public/contrato-core');
 
 const SETTING = 'payments';
 const TOKEN_RE = /^[a-f0-9]{40}$/;
@@ -181,7 +182,7 @@ function createMercadoPago(env = {}, fetchImpl = globalThis.fetch) {
 
 const DEFAULT_AGENCY = { name: 'Viajes Bumeran Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
 
-function createPayments(dataStore, { assignment = null, mailer = null, env = {}, mercadoPago = null, publicDirectory = null, now = () => nowCancun() } = {}) {
+function createPayments(dataStore, { assignment = null, mailer = null, env = {}, mercadoPago = null, publicDirectory = null, contracts = null, now = () => nowCancun() } = {}) {
   const mp = mercadoPago || createMercadoPago(env);
   const appUrl = (req) => String(env.APP_URL || '').trim().replace(/\/+$/, '') || (req ? `${req.protocol}://${req.get('host')}` : 'https://travelpartner.viajescasal.com');
   const settings = async () => cleanSettings(await dataStore.getSetting(SETTING));
@@ -214,8 +215,10 @@ function createPayments(dataStore, { assignment = null, mailer = null, env = {},
     if (quote.payment_plan && force && quote.payment_plan.paid > 0) throw new ValidationError('El plan ya tiene pagos; edítalo en lugar de volver a armarlo');
     const lead = quote.lead_id ? await dataStore.getRecord('leads', quote.lead_id) : null;
     const plan = buildPlan(quote, lead, await settings(), now().slice(0, 10));
-    const updated = await dataStore.updateRecord('quotes', quote.id, { payment_plan: plan, pay_token: quote.pay_token || newPayToken() });
+    let updated = await dataStore.updateRecord('quotes', quote.id, { payment_plan: plan, pay_token: quote.pay_token || newPayToken() });
     await syncTrips(updated, plan);
+    // TP-204: contrato pendiente de firma antes del anticipo.
+    if (contracts) updated = await contracts.requireFor(updated);
     return updated;
   }
 
@@ -371,6 +374,8 @@ ${outro ? `<p style="font-size:14px">${escapeHtml(outro)}</p>` : ''}
         installments: plan.installments.map((i) => ({ id: i.id, label: i.label, due: i.due, amount: i.amount, paid: i.paid, status: i.status, link_url: i.link_url || null, pending: i.pending ? i.pending.status : null }))
       },
       methods: { mercadoPago: mp.configured, bank: Object.keys(bank).length ? bank : null },
+      // TP-204: si falta firmar el contrato, la liga pide firmarlo antes de pagar.
+      contract: { state: TPContract.state(quote), url: TPContract.state(quote) === 'none' ? null : `/contrato/${quote.pay_token}` },
       today: now().slice(0, 10)
     };
   }
@@ -412,6 +417,7 @@ ${outro ? `<p style="font-size:14px">${escapeHtml(outro)}</p>` : ''}
       if (!mp.configured) { res.status(400).json({ ok: false, error: 'El pago en línea no está disponible. Usa los datos de transferencia.' }); return; }
       const result = await serial(`q${quote.id}`, async () => {
         const fresh = await dataStore.getRecord('quotes', quote.id);
+        if (TPContract.pending(fresh)) throw new ValidationError('Primero firma tu contrato para poder pagar');
         const plan = recalc(fresh.payment_plan);
         const inst = plan.installments.find((i) => i.id === String(req.body?.installment || '')) || nextPending(plan);
         if (!inst || inst.status === 'pagado') throw new ValidationError('Ese pago ya está cubierto');
