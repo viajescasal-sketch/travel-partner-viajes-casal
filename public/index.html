@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="/styles.css?v=tp106" />
     <link rel="stylesheet" href="/tp006.css?v=tp301" />
-    <link rel="stylesheet" href="/viaje.css?v=tp206" />
+    <link rel="stylesheet" href="/viaje.css?v=tp307" />
     <link rel="icon" href="/brand/logo-mark.png" />
   </head>
   <body>
@@ -579,6 +579,8 @@
                 ><button data-settings-tab="paymentsPanel">Cobros</button
                 ><button data-settings-tab="contractPanel">Contrato</button
                 ><button data-settings-tab="goalsPanel">Metas y comisiones</button
+                ><button data-settings-tab="fieldsPanel">Campos personalizables</button
+                ><button data-settings-tab="automationsPanel">Automatizaciones</button
                 ><button data-settings-tab="integrationsPanel">Integraciones</button
                 ><button data-settings-tab="backupsPanel">Respaldos</button>
               </nav>
@@ -711,6 +713,24 @@
                   </div>
                 </div>
                 <div id="goalsSettingsBody"><p class="muted">Cargando…</p></div>
+              </article>
+              <article class="panel settings-panel" id="fieldsPanel" hidden>
+                <div class="panel-head">
+                  <div>
+                    <h3>Campos personalizables</h3>
+                    <p>Agrega tus propios campos a leads, clientes y viajes (aerolínea preferida, motivo del viaje, aniversario…).</p>
+                  </div>
+                </div>
+                <div id="fieldsSettingsBody"><p class="muted">Cargando…</p></div>
+              </article>
+              <article class="panel settings-panel" id="automationsPanel" hidden>
+                <div class="panel-head">
+                  <div>
+                    <h3>Automatizaciones</h3>
+                    <p>Reglas “si pasa X, haz Y”: seguimientos, plantillas de WhatsApp, correos y avisos sin programar.</p>
+                  </div>
+                </div>
+                <div id="automationsBody"><p class="muted">Cargando…</p></div>
               </article>
               <article class="panel settings-panel" id="integrationsPanel" hidden>
                 <h3>Integraciones</h3>
@@ -913,12 +933,16 @@
     <script src="/reportes-core.js?v=tp206"></script>
     <script src="/comisiones-core.js?v=tp206"></script>
     <script src="/contrato-core.js?v=tp206"></script>
-    <script src="/app.js?v=tp206"></script>
+    <script src="/campos-core.js?v=tp307"></script>
+    <script src="/automatizaciones-core.js?v=tp307"></script>
+    <script src="/app.js?v=tp307"></script>
     <script src="/viaje.js?v=tp305"></script>
     <script src="/reservas.js?v=tp206"></script>
     <script src="/fidelidad.js?v=tp311"></script>
     <script src="/campanas.js?v=tp206"></script>
     <script src="/contratos.js?v=tp206"></script>
     <script src="/metas.js?v=tp206"></script>
+    <script src="/campos.js?v=tp307"></script>
+    <script src="/automatizaciones.js?v=tp307"></script>
   </body>
 </html>

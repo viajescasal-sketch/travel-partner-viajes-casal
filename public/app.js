@@ -148,6 +148,7 @@ async function loadAll() {
     db.payments = data.settings?.payments || null;
     db.me = data.me || null;
     db.goals = data.goals || { base: 'venta', sellers: {} }; // TP-206
+    db.customFields = data.settings?.customFields || { leads: [], clients: [], trips: [] }; // TP-306
     loaded = true;
     renderAll();
   } catch (error) {
@@ -280,7 +281,7 @@ function filteredLeads(ignoreStage = false) {
     if (ui.leadOwner && String(l.owner_id) !== ui.leadOwner) return false;
     if (!q) return true;
     const c = clientById(l.client_id);
-    return [c?.name, c?.phone, c?.email, l.destination, l.stage, l.notes, l.source].join(' ').toLowerCase().includes(q);
+    return [c?.name, c?.phone, c?.email, l.destination, l.stage, l.notes, l.source, ...Object.values(l.custom || {}).flat()].join(' ').toLowerCase().includes(q);
   });
 }
 function renderLeads() {
@@ -300,7 +301,7 @@ function renderLeads() {
   const cols = admin ? 7 : 6;
   $('#leadRows').innerHTML = list.length ? list.map((l) => {
     const badge = shared.has(l.client_id) ? '<span class="badge-shared" title="Este cliente tiene leads con más de un vendedor">Cliente compartido</span>' : '';
-    return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}${String(l.notes || '').includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip" title="Llegó por el bot de WhatsApp">🤖 Bot</span>' : ''}${String(l.notes || '').includes('🌐 Formulario web') ? '<span class="bot-chip web" title="Llegó por el formulario web">🌐 Web</span>' : ''}${qualChip(l)}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
+    return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}${String(l.notes || '').includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip" title="Llegó por el bot de WhatsApp">🤖 Bot</span>' : ''}${String(l.notes || '').includes('🌐 Formulario web') ? '<span class="bot-chip web" title="Llegó por el formulario web">🌐 Web</span>' : ''}${qualChip(l)}${typeof customChipsHtml === 'function' ? customChipsHtml('leads', l) : ''}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
   }).join('') : emptyRow(cols, db.leads.length ? 'Ningún lead coincide con la búsqueda.' : 'Aún no hay leads registrados.');
 }
 /* ---------- tablero Kanban de oportunidades (TP-103) ---------- */
@@ -331,7 +332,7 @@ function boardCard(l, admin) {
   const next = nextFollowupFor(l.id);
   const overdue = next && next.due_at.slice(0, 16) < nowLocal().toISOString().slice(0, 16).replace('T', ' ');
   const notes = String(l.notes || '');
-  const chips = `${contactChip(l)}${notes.includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip">🤖 Bot</span>' : ''}${notes.includes('🌐 Formulario web') ? '<span class="bot-chip web">🌐 Web</span>' : ''}${qualChip(l)}`;
+  const chips = `${contactChip(l)}${notes.includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip">🤖 Bot</span>' : ''}${notes.includes('🌐 Formulario web') ? '<span class="bot-chip web">🌐 Web</span>' : ''}${qualChip(l)}${typeof customChipsHtml === 'function' ? customChipsHtml('leads', l) : ''}`;
   const value = boardValue(l);
   const canMove = canWrite('leads');
   return `<div class="kb-card${late ? ' late' : ''}" data-lead="${l.id}"${canMove ? ' draggable="true"' : ''} tabindex="0" aria-label="${escapeHtml(`${c?.name || ''}, ${l.destination}, ${l.stage}`)}">
@@ -560,6 +561,7 @@ $('#bellPanel').addEventListener('click', async (e) => {
       if (linkType === 'payplan' && quoteById(id)) { navigate('quotes'); payPlanModal(id); return true; }
       if (linkType === 'client' && clientById(id)) { navigate('clients'); clientFile(id); return true; }
       if (linkType === 'followup' && followupById(id)) { navigate('followups'); followupModal(id); return true; }
+      if (linkType === 'trip' && tripById(id)) { navigate('trips'); tripModal(id); return true; } // TP-307
       return false;
     };
     if (!open()) { await loadAll(); if (!open()) toast('Ese registro ya no está disponible'); }
@@ -814,7 +816,7 @@ function renderClients() {
 /* ---------- viajes ---------- */
 function renderTrips() {
   const today = todayStr();
-  const card = (t, label) => `<article class="trip-card clickable" data-trip="${t.id}"><small>${escapeHtml(label)}</small><h4>${escapeHtml(t.destination)}</h4><p>${escapeHtml(clientName(t.client_id))}</p><p>${escapeHtml(t.status)}${t.confirmation ? ' · ✓ Confirmación' : ''}</p>${tripBadges(t)}${tripBookingBadge(t)}</article>`;
+  const card = (t, label) => `<article class="trip-card clickable" data-trip="${t.id}"><small>${escapeHtml(label)}</small><h4>${escapeHtml(t.destination)}</h4><p>${escapeHtml(clientName(t.client_id))}</p><p>${escapeHtml(t.status)}${t.confirmation ? ' · ✓ Confirmación' : ''}</p>${tripBadges(t)}${tripBookingBadge(t)}${typeof customChipsHtml === 'function' ? customChipsHtml('trips', t) : ''}</article>`;
   const open = db.trips.filter((t) => t.status !== 'Cerrado');
   const upcoming = open.filter((t) => t.start_date > today).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const active = open.filter((t) => t.start_date <= today && t.end_date >= today);
@@ -1182,6 +1184,7 @@ function leadModal(id, presetClientId) {
     ${lead ? lostFieldsHtml(lead, { hidden: lead.stage !== 'Perdido' }) : ''}
     ${isAdmin() ? field('Vendedor asignado', `<select name="owner_id">${options([...(lead ? [] : [['auto', 'Automático (según la asignación)']]), ...sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`])], lead?.owner_id ?? currentUser.id)}</select>`) : ''}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
+    ${typeof customFieldsHtml === 'function' ? customFieldsHtml('leads', lead?.custom) : ''}
     ${lead ? autoScoreHtml(lead) : ''}
     ${qualHtml(lead)}
     ${lead ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-quote-for="${lead.client_id}" data-quote-lead="${lead.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-cv-lead="${lead.id}">🧩 Armar en Canvas${lead.canvas?.blocks?.length ? ` (${lead.canvas.blocks.length})` : ''}</button><button type="button" class="btn primary small" data-wa-lead="${lead.id}">💬 Plantilla WhatsApp</button><button type="button" class="btn secondary small" data-client="${lead.client_id}">Ficha 360</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="Llamada">📞 Programar llamada</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}" data-followup-type="WhatsApp">💬 Programar WhatsApp</button><button type="button" class="btn secondary small" data-new-followup-lead="${lead.id}">Otro seguimiento</button><small>Creado ${escapeHtml(fmtDate(lead.created_at))}</small></div>` : ''}
@@ -1206,6 +1209,7 @@ function leadModal(id, presetClientId) {
       travelers: v.travelers || null, budget: v.budget || null, notes: v.notes || null
     });
     if (db.leadQuestions.length) body.qualification = readQualification();
+    if (typeof readCustomFields === 'function') { const cfv = readCustomFields('leads', form); if (cfv) body.custom = cfv; } // TP-306
     if (v.owner_id) body.owner_id = v.owner_id === 'auto' ? 'auto' : Number(v.owner_id);
     if (lead) {
       const reassigned = body.owner_id && body.owner_id !== lead.owner_id;
@@ -1620,6 +1624,7 @@ function clientModal(id) {
     ${field('Correo', `<input name="email" type="email" maxlength="254" value="${escapeHtml(c?.email)}">`)}
     ${field('Preferencias (separadas por coma)', `<input name="tags" maxlength="255" placeholder="Pareja, Todo incluido" value="${escapeHtml(c?.tags)}">`)}
     ${field('Notas', `<textarea name="notes" rows="2" maxlength="4000">${escapeHtml(c?.notes)}</textarea>`, true)}
+    ${typeof customFieldsHtml === 'function' ? customFieldsHtml('clients', c?.custom) : ''}
     <p class="full dupe-warn hidden"></p>
     </fieldset>
     ${c ? `<div class="full quick-actions">${canWrite('leads') ? `<button type="button" class="btn secondary small" data-new-lead-client="${c.id}">Nuevo lead</button>` : ''}${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-quote-for="${c.id}">Nueva cotización</button>` : ''}${canWrite('trips') ? `<button type="button" class="btn secondary small" data-new-trip-client="${c.id}">Nuevo viaje</button>` : ''}</div>` : ''}
@@ -1628,8 +1633,9 @@ function clientModal(id) {
     ${deleteBlock('cliente y todo su historial', c?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">${readonly ? 'Cerrar' : 'Cancelar'}</button>${readonly ? '' : `<button type="submit" class="btn primary">${c ? 'Guardar cambios' : 'Guardar cliente'}</button>`}</div></form>`;
   openModal('CLIENTE', c ? c.name : 'Nuevo cliente', html);
-  bindForm((v) => {
+  bindForm((v, form) => {
     const body = clean({ name: v.name, phone: v.phone || null, email: v.email || null, tags: v.tags || null, notes: v.notes || null });
+    if (typeof readCustomFields === 'function') { const cfv = readCustomFields('clients', form); if (cfv) body.custom = cfv; } // TP-306
     if (c) return mutate(() => send('PATCH', `/api/clients/${c.id}`, body), 'Cliente actualizado');
     // TP-111: si ya existe, avisar antes de crear otro.
     return (async () => {
@@ -1660,13 +1666,15 @@ function tripModal(id, preset = {}) {
     ${field('Regreso*', `<input name="end_date" type="date" required value="${escapeHtml(t?.end_date ?? fromLead?.end_date)}">`)}
     ${field('Estado', `<select name="status">${options(TRIP_STATUSES, t?.status || 'Confirmado')}</select>`, true)}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(t?.notes)}</textarea>`, true)}
+    ${typeof customFieldsHtml === 'function' ? customFieldsHtml('trips', t?.custom) : ''}
     ${t ? `<div class="full quick-actions"><button type="button" class="btn secondary small" data-confirmation="${t.id}">${t.confirmation ? 'Editar confirmación de servicios' : 'Preparar confirmación de servicios'}</button><button type="button" class="btn secondary small" data-res-pdf="${t.id}">Ver PDF de confirmación</button><button type="button" class="btn secondary small" data-itinerary="${t.id}">📱 Itinerario digital</button><button type="button" class="btn secondary small" data-pax-trip="${t.id}">${escapeHtml(tripPaxButtonLabel(t))}</button><button type="button" class="btn secondary small" data-cv-trip="${t.id}">🧩 Canvas</button><button type="button" class="btn secondary small" data-bk-trip="${t.id}">${escapeHtml(tripBookingLabel(t))}</button><button type="button" class="btn secondary small" data-survey-trip="${t.id}">${escapeHtml(surveyLabel(t))}</button><button type="button" class="btn secondary small" data-wa-trip="${t.id}">💬 WhatsApp</button>${t.confirmation ? '<small>✓ Confirmación lista</small>' : ''}</div>` : ''}
     ${t ? historyButton('trips', t.id) : ''}
     ${deleteBlock('viaje', t?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${t ? 'Guardar cambios' : 'Guardar viaje'}</button></div></form>`;
   openModal('OPERACIÓN', t ? `Viaje a ${t.destination}` : 'Nuevo viaje', html);
-  const form = bindForm((v) => {
+  const form = bindForm((v, f) => {
     const body = clean({ client_id: Number(v.client_id), quote_id: v.quote_id ? Number(v.quote_id) : null, destination: v.destination, start_date: v.start_date, end_date: v.end_date, status: v.status, notes: v.notes || null });
+    if (typeof readCustomFields === 'function') { const cfv = readCustomFields('trips', f); if (cfv) body.custom = cfv; } // TP-306
     return t ? mutate(() => send('PATCH', `/api/trips/${t.id}`, body), 'Viaje actualizado') : mutate(() => send('POST', '/api/trips', body), 'Viaje registrado');
   });
   form.client_id.onchange = () => { form.quote_id.innerHTML = quoteOptions(form.client_id.value); };
@@ -1705,6 +1713,8 @@ function followupModal(id, preset = {}) {
     ${field('Lead', `<select name="lead_id">${leadOptions(clientId)}</select>`)}
     ${field('Detalles', `<textarea name="details" rows="2" maxlength="2000" placeholder="Qué vas a decir o qué falta">${escapeHtml(f?.details)}</textarea>`, true)}
     ${f ? `<label class="full check"><input type="checkbox" name="done" ${f.done ? 'checked' : ''}> Marcar como hecho</label>` : ''}
+    ${f?.auto ? `<p class="full muted-note">🤖 Creado por la automatización “${escapeHtml(f.auto.rule)}”.${f.auto.template ? ' Abre la plantilla, revísala y envíala por WhatsApp.' : ''}</p>` : ''}
+    ${f?.auto?.template && client?.phone ? `<div class="full"><button type="button" class="btn primary small" data-fup-template="${f.id}">💬 Abrir plantilla de WhatsApp</button></div>` : ''}
     ${f ? `<div class="full quick-actions"><a class="btn secondary small" href="${escapeHtml(googleCalendarLink(f))}" target="_blank" rel="noopener">📅 Agregar a Google Calendar</a>${waPhone ? `<a class="btn secondary small" href="https://wa.me/${waPhone}" target="_blank" rel="noopener">💬 Abrir WhatsApp</a><a class="btn secondary small" href="tel:+${waPhone}">📞 Llamar</a>` : ''}${f.lead_id ? `<button type="button" class="btn secondary small" data-lead="${f.lead_id}">Ver lead</button>` : ''}${isAdmin() ? `<small>Vendedor: ${escapeHtml(userName(f.owner_id))}</small>` : ''}</div>` : ''}
     ${deleteBlock('seguimiento', f?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${f ? 'Guardar cambios' : 'Programar'}</button></div></form>`;
@@ -1723,6 +1733,9 @@ function followupModal(id, preset = {}) {
   form.client_id.onchange = () => { form.lead_id.innerHTML = leadOptions(form.client_id.value); refreshTitle(); };
   form.querySelectorAll('[data-quick-due]').forEach((b) => { b.onclick = () => { form.due_at.value = b.dataset.quickDue; form.querySelectorAll('[data-quick-due]').forEach((x) => x.classList.toggle('active', x === b)); }; });
   if (f) bindDelete(`/api/followups/${f.id}`, 'Seguimiento eliminado');
+  // TP-307: tarea de WhatsApp creada por una automatización → abre la plantilla lista; al enviarla se marca hecha.
+  const tpl = $('#modalBody [data-fup-template]');
+  if (tpl) tpl.onclick = () => waModal({ clientId: f.client_id, leadId: f.lead_id || '', quoteId: f.auto.quote_id || undefined, tripId: f.auto.trip_id || undefined, templateId: f.auto.template, onSent: () => send('PATCH', `/api/followups/${f.id}`, { done: true }).then(loadAll).catch(() => {}) });
 }
 
 /* ---------- TP-107 Plantillas de WhatsApp por etapa ---------- */
@@ -1800,6 +1813,7 @@ async function waModal(preset = {}) {
     state.tripId = (trips.find((t) => state.quoteId && t.quote_id === Number(state.quoteId)) || (!openLead ? trips.find((t) => t.end_date >= addDays(todayStr(), -60)) : null))?.id ?? '';
   }
   const current = () => ({ client, lead: leadById(state.leadId), quote: quoteById(state.quoteId), trip: tripById(state.tripId), extra: preset.vars || null });
+  if (!state.stage && preset.templateId) state.stage = tpl.templates.find((t) => t.id === preset.templateId)?.stage || ''; // TP-307
   if (!state.stage) state.stage = suggestedStage(current());
   const phone = waPhone(client.phone);
   const sel = (name, list, value, blank) => `<select data-wa="${name}">${options(list, value, { blank })}</select>`;
@@ -2006,6 +2020,7 @@ async function clientFile(id, opts = {}) {
     <div class="c360-tabs"><button type="button" data-c360-tab="timeline">Línea de tiempo</button><button type="button" data-c360-tab="data">Datos del cliente</button></div>
     <section class="c360-pane" data-pane="timeline">
       ${c.notes || c.tags ? `<div class="c360-pinned">${c.tags ? `<div class="tags">${String(c.tags).split(',').map((t) => t.trim()).filter(Boolean).map((t) => `<span>${escapeHtml(t)}</span>`).join('')}</div>` : ''}${c.notes ? `<p>📌 ${escapeHtml(c.notes)}</p>` : ''}</div>` : ''}
+      ${typeof customSummaryHtml === 'function' ? customSummaryHtml('clients', c) : ''}
       ${payPlanSummaryHtml(c.id)}
       ${upcoming.length ? `<div class="c360-next"><b>Próximos pasos</b>${upcoming.map((f) => `<button type="button" class="lead-fup${isLateFollowup(f) ? ' late' : ''}" data-followup="${f.id}"><span>${FOLLOWUP_ICONS[f.type] || ''} ${escapeHtml(f.title)}</span><small>${escapeHtml(fmtDue(f.due_at))}</small></button>`).join('')}</div>` : ''}
       <div class="c360-filters">${TL_FILTERS.map(([k, label]) => `<button type="button" class="chip-btn" data-tl-filter="${k}">${label}</button>`).join('')}</div>
@@ -2020,6 +2035,7 @@ async function clientFile(id, opts = {}) {
         ${field('Fecha de nacimiento', `<input name="birth_date" type="date" value="${escapeHtml(c.birth_date)}">`)}
         <label class="kb-check"><input type="checkbox" name="no_marketing" ${c.no_marketing ? 'checked' : ''}> No contactar en campañas de recompra</label>
         ${field('Notas fijas del cliente', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(c.notes)}</textarea>`, true)}
+        ${typeof customFieldsHtml === 'function' ? customFieldsHtml('clients', c.custom) : ''}
         <p class="full dupe-warn hidden"></p>
         </fieldset>
         ${historyButton('clients', c.id)}
@@ -2065,7 +2081,11 @@ async function clientFile(id, opts = {}) {
     else if (a === 'review') eventModal(c, 'review');
     else if (a === 'note') eventModal(c, 'note');
   };
-  bindForm((v) => mutate(() => send('PATCH', `/api/clients/${c.id}`, clean({ name: v.name, phone: v.phone || null, email: v.email || null, tags: v.tags || null, notes: v.notes || null, birth_date: v.birth_date || null, no_marketing: Boolean(v.no_marketing) })), 'Cliente actualizado'));
+  bindForm((v, form) => {
+    const body = clean({ name: v.name, phone: v.phone || null, email: v.email || null, tags: v.tags || null, notes: v.notes || null, birth_date: v.birth_date || null, no_marketing: Boolean(v.no_marketing) });
+    if (typeof readCustomFields === 'function') { const cfv = readCustomFields('clients', form); if (cfv) body.custom = cfv; } // TP-306
+    return mutate(() => send('PATCH', `/api/clients/${c.id}`, body), 'Cliente actualizado');
+  });
   const dataForm = $('#modalBody form');
   bindDuplicateCheck(dataForm, c.id);
   if (isAdmin() && (c.phone || c.email)) {
@@ -2949,7 +2969,7 @@ const SECURITY_LABELS = {
   twofa_failed: 'Bloqueado por códigos incorrectos', twofa_reset_by_admin: 'Quitó la app de un usuario',
   trusted_devices_cleared: 'Olvidó sus equipos recordados', twofa_skipped_no_mail: 'Entró sin segundo paso (correo no configurado)',
   crm_settings_update: 'Cambió la configuración', profile_update: 'Actualizó el perfil para documentos',
-  backup_auto: 'Respaldo automático diario', backup_manual: 'Hizo un respaldo', backup_download: 'Descargó un respaldo', data_export: 'Exportó información', crm_shared_client: 'Registró un cliente que ya atiende otro vendedor'
+  backup_auto: 'Respaldo automático diario', backup_manual: 'Hizo un respaldo', backup_download: 'Descargó un respaldo', data_export: 'Exportó información', crm_shared_client: 'Registró un cliente que ya atiende otro vendedor', crm_automation: '🤖 Automatización'
 };
 const VERB = { create: 'Creó', update: 'Editó', delete: 'Eliminó', duplicate: 'Duplicó', reassign: 'Reasignó' };
 function describeAction(item) {
@@ -3140,6 +3160,8 @@ function showSettingsTab(tab) {
   if (tab === 'campaignPanel' && typeof renderCampaignSettings === 'function') renderCampaignSettings(); // TP-310
   if (tab === 'contractPanel' && typeof renderContractSettings === 'function') renderContractSettings(); // TP-204
   if (tab === 'goalsPanel' && typeof renderGoalsSettings === 'function') renderGoalsSettings(); // TP-206
+  if (tab === 'fieldsPanel' && typeof renderCustomFieldsSettings === 'function') renderCustomFieldsSettings(); // TP-306
+  if (tab === 'automationsPanel' && typeof renderAutomations === 'function') renderAutomations(); // TP-307
 }
 async function loadMailStatus() {
   const el = $('#mailStatus'), button = $('#testMail');
