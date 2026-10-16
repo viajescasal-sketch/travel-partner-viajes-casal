@@ -7,6 +7,14 @@
   const hoursBetween = (a, b) => (Date.parse(`${String(b).slice(0, 19).replace(' ', 'T')}Z`) - Date.parse(`${String(a).slice(0, 19).replace(' ', 'T')}Z`)) / 3600000;
   const median = (arr) => { if (!arr.length) return null; const s = [...arr].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
   const round = (n, d = 1) => (n == null ? null : Math.round(n * 10 ** d) / 10 ** d);
+  const TT = typeof module !== 'undefined' && module.exports ? require('./viaje-core') : global.TPTrip;
+  // Utilidad de una venta: reservas de sus viajes (TP-205: tarifa neta = venta − costo; comisionable = comisión del proveedor).
+  // null si ninguna reserva tiene todavía costo o comisión.
+  function saleProfit(q, trips) {
+    if (!q) return null;
+    const profits = (trips || []).filter((t) => t.quote_id === q.id).flatMap((t) => (t.bookings?.list || []).filter((b) => b.status !== 'Cancelada')).map(TT.bookingProfit).filter((p) => p != null);
+    return profits.length ? Math.round(profits.reduce((s, p) => s + p, 0) * 100) / 100 : null;
+  }
   const originOf = (lead) => (lead.referral?.referrer_id ? 'Programa de referidos' : lead.source || 'Otro');
 
   /**
@@ -41,8 +49,8 @@
           x.revenue += Number(q?.price) || 0;
           const d = hoursBetween(l.created_at, l.closed_at) / 24;
           if (Number.isFinite(d) && d >= 0) x.closeDays.push(d);
-          const bks = trips.filter((t) => q && t.quote_id === q.id).flatMap((t) => (t.bookings?.list || []).filter((b) => b.status !== 'Cancelada' && b.cost !== '' && b.cost != null));
-          if (bks.length) { x.profit += bks.reduce((s, b) => s + (Number(b.price) || 0) - (Number(b.cost) || 0), 0); x.profitSales += 1; }
+          const p = saleProfit(q, trips);
+          if (p != null) { x.profit += p; x.profitSales += 1; }
         } else if (l.stage === 'Perdido') x.lost += 1;
       }
     }
@@ -83,6 +91,6 @@
     return { from: '', to: '' };
   }
 
-  global.TPReports = { performance, period, originOf };
+  global.TPReports = { performance, period, originOf, saleProfit };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.TPReports;
 }(typeof window !== 'undefined' ? window : globalThis));

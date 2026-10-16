@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Contrato de viaje · Viajes Casal</title>
+  <link rel="icon" href="/brand/logo-mark.png">
+  <style>
+    :root{--navy:#073b66;--teal:#00b8c8;--coral:#ff7959;--bg:#f4f7f9;--text:#203342;--muted:#6c7b87;--border:#dce6ea;--ok:#18815d}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif;line-height:1.5}
+    .hero{background:linear-gradient(140deg,#052f52,#075079);color:#fff;padding:26px 18px 70px;text-align:center}
+    .hero img{height:58px;background:#fff;border-radius:12px;padding:6px 10px}
+    .hero h1{font-size:24px;margin:16px 0 4px}.hero p{margin:0;color:#d4e6ef;font-size:15px}
+    main{max-width:760px;margin:-50px auto 40px;padding:0 16px}
+    .card{background:#fff;border:1px solid var(--border);border-radius:18px;padding:22px;box-shadow:0 12px 32px rgba(7,59,102,.08);margin-bottom:16px}
+    .steps{display:flex;gap:8px;justify-content:center;margin-bottom:16px;flex-wrap:wrap}
+    .steps span{background:#fff;border:1px solid var(--border);border-radius:30px;padding:7px 14px;font-size:13px;color:var(--muted)}
+    .steps span.on{border-color:var(--teal);color:var(--navy);font-weight:bold}.steps span.done{color:var(--ok)}
+    .doc h2{font-size:19px;color:var(--navy);margin:0 0 10px;text-align:center;text-transform:uppercase;letter-spacing:.3px}
+    .doc .intro{font-size:14px}
+    .doc h3{font-size:14px;color:var(--navy);text-transform:uppercase;margin:20px 0 8px;border-bottom:2px solid #e7eef1;padding-bottom:5px}
+    .doc table{width:100%;border-collapse:collapse;font-size:14px}
+    .doc td{padding:6px 0;border-bottom:1px dashed var(--border);vertical-align:top}.doc td:first-child{color:var(--muted);width:34%;padding-right:12px}
+    .doc ol{padding-left:22px;margin:0;font-size:14px}.doc li{margin-bottom:9px}
+    label{display:block;font-size:14px;font-weight:bold;margin:12px 0 6px}
+    input[type=text]{width:100%;font-size:16px;padding:12px;border:1px solid var(--border);border-radius:10px}
+    .check{display:flex;gap:10px;align-items:flex-start;font-weight:normal}.check input{margin-top:4px;width:18px;height:18px;flex:none}
+    .pad-wrap{position:relative;border:2px dashed #b9cad2;border-radius:12px;background:#fbfdfe;touch-action:none}
+    .pad-wrap canvas{display:block;width:100%;height:190px;cursor:crosshair;touch-action:none}
+    .pad-hint{position:absolute;left:0;right:0;bottom:40px;text-align:center;color:#9aabb5;font-size:14px;pointer-events:none}
+    .pad-line{position:absolute;left:24px;right:24px;bottom:34px;border-top:1px solid #c7d4da;pointer-events:none}
+    .pad-acts{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;color:var(--muted)}
+    .btn{display:block;width:100%;border:0;border-radius:12px;padding:15px;font-size:17px;font-weight:bold;color:#fff;background:linear-gradient(135deg,var(--teal),#058ab6);cursor:pointer;text-align:center;text-decoration:none;margin-top:14px}
+    .btn:disabled{opacity:.6;cursor:wait}.btn.alt{background:#fff;color:var(--navy);border:1px solid var(--border)}
+    .link{background:none;border:0;color:#007985;font-size:13px;cursor:pointer;text-decoration:underline;padding:0}
+    .err{background:#fdecec;color:#932f2f;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:12px}
+    .note{border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:16px}.note.ok{background:#e8f7ef;color:#0f6247}.note.info{background:#e8f8fa;color:#035f68}
+    .signed{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;margin-top:18px;border-top:2px solid #e7eef1;padding-top:14px}
+    .signed img{max-width:300px;width:100%;height:auto;border-bottom:1px solid var(--text)}
+    .signed b{font-size:15px}.audit{font-size:12px;color:var(--muted);word-break:break-all}
+    .muted{color:var(--muted);font-size:13px}
+    footer{text-align:center;color:var(--muted);font-size:12px;padding:0 16px 30px}
+    .hidden{display:none!important}
+    @media print{body{background:#fff}.hero{background:none;color:var(--text);padding:0 0 10px}.hero p{color:var(--muted)}main{margin:0;max-width:none}.card{box-shadow:none;border:0;padding:0}.noprint,.steps{display:none!important}}
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <img src="/brand/logo-viajes-bumeran-casal.png" alt="Viajes Casal">
+    <h1 id="title">Tu contrato de viaje</h1>
+    <p id="subtitle">Cargando…</p>
+  </header>
+  <main id="app"><div class="card"><p class="muted">Cargando tu contrato…</p></div></main>
+  <footer id="foot"></footer>
+  <script src="/contrato.js?v=tp204"></script>
+</body>
+</html>

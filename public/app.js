@@ -147,6 +147,7 @@ async function loadAll() {
     db.reminders = data.settings?.reminders || null;
     db.payments = data.settings?.payments || null;
     db.me = data.me || null;
+    db.goals = data.goals || { base: 'venta', sellers: {} }; // TP-206
     loaded = true;
     renderAll();
   } catch (error) {
@@ -204,6 +205,7 @@ function renderDashboard() {
   const d = nowLocal();
   $('#todayLabel').textContent = `${WEEKDAYS[d.getUTCDay()]}, ${d.getUTCDate()} DE ${MONTHS_LONG[d.getUTCMonth()].toUpperCase()}`;
 
+  if (typeof renderGoalPanel === 'function') renderGoalPanel(); // TP-206
   if (isOps()) { renderOpsDashboard(today); return; }
   setKpiLabels(['Leads activos', 'Cotizaciones enviadas', 'Ventas del mes', 'Conversión']);
   const active = db.leads.filter((l) => !CLOSED.includes(l.stage));
@@ -1074,6 +1076,7 @@ function renderReports() {
   renderLostReport();
   if (typeof renderPostventaReport === 'function') renderPostventaReport(); // TP-308/309
   if (typeof renderPerformance === 'function') renderPerformance(); // TP-311
+  if (typeof renderSellerCommissions === 'function') renderSellerCommissions(); // TP-206
   $('#sourceLegend').innerHTML = counts.length ? counts.map(([s, n], i) => `<p><i class="swatch" style="background:${SOURCE_COLORS[i % SOURCE_COLORS.length]}"></i>${escapeHtml(s)} ${Math.round((n / total) * 100)}%</p>`).join('') : '<p>Sin leads todavía</p>';
 }
 
@@ -2237,6 +2240,7 @@ async function payPlanModal(quoteId, opts = {}) {
     <div class="pay-bar big"><i style="width:${pct}%"></i></div>
     <label class="gcal-url">Liga de pago para el cliente<span><input id="ppUrl" readonly value="${escapeHtml(url)}"><button type="button" class="btn secondary small" id="ppCopy">Copiar</button></span></label>
     <p class="muted-note">${how} La liga muestra su plan, lo que lleva pagado y el siguiente pago. Las plantillas “Liga para apartar” y “Recordatorio de pago” la incluyen con <b>{liga_pago}</b>.</p>
+    ${typeof contractPlanHtml === 'function' ? contractPlanHtml(q) : ''}
     <div class="pp-list">${rows}</div>
     <p class="muted-note">🔔 Recordatorios automáticos: ${Number(cfg.reminderDays ?? 3)} días antes y el día de cada vencimiento te llega un aviso (y un seguimiento “Pago” en tu calendario)${cfg.emailClient !== false ? '; si el cliente tiene correo, también le llega un recordatorio con la liga' : ''}. Si se vence, se avisa también al administrador.</p>
     <div class="modal-actions">${write ? '<button type="button" class="btn secondary" id="ppEdit">✎ Editar plan</button>' : ''}<a class="btn secondary" href="${escapeHtml(url)}" target="_blank" rel="noopener">Ver como cliente</a>${write && client?.phone && nextInst(plan) ? '<button type="button" class="btn primary" id="ppSend">💬 Enviar liga por WhatsApp</button>' : '<button type="button" class="btn primary close">Listo</button>'}</div>
@@ -3134,6 +3138,8 @@ function showSettingsTab(tab) {
   if (tab === 'paymentsPanel') renderPaymentsSettings();
   if (tab === 'postventaPanel' && typeof renderPostventaSettings === 'function') renderPostventaSettings(); // TP-308/309
   if (tab === 'campaignPanel' && typeof renderCampaignSettings === 'function') renderCampaignSettings(); // TP-310
+  if (tab === 'contractPanel' && typeof renderContractSettings === 'function') renderContractSettings(); // TP-204
+  if (tab === 'goalsPanel' && typeof renderGoalsSettings === 'function') renderGoalsSettings(); // TP-206
 }
 async function loadMailStatus() {
   const el = $('#mailStatus'), button = $('#testMail');

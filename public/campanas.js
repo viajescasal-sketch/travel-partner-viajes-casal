@@ -109,17 +109,26 @@
     ['label', 'Vendedor'], ['leads', 'Leads'], ['contactRate', 'Contactados', (v) => (v == null ? '—' : `${v}%`)], ['responseHours', '1ª respuesta', (v) => (v == null ? '—' : v < 1 ? `${Math.round(v * 60)} min` : `${v} h`)],
     ['quotesSent', 'Cotizaciones enviadas'], ['sales', 'Ventas'], ['revenue', 'Ingresos', (v) => money(v)], ['ticket', 'Ticket', (v) => (v == null ? '—' : money(v))],
     ['conversion', 'Conversión', (v) => (v == null ? '—' : `${v}%`)], ['lost', 'Perdidos'], ['winRate', 'Ganadas / cerradas', (v) => (v == null ? '—' : `${v}%`)],
-    ['closeDays', 'Días al cierre', (v) => (v == null ? '—' : v)], ['profit', 'Utilidad (reservas)', (v, r) => (v == null ? '—' : `${money(v)}${r.profitSales < r.sales ? ` <small>(${r.profitSales}/${r.sales})</small>` : ''}`)]
+    ['closeDays', 'Días al cierre', (v) => (v == null ? '—' : v)], ['profit', 'Utilidad (reservas)', (v, r) => (v == null ? '—' : `${money(v)}${r.profitSales < r.sales ? ` <small>(${r.profitSales}/${r.sales})</small>` : ''}`)],
+    ['commission', 'Comisión vendedor', (v, r) => (v == null ? '—' : `${money(v)}${r.commissionMissing ? ` <small title="Ventas sin utilidad o sin % de comisión">(+${r.commissionMissing} sin calcular)</small>` : ''}`)]
   ];
   function compute() {
     const { from, to } = TPReports.period(pf.period, todayStr());
-    return TPReports.performance(db, { from, to, by: pf.by, label: (k) => (pf.by === 'origin' ? k : k === 'none' ? 'Sin asignar' : userName(k)) });
+    const r = TPReports.performance(db, { from, to, by: pf.by, label: (k) => (pf.by === 'origin' ? k : k === 'none' ? 'Sin asignar' : userName(k)) });
+    // TP-206: comisión de cada vendedor (ventas aceptadas en el periodo; % de la utilidad).
+    if (pf.by === 'seller' && window.TPComm) {
+      const by = TPComm.commissionBySeller(db, db.goals, { from, to });
+      let total = 0, missing = 0;
+      r.rows.forEach((row) => { const c = by.get(row.key) || by.get(Number(row.key)); row.commission = c ? c.total : null; row.commissionMissing = c ? c.missing : 0; total += c?.total || 0; missing += c?.missing || 0; });
+      r.total.commission = Math.round(total * 100) / 100; r.total.commissionMissing = missing;
+    }
+    return r;
   }
   window.renderPerformance = () => {
     const box = $('#performanceReport');
     if (!box || !window.TPReports) return;
     const r = compute();
-    const cols = COLS.map((c, i) => (i === 0 ? [c[0], pf.by === 'origin' ? 'Origen' : 'Vendedor', c[2]] : c));
+    const cols = COLS.filter((c) => c[0] !== 'commission' || pf.by === 'seller').map((c, i) => (i === 0 ? [c[0], pf.by === 'origin' ? 'Origen' : 'Vendedor', c[2]] : c));
     const maxRev = Math.max(1, ...r.rows.map((x) => x.revenue));
     const cell = (c, row) => (c[2] ? c[2](row[c[0]], row) : H(row[c[0]] ?? '—'));
     box.innerHTML = `<div class="panel-head"><div><h3>Desempeño por ${pf.by === 'origin' ? 'origen' : 'vendedor'}</h3><p class="panel-sub">Leads, contacto y conversión: leads creados en el periodo. Ventas, ingresos, perdidos y utilidad: leads cerrados en el periodo.</p></div>
@@ -127,7 +136,7 @@
       ${r.rows.length ? `<div class="table"><table class="perf-table"><thead><tr>${cols.map((c) => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>
         ${r.rows.map((row) => `<tr>${cols.map((c, i) => `<td>${i === 0 ? `<b>${H(row.label)}</b><i class="perf-bar" style="width:${Math.round((row.revenue / maxRev) * 100)}%"></i>` : cell(c, row)}</td>`).join('')}</tr>`).join('')}
         <tr class="perf-total">${cols.map((c, i) => `<td>${i === 0 ? '<b>Total</b>' : cell(c, r.total)}</td>`).join('')}</tr></tbody></table></div>
-        <p class="muted-note">1ª respuesta: mediana entre la asignación del lead y el primer contacto. Utilidad: venta menos costo de las reservas registradas (entre paréntesis, cuántas ventas ya tienen costos). Comisiones por vendedor: se agregan con TP-206.</p>` : '<p class="empty-note">Sin datos en este periodo.</p>'}`;
+        <p class="muted-note">1ª respuesta: mediana entre la asignación del lead y el primer contacto. Utilidad: reservas de tarifa neta (venta − costo) más comisiones de proveedores (entre paréntesis, cuántas ventas ya tienen esos datos). Comisión vendedor: su % sobre la utilidad de las ventas aceptadas en el periodo (Configuración › Metas y comisiones).</p>` : '<p class="empty-note">Sin datos en este periodo.</p>'}`;
     box.querySelectorAll('[data-pf-by]').forEach((b) => { b.onclick = () => { pf.by = b.dataset.pfBy; renderPerformance(); }; });
     $('#pfPeriod').onchange = (e) => { pf.period = e.target.value; renderPerformance(); };
     $('#pfCsv').onclick = () => {

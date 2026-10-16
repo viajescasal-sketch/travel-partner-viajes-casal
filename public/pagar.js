@@ -55,7 +55,9 @@
     }).join('');
 
     let payBox = '';
-    if (!next) payBox = '<div class="card"><p class="done-all">🎉 ¡Tu viaje está liquidado!</p><p class="muted" style="text-align:center">Gracias por viajar con nosotros. Tu Travel Partner te enviará tus documentos de viaje.</p></div>';
+    const contract = d.contract || {};
+    if (next && contract.state === 'pending') payBox = `<div class="card"><h2>Paso 1: firma tu contrato ✍️</h2><p class="muted" style="margin-top:-6px">Antes de pagar tu anticipo, lee y firma el contrato de tu viaje (precio, plan de pagos, políticas de cambios y cancelación). Toma un par de minutos y lo firmas desde tu celular.</p><a class="pay" href="${esc(contract.url)}">Leer y firmar mi contrato</a><p class="muted" style="text-align:center;margin:10px 0 0">Después podrás pagar ${money(Math.round((next.amount - next.paid) * 100) / 100)} de ${esc(next.label.toLowerCase())}.</p></div>`;
+    else if (!next) payBox = '<div class="card"><p class="done-all">🎉 ¡Tu viaje está liquidado!</p><p class="muted" style="text-align:center">Gracias por viajar con nosotros. Tu Travel Partner te enviará tus documentos de viaje.</p></div>';
     else {
       const due = Math.round((next.amount - next.paid) * 100) / 100;
       const opts = [];
@@ -77,7 +79,8 @@
       <div class="card"><div class="sum"><div><span>Total del viaje</span><b>${money(p.total)}</b></div><div><span>Pagado</span><b>${money(p.paid)}</b></div><div class="bal"><span>Saldo</span><b>${money(p.balance)}</b></div></div>
         <div class="bar"><i style="width:${pct}%"></i></div><p class="muted" style="margin:0">${pct}% pagado · ${esc(q.folio)}${q.hotel ? ` · ${esc(q.hotel)}` : ''}</p></div>
       ${payBox}
-      <div class="card"><h2>Tus pagos</h2>${rows}</div>`;
+      <div class="card"><h2>Tus pagos</h2>${rows}</div>
+      ${contract.url && contract.state !== 'pending' ? `<p style="text-align:center"><a href="${esc(contract.url)}" style="color:#007985;font-size:14px">📄 Ver mi contrato${contract.state === 'signed' ? ' firmado' : ''}</a></p>` : ''}`;
     $('#foot').innerHTML = `${esc(d.agency.name || 'Viajes Casal')}${d.seller ? ` · Tu Travel Partner: ${esc(d.seller.name)}` : ''}${d.agency.whatsapp ? ` · WhatsApp ${esc(d.agency.whatsapp)}` : ''}`;
 
     document.querySelectorAll('[data-copy]').forEach((btn) => { btn.onclick = async () => { try { await navigator.clipboard.writeText(btn.dataset.copy); btn.textContent = '¡Copiado!'; } catch { btn.textContent = btn.dataset.copy; } }; });

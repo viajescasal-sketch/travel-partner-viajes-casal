@@ -356,6 +356,11 @@
      TP-305 · CATÁLOGO DE PROVEEDORES
      ========================================================= */
   const SUPPLIER_TYPES = ['Hotel', 'Mayorista', 'Operador de tours', 'Traslados', 'Aerolínea', 'Seguro', 'Otro'];
+  // TP-205: tarifa neta (ganas venta − costo) o comisionable (el proveedor te paga un % después del viaje).
+  const PROFIT_MODELS = ['neta', 'comision'];
+  const PROFIT_MODEL_LABELS = { neta: 'Tarifa neta', comision: 'Comisionable' };
+  const COMMISSION_STATUSES = ['Pendiente', 'Facturada', 'Cobrada', 'Cancelada'];
+  const COMMISSION_DAYS_DEFAULT = 30;
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   function cleanSupplier(raw) {
     const r = raw && typeof raw === 'object' ? raw : {};
@@ -367,8 +372,13 @@
     const commission = r.commission === '' || r.commission == null ? '' : Number(String(r.commission).replace(/[^0-9.]/g, ''));
     if (commission !== '' && (!Number.isFinite(commission) || commission < 0 || commission > 100)) throw Object.assign(new Error('La comisión debe estar entre 0 y 100 %'), { status: 400, expose: true });
     const website = t('website', 200);
+    // TP-205: cómo se gana con el proveedor y en cuántos días se cobra la comisión después del viaje.
+    const days = r.commission_days === '' || r.commission_days == null ? '' : Math.round(Number(r.commission_days));
+    if (days !== '' && (!Number.isFinite(days) || days < 0 || days > 365)) throw Object.assign(new Error('Los días para cobrar la comisión deben estar entre 0 y 365'), { status: 400, expose: true });
     return {
       name, type: SUPPLIER_TYPES.includes(r.type) ? r.type : 'Otro',
+      model: PROFIT_MODELS.includes(r.model) ? r.model : 'neta',
+      commission_days: days,
       destinations: t('destinations', 200), contact_name: t('contact_name', 120), phone: t('phone', 40), whatsapp: t('whatsapp', 40), email,
       website: website && !/^https?:\/\//i.test(website) ? `https://${website}` : website,
       commission: commission === '' ? '' : Math.round(commission * 100) / 100,
@@ -406,9 +416,22 @@
       supplier_paid: raw.supplier_paid === true,
       voucher_ids: (Array.isArray(raw.voucher_ids) ? raw.voucher_ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 10),
       source: /^b[a-z0-9]{3,12}$/.test(String(raw.source || '')) ? raw.source : '',
-      notes: t('notes', 1000)
+      notes: t('notes', 1000),
+      // TP-205: comisión del proveedor
+      model: PROFIT_MODELS.includes(raw.model) ? raw.model : 'neta',
+      commission_pct: '', commission_amount: '', commission_due: '', commission_status: 'Pendiente', commission_invoice: '', commission_paid_at: ''
     };
     if (b.end_date && b.start_date && b.end_date < b.start_date) b.end_date = b.start_date;
+    if (b.model === 'comision') {
+      const pct = numOr(raw.commission_pct);
+      b.commission_pct = pct === '' ? '' : Math.min(pct, 100);
+      b.commission_amount = numOr(raw.commission_amount);
+      if (b.commission_amount === '' && b.commission_pct !== '' && b.price !== '') b.commission_amount = Math.round(b.price * b.commission_pct) / 100;
+      b.commission_due = isDate(raw.commission_due) ? raw.commission_due : '';
+      b.commission_status = COMMISSION_STATUSES.includes(raw.commission_status) ? raw.commission_status : 'Pendiente';
+      b.commission_invoice = t('commission_invoice', 60);
+      b.commission_paid_at = b.commission_status === 'Cobrada' && isDate(raw.commission_paid_at) ? raw.commission_paid_at : '';
+    }
     if (!b.description && !b.supplier_name && !b.confirmation) return null;
     return b;
   }
@@ -430,7 +453,36 @@
       if (d != null && d < 0) out.push({ level: 'danger', text: `Pago al proveedor vencido (${-d} ${d === -1 ? 'día' : 'días'})` });
       else if (d != null && d <= 7) out.push({ level: 'warn', text: d === 0 ? 'Pagar al proveedor hoy' : `Pagar al proveedor en ${d} ${d === 1 ? 'día' : 'días'}` });
     }
+    const ca = commissionAlert(b, today);
+    if (ca) out.push(ca);
     return out;
+  }
+  // TP-205: utilidad de una reserva. Tarifa neta: venta − costo. Comisionable: la comisión del proveedor.
+  // null = todavía no hay datos para calcularla (falta costo o comisión).
+  function bookingProfit(b) {
+    if (!b || b.status === 'Cancelada') return 0;
+    if (b.model === 'comision') {
+      if (b.commission_status === 'Cancelada') return 0;
+      if (b.commission_amount !== '' && b.commission_amount != null) return Number(b.commission_amount) || 0;
+      if (b.commission_pct !== '' && b.commission_pct != null && b.price !== '' && b.price != null) return Math.round(Number(b.price) * Number(b.commission_pct)) / 100;
+      return null;
+    }
+    if (b.cost === '' || b.cost == null) return null;
+    return (Number(b.price) || 0) - (Number(b.cost) || 0);
+  }
+  // Comisión por cobrar al proveedor (comisionable, no cobrada ni cancelada).
+  const commissionOpen = (b) => Boolean(b && b.status !== 'Cancelada' && b.model === 'comision' && !['Cobrada', 'Cancelada'].includes(b.commission_status));
+  const commissionDueDefault = (b, trip = {}, supplier = null) => {
+    const base = b.end_date || trip.end_date || b.start_date || trip.start_date;
+    if (!isDate(base)) return '';
+    const days = supplier && supplier.commission_days !== '' && supplier.commission_days != null ? Number(supplier.commission_days) : COMMISSION_DAYS_DEFAULT;
+    return addDays(base, days);
+  };
+  function commissionAlert(b, today = '') {
+    if (!commissionOpen(b) || !b.commission_due || !isDate(today)) return null;
+    const d = daysBetween(today, b.commission_due);
+    if (d < 0) return { level: 'warn', text: `Comisión por cobrar vencida (${-d} ${d === -1 ? 'día' : 'días'})` };
+    return null;
   }
   function bookingsSummary(list, trip = {}, today = '') {
     const l = (Array.isArray(list) ? list : []).filter((b) => b.status !== 'Cancelada');
@@ -438,7 +490,11 @@
     const alerts = l.flatMap((b) => bookingAlerts(b, trip, today));
     const sum = (k) => Math.round(l.reduce((s, b) => s + (Number(b[k]) || 0), 0) * 100) / 100;
     const owed = Math.round(l.filter((b) => !b.supplier_paid).reduce((s, b) => s + (Number(b.cost) || 0), 0) * 100) / 100;
-    return { total: l.length, confirmed, pending: l.length - confirmed, danger: alerts.filter((a) => a.level === 'danger').length, warn: alerts.filter((a) => a.level === 'warn').length, cost: sum('cost'), price: sum('price'), owed };
+    const profits = l.map(bookingProfit);
+    const known = profits.filter((p) => p != null);
+    const commission = Math.round(l.filter((b) => b.model === 'comision').reduce((s, b) => s + (bookingProfit(b) || 0), 0) * 100) / 100;
+    const toCollect = Math.round(l.filter(commissionOpen).reduce((s, b) => s + (bookingProfit(b) || 0), 0) * 100) / 100;
+    return { total: l.length, confirmed, pending: l.length - confirmed, danger: alerts.filter((a) => a.level === 'danger').length, warn: alerts.filter((a) => a.level === 'warn').length, cost: sum('cost'), price: sum('price'), owed, profit: known.length ? Math.round(known.reduce((s, p) => s + p, 0) * 100) / 100 : null, profitMissing: profits.length - known.length, commission, toCollect };
   }
   const CANVAS_TO_BOOKING = { vuelo: 'Vuelo', hotel: 'Hotel', traslado: 'Traslado', tour: 'Tour', seguro: 'Seguro' };
   // Reservas a partir del lienzo del viaje (una por bloque; no repite las que ya existen).
@@ -486,6 +542,7 @@
     BLOCKS, BLOCK_TYPES, MAX_BLOCKS, MAX_DAYS, newBlockId, canvasDays, cleanBlock, normalizeCanvas, sortBlocks, canvasTotals, canvasToQuote, canvasToItinerary, canvasToConfirmation, canvasFromTrip,
     shortDate, addDays, isDate,
     SUPPLIER_TYPES, cleanSupplier, netFromCommission, findSupplierByName,
+    PROFIT_MODELS, PROFIT_MODEL_LABELS, COMMISSION_STATUSES, COMMISSION_DAYS_DEFAULT, bookingProfit, commissionOpen, commissionDueDefault, commissionAlert,
     BOOKING_TYPES, BOOKING_STATUSES, BOOKING_ICONS, MAX_BOOKINGS, cleanBooking, cleanBookings, bookingAlerts, bookingsSummary, bookingsFromCanvas, bookingsFromConfirmation, publicBookings
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.TPTrip;

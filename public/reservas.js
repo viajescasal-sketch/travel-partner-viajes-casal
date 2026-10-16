@@ -47,7 +47,18 @@
     let list = clone(t.bookings?.list || []);
     let vouchers = clone(t.vouchers || []);
     const today = todayStr();
-    const blank = () => ({ id: `r${Date.now().toString(36)}${list.length}`, type: 'Hotel', status: 'Por reservar', supplier_id: null, supplier_name: '', confirmation: '', description: '', start_date: t.start_date, end_date: t.end_date, time: '', cost: '', price: '', supplier_due: '', supplier_paid: false, voucher_ids: [], source: '', notes: '' });
+    const blank = () => ({ id: `r${Date.now().toString(36)}${list.length}`, type: 'Hotel', status: 'Por reservar', supplier_id: null, supplier_name: '', confirmation: '', description: '', start_date: t.start_date, end_date: t.end_date, time: '', cost: '', price: '', supplier_due: '', supplier_paid: false, voucher_ids: [], source: '', notes: '', model: 'neta', commission_pct: '', commission_amount: '', commission_due: '', commission_status: 'Pendiente', commission_invoice: '', commission_paid_at: '' });
+    const finance = canEditSup();
+    // TP-205: datos de la comisión del proveedor.
+    const commHtml = (b) => (b.model === 'comision' ? `<div class="pax-grid bk-comm">
+        <label>% comisión<input data-bf="commission_pct" inputmode="decimal" maxlength="6" value="${H(b.commission_pct)}" placeholder="10"></label>
+        <label>Comisión esperada (MXN)<input data-bf="commission_amount" inputmode="decimal" maxlength="14" value="${H(b.commission_amount)}" placeholder="${b.price !== '' && b.commission_pct !== '' ? H(Math.round(Number(b.price) * Number(b.commission_pct)) / 100) : ''}"></label>
+        <label>Cobrar comisión el<input type="date" data-bf="commission_due" value="${H(b.commission_due)}"></label>
+        <label>Estado del cobro${finance ? `<select data-bf="commission_status">${options(T.COMMISSION_STATUSES, b.commission_status)}</select>` : `<input value="${H(b.commission_status)}" disabled>`}</label>
+        ${finance ? `<label>Factura / referencia<input data-bf="commission_invoice" maxlength="60" value="${H(b.commission_invoice)}"></label>` : ''}
+        ${b.commission_status === 'Cobrada' ? `<label>Cobrada el<input type="date" data-bf="commission_paid_at" value="${H(b.commission_paid_at)}"${finance ? '' : ' disabled'}></label>` : ''}
+      </div>` : '');
+    const commDefault = (b) => { if (b.model !== 'comision' || b.commission_due) return; b.commission_due = T.commissionDueDefault(b, t, b.supplier_id ? supById(b.supplier_id) : null); };
 
     const alertsHtml = (b) => { const a = T.bookingAlerts(b, t, today); return `<div class="pax-alerts">${a.length ? a.map((x) => `<span class="pax-alert ${x.level}">${ALERT_ICON[x.level]} ${H(x.text)}</span>`).join('') : b.status === 'Cancelada' ? '<span class="pax-alert">Cancelada</span>' : '<span class="pax-alert ok">✓ En orden</span>'}</div>`; };
     const supInfo = (b) => { const s = b.supplier_id ? supById(b.supplier_id) : null; return s ? `<div class="bk-sup">${s.contact_name ? `<b>${H(s.contact_name)}</b>` : ''}${contactLinks(s)}${s.commission !== '' && s.commission != null ? `<span class="muted">Comisión ${s.commission}%</span>` : ''}${s.payment_terms ? `<span class="muted">${H(s.payment_terms)}</span>` : ''}</div>` : (b.supplier_name ? '<div class="bk-sup muted">No está en el catálogo de proveedores</div>' : ''); };
@@ -62,19 +73,21 @@
         <label class="span2">Descripción<input data-bf="description" maxlength="300" value="${H(b.description)}" placeholder="Junior Suite · Todo incluido · 2 adultos"></label>
         <label>${b.type === 'Hotel' ? 'Check-in' : 'Fecha'}<input type="date" data-bf="start_date" value="${H(b.start_date)}"></label>
         <label>${b.type === 'Hotel' ? 'Check-out' : 'Hasta'}<input type="date" data-bf="end_date" value="${H(b.end_date)}"></label>
-        <label>Costo neto (MXN)<input data-bf="cost" inputmode="decimal" maxlength="14" value="${H(b.cost)}"></label>
+        <label>Cómo ganas<select data-bf="model">${options(T.PROFIT_MODELS.map((m) => [m, T.PROFIT_MODEL_LABELS[m]]), b.model || 'neta')}</select></label>
         <label>Precio de venta (MXN)<input data-bf="price" inputmode="decimal" maxlength="14" value="${H(b.price)}"></label>
+        <label>${b.model === 'comision' ? 'Pago al proveedor (MXN)' : 'Costo neto (MXN)'}<input data-bf="cost" inputmode="decimal" maxlength="14" value="${H(b.cost)}"${b.model === 'comision' ? ' placeholder="Si tú le pagas"' : ''}></label>
         <label>Pagar al proveedor antes de<input type="date" data-bf="supplier_due" value="${H(b.supplier_due)}"></label>
         <label class="bk-paid"><span>Pago al proveedor</span><span><input type="checkbox" data-bf="supplier_paid" ${b.supplier_paid ? 'checked' : ''}> Pagado</span></label>
         <label class="full">Notas internas<input data-bf="notes" maxlength="1000" value="${H(b.notes)}"></label>
       </div>
+      <div data-bk-comm>${commHtml(b)}</div>
       <div data-bk-sup>${supInfo(b)}</div>
       ${docsHtml(b)}
       <div class="pax-foot">${alertsHtml(b)}</div>
     </div>`;
     const summaryHtml = () => {
       const s = T.bookingsSummary(list, t, today);
-      return `<div class="pax-summary"><span><b>${s.total}</b> ${s.total === 1 ? 'reserva' : 'reservas'} · ${s.confirmed} confirmada${s.confirmed === 1 ? '' : 's'}</span>${s.pending ? `<span class="warn">${s.pending} por confirmar</span>` : s.total ? '<span class="ok">✓ Todo confirmado</span>' : ''}${s.danger ? `<span class="danger">⛔ ${s.danger} urgente${s.danger > 1 ? 's' : ''}</span>` : ''}<span>Costo ${money(s.cost)} · Venta ${money(s.price)} · Utilidad ${money(s.price - s.cost)}</span>${s.owed ? `<span class="warn">Por pagar a proveedores ${money(s.owed)}</span>` : ''}</div>`;
+      return `<div class="pax-summary"><span><b>${s.total}</b> ${s.total === 1 ? 'reserva' : 'reservas'} · ${s.confirmed} confirmada${s.confirmed === 1 ? '' : 's'}</span>${s.pending ? `<span class="warn">${s.pending} por confirmar</span>` : s.total ? '<span class="ok">✓ Todo confirmado</span>' : ''}${s.danger ? `<span class="danger">⛔ ${s.danger} urgente${s.danger > 1 ? 's' : ''}</span>` : ''}<span>Venta ${money(s.price)} · Utilidad ${s.profit == null ? '—' : money(s.profit)}${s.profitMissing ? ` <small>(${s.profitMissing} sin costo o comisión)</small>` : ''}</span>${s.toCollect ? `<span class="ok">Comisiones por cobrar ${money(s.toCollect)}</span>` : ''}${s.owed ? `<span class="warn">Por pagar a proveedores ${money(s.owed)}</span>` : ''}</div>`;
     };
     const canGenerate = () => t.canvas?.blocks?.length || t.confirmation;
 
@@ -96,14 +109,22 @@
         if (!f || !r) return;
         const { row, b } = r;
         if (f === 'supplier_paid') b.supplier_paid = e.target.checked;
-        else if (f === 'cost' || f === 'price') b[f] = e.target.value.trim() === '' ? '' : Math.max(Number(e.target.value.replace(/[^0-9.]/g, '')) || 0, 0);
+        else if (['cost', 'price', 'commission_pct', 'commission_amount'].includes(f)) b[f] = e.target.value.trim() === '' ? '' : Math.max(Number(e.target.value.replace(/[^0-9.]/g, '')) || 0, 0);
         else b[f] = e.target.value;
+        if (f === 'commission_pct' && b.commission_pct > 100) b.commission_pct = 100;
+        if (f === 'commission_status' && b.commission_status === 'Cobrada' && !b.commission_paid_at) b.commission_paid_at = today;
         if (f === 'supplier_name') {
           const s = matchSupplier(b.supplier_name);
           b.supplier_id = s ? s.id : null;
           row.querySelector('[data-bk-sup]').innerHTML = supInfo(b);
+          // TP-205: el proveedor define cómo se gana con él (tarifa neta o comisionable) y su %.
+          if (s && s.model === 'comision' && b.model !== 'comision' && b.cost === '') { b.model = 'comision'; if (b.commission_pct === '' && s.commission !== '') b.commission_pct = s.commission; commDefault(b); render(); toast(`${s.name} es comisionable: se registrará la comisión por cobrar`); return; }
         }
-        if ((f === 'price' || f === 'supplier_name') && b.cost === '' && b.supplier_id) {
+        if (f === 'model') { if (b.model === 'comision') { const sp = b.supplier_id ? supById(b.supplier_id) : null; if (b.commission_pct === '' && sp && sp.commission !== '') b.commission_pct = sp.commission; commDefault(b); } render(); return; }
+        if (['commission_pct', 'price'].includes(f) && b.model === 'comision') { const inp = row.querySelector('[data-bf="commission_amount"]'); if (inp) inp.placeholder = b.price !== '' && b.commission_pct !== '' ? Math.round(Number(b.price) * Number(b.commission_pct)) / 100 : ''; }
+        if (['end_date', 'start_date'].includes(f) && b.model === 'comision' && !b.commission_due) { commDefault(b); const inp = row.querySelector('[data-bf="commission_due"]'); if (inp) inp.value = b.commission_due; }
+        if (f === 'commission_status') { row.querySelector('[data-bk-comm]').innerHTML = commHtml(b); }
+        if ((f === 'price' || f === 'supplier_name') && b.cost === '' && b.supplier_id && b.model !== 'comision') {
           const net = T.netFromCommission(b.price, supById(b.supplier_id)?.commission);
           if (net !== '') { b.cost = net; row.querySelector('[data-bf="cost"]').value = net; toast(`Costo neto calculado con la comisión de ${b.supplier_name}`); }
         }
@@ -192,7 +213,7 @@
   function supplierStats(s) {
     const rows = allBookings().filter(({ b }) => b.supplier_id === s.id || (!b.supplier_id && b.supplier_name.toLowerCase() === s.name.toLowerCase()));
     const live = rows.filter(({ b }) => b.status !== 'Cancelada');
-    return { rows, total: live.length, owed: live.filter(({ b }) => !b.supplier_paid).reduce((x, { b }) => x + (Number(b.cost) || 0), 0), sold: live.reduce((x, { b }) => x + (Number(b.price) || 0), 0) };
+    return { rows, total: live.length, owed: live.filter(({ b }) => !b.supplier_paid).reduce((x, { b }) => x + (Number(b.cost) || 0), 0), sold: live.reduce((x, { b }) => x + (Number(b.price) || 0), 0), toCollect: live.filter(({ b }) => T.commissionOpen(b)).reduce((x, { b }) => x + (T.bookingProfit(b) || 0), 0) };
   }
   function renderSuppliers() {
     const grid = $('#supplierGrid');
@@ -202,26 +223,69 @@
     const list = (db.suppliers || []).filter((s) => (sp.inactive || s.active !== false) && (!sp.type || s.type === sp.type) && (!q || `${s.name} ${s.destinations} ${s.contact_name} ${s.notes} ${s.type}`.toLowerCase().includes(q)));
     grid.innerHTML = list.map((s) => {
       const st = supplierStats(s);
-      return `<article class="card sup-card clickable${s.active === false ? ' off' : ''}" data-sup="${s.id}"><div class="card-top"><span class="status qualified">${H(s.type)}</span>${s.commission !== '' && s.commission != null ? `<b class="sup-com">${s.commission}%</b>` : '<small class="muted">Sin comisión</small>'}</div>
+      return `<article class="card sup-card clickable${s.active === false ? ' off' : ''}" data-sup="${s.id}"><div class="card-top"><span class="status qualified">${H(s.type)}</span>${s.commission !== '' && s.commission != null ? `<b class="sup-com" title="${H(T.PROFIT_MODEL_LABELS[s.model || 'neta'])}">${s.model === 'comision' ? 'Comisión ' : 'Neta · '}${s.commission}%</b>` : `<small class="muted">${H(T.PROFIT_MODEL_LABELS[s.model || 'neta'])}</small>`}</div>
         <h3>${H(s.name)}${s.active === false ? ' <small>(inactivo)</small>' : ''}</h3><p>${H(s.destinations || 'Destinos por definir')}</p>
         ${s.contact_name || s.phone || s.email ? `<p>${H([s.contact_name, s.phone, s.email].filter(Boolean).join(' · '))}</p>` : '<p class="muted">Sin datos de contacto</p>'}
-        <div class="meta"><div><span>Reservas</span><b>${st.total}</b></div><div><span>Por pagar</span><b>${money(st.owed)}</b></div></div></article>`;
+        <div class="meta"><div><span>Reservas</span><b>${st.total}</b></div><div><span>Por pagar</span><b>${money(st.owed)}</b></div>${st.toCollect ? `<div><span>Comisión por cobrar</span><b>${money(st.toCollect)}</b></div>` : ''}</div></article>`;
     }).join('') || `<p class="empty-note">${(db.suppliers || []).length ? 'Ningún proveedor coincide con la búsqueda.' : 'Aún no hay proveedores.'}</p>`;
     $('#supTypeFilter').innerHTML = `<option value="">Todos los tipos</option>${options(T.SUPPLIER_TYPES, sp.type)}`;
+    renderSupCommissions();
   }
   window.renderSuppliers = renderSuppliers;
+
+  /* ---------------- TP-205 · Comisiones por cobrar a proveedores ---------------- */
+  const cm = { view: 'open', supplier: '' };
+  function renderSupCommissions() {
+    const box = $('#supCommissions');
+    if (!box) return;
+    const today = todayStr();
+    const all = allBookings().filter(({ b }) => b.model === 'comision' && b.status !== 'Cancelada');
+    if (!all.length) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    const amt = (b) => T.bookingProfit(b) || 0;
+    const open = all.filter(({ b }) => T.commissionOpen(b));
+    const late = open.filter(({ b }) => b.commission_due && b.commission_due < today);
+    const month = today.slice(0, 7);
+    const collected = all.filter(({ b }) => b.commission_status === 'Cobrada' && String(b.commission_paid_at).slice(0, 7) === month);
+    const view = all.filter(({ b }) => (cm.view === 'open' ? T.commissionOpen(b) : cm.view === 'all' ? true : b.commission_status === cm.view) && (!cm.supplier || (b.supplier_name || '—') === cm.supplier));
+    const groups = new Map();
+    view.forEach((x) => { const k = x.b.supplier_name || '—'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); });
+    const finance = canEditSup();
+    const sum = (l) => l.reduce((x, { b }) => x + amt(b), 0);
+    box.innerHTML = `<div class="panel-head"><div><h3>💰 Comisiones por cobrar a proveedores</h3><p>Reservas comisionables: cuánto te debe cada proveedor, cuándo cobrarlo y su estado.</p></div></div>
+      <div class="mini bk-kpis"><div>Por cobrar<b>${money(sum(open))}</b><small>${open.length} reserva${open.length === 1 ? '' : 's'}</small></div><div>Vencidas<b>${money(sum(late))}</b><small>${late.length ? `${late.length} pasada${late.length > 1 ? 's' : ''} de su fecha` : 'Al día'}</small></div><div>Cobradas este mes<b>${money(sum(collected))}</b></div></div>
+      <div class="toolbar"><select id="cmView">${options([['open', 'Por cobrar (pendientes y facturadas)'], ['Pendiente', 'Pendientes'], ['Facturada', 'Facturadas'], ['Cobrada', 'Cobradas'], ['all', 'Todas']], cm.view)}</select><select id="cmSupplier"><option value="">Todos los proveedores</option>${options([...new Set(all.map(({ b }) => b.supplier_name || '—'))].sort(), cm.supplier)}</select></div>
+      ${groups.size ? [...groups.entries()].sort((a, c) => sum(c[1]) - sum(a[1])).map(([name, rows]) => `<div class="cm-group"><div class="cm-head"><b>${H(name)}</b><span>${rows.length} reserva${rows.length === 1 ? '' : 's'} · ${money(sum(rows))}</span></div>
+        <div class="table"><table><thead><tr><th>Viaje</th><th>Servicio</th><th>Venta</th><th>Comisión</th><th>Cobrar el</th><th>Estado</th></tr></thead><tbody>
+        ${rows.sort((a, c) => String(a.b.commission_due || '9').localeCompare(String(c.b.commission_due || '9'))).map(({ b, t }) => { const overdue = T.commissionOpen(b) && b.commission_due && b.commission_due < today; return `<tr data-cm-trip="${t.id}" data-cm-bk="${H(b.id)}"><td><button type="button" class="link" data-bk-trip="${t.id}"><b>${H(clientName(t.client_id))}</b></button><br><small>${H(t.destination)} · ${H(fmtDate(t.start_date))}</small></td><td>${T.BOOKING_ICONS[b.type]} ${H(b.description || b.type)}${b.confirmation ? `<br><small>${H(b.confirmation)}</small>` : ''}</td><td>${b.price !== '' ? money(b.price) : '—'}</td><td><b>${T.bookingProfit(b) == null ? '—' : money(amt(b))}</b>${b.commission_pct !== '' ? `<br><small>${b.commission_pct}%</small>` : ''}</td><td class="${overdue ? 'danger-text' : ''}">${b.commission_due ? H(fmtDate(b.commission_due)) : '—'}${overdue ? '<br><small>Vencida</small>' : ''}</td><td>${finance ? `<select data-cm-status>${options(T.COMMISSION_STATUSES, b.commission_status)}</select>` : `<span class="bk-pill">${H(b.commission_status)}</span>`}${b.commission_invoice ? `<br><small>Fact. ${H(b.commission_invoice)}</small>` : ''}${b.commission_status === 'Cobrada' && b.commission_paid_at ? `<br><small>${H(fmtDate(b.commission_paid_at))}</small>` : ''}</td></tr>`; }).join('')}
+        </tbody></table></div></div>`).join('') : '<p class="empty-note">Nada con estos filtros.</p>'}`;
+    $('#cmView').onchange = (e) => { cm.view = e.target.value; renderSupCommissions(); };
+    $('#cmSupplier').onchange = (e) => { cm.supplier = e.target.value; renderSupCommissions(); };
+    box.querySelectorAll('[data-cm-status]').forEach((sel) => {
+      sel.onchange = async () => {
+        const tr = sel.closest('[data-cm-trip]');
+        const body = { status: sel.value };
+        if (sel.value === 'Facturada') { const inv = prompt('Número de factura o referencia (opcional)', ''); if (inv === null) { renderSupCommissions(); return; } body.invoice = inv; }
+        sel.disabled = true;
+        await mutate(() => send('PATCH', `/api/trips/${tr.dataset.cmTrip}/bookings/${tr.dataset.cmBk}/commission`, body), `Comisión ${sel.value.toLowerCase()}`);
+      };
+    });
+  }
+  window.renderSupCommissions = renderSupCommissions;
 
   function supplierModal(id) {
     const s = id ? supById(id) : null;
     const editable = canEditSup();
-    const v = s || { name: '', type: 'Hotel', destinations: '', contact_name: '', phone: '', whatsapp: '', email: '', website: '', commission: '', rates: '', payment_terms: '', notes: '', active: true };
+    const v = s || { name: '', type: 'Hotel', model: 'neta', destinations: '', contact_name: '', phone: '', whatsapp: '', email: '', website: '', commission: '', commission_days: '', rates: '', payment_terms: '', notes: '', active: true };
     const st = s ? supplierStats(s) : null;
     const upcoming = st ? st.rows.filter(({ b }) => b.status !== 'Cancelada').sort((a, c) => (a.b.start_date || '').localeCompare(c.b.start_date || '')).slice(0, 8) : [];
     const html = `<form class="modal-form"><fieldset class="readonly"${editable ? '' : ' disabled'}>
       ${field('Nombre*', `<input name="name" required maxlength="120" value="${H(v.name)}">`)}
       ${field('Tipo', `<select name="type">${options(T.SUPPLIER_TYPES, v.type)}</select>`)}
       ${field('Destinos o zonas', `<input name="destinations" maxlength="200" value="${H(v.destinations)}" placeholder="Cancún, Riviera Maya, Tulum">`)}
+      ${field('Cómo ganas con este proveedor', `<select name="model">${options(T.PROFIT_MODELS.map((m) => [m, m === 'neta' ? 'Tarifa neta (venta − costo)' : 'Comisionable (me paga comisión)']), v.model || 'neta')}</select>`)}
       ${field('Comisión (%)', `<input name="commission" inputmode="decimal" maxlength="6" value="${H(v.commission)}" placeholder="10">`)}
+      ${field('Días para cobrar la comisión', `<input name="commission_days" type="number" min="0" max="365" value="${H(v.commission_days ?? '')}" placeholder="${T.COMMISSION_DAYS_DEFAULT} (después del viaje)">`)}
       ${field('Contacto', `<input name="contact_name" maxlength="120" value="${H(v.contact_name)}" placeholder="Nombre del ejecutivo">`)}
       ${field('Teléfono', `<input name="phone" maxlength="40" value="${H(v.phone)}">`)}
       ${field('WhatsApp', `<input name="whatsapp" maxlength="40" value="${H(v.whatsapp)}">`)}
@@ -233,12 +297,13 @@
       <label class="full kb-check"><input type="checkbox" name="active" ${v.active !== false ? 'checked' : ''}> Activo (aparece al cotizar y reservar)</label>
       </fieldset>
       ${s && contactLinks(s) ? `<div class="full bk-sup">${contactLinks(s)}</div>` : ''}
-      ${s ? `<div class="full lead-fups"><b>Reservas con este proveedor (${st.total}) · por pagar ${money(st.owed)} · vendido ${money(st.sold)}</b>${upcoming.map(({ b, t }) => `<button type="button" class="lead-fup" data-bk-trip="${t.id}"><span>${T.BOOKING_ICONS[b.type]} ${H(clientName(t.client_id))} · ${H(b.description || b.type)}</span><small>${H(b.status)}${b.start_date ? ` · ${H(fmtDate(b.start_date))}` : ''}</small></button>`).join('') || '<p class="lead-fups-empty">Sin reservas todavía.</p>'}</div>` : ''}
+      <p class="full muted-note">Tarifa neta: le pagas el costo y tu utilidad es la diferencia (si pones %, el costo se calcula solo con el precio de venta). Comisionable: el proveedor te paga el % después del viaje; la reserva queda en “Comisiones por cobrar” con su fecha de cobro.</p>
+      ${s ? `<div class="full lead-fups"><b>Reservas con este proveedor (${st.total}) · por pagar ${money(st.owed)} · vendido ${money(st.sold)}${st.toCollect ? ` · comisión por cobrar ${money(st.toCollect)}` : ''}</b>${upcoming.map(({ b, t }) => `<button type="button" class="lead-fup" data-bk-trip="${t.id}"><span>${T.BOOKING_ICONS[b.type]} ${H(clientName(t.client_id))} · ${H(b.description || b.type)}</span><small>${H(b.status)}${b.start_date ? ` · ${H(fmtDate(b.start_date))}` : ''}</small></button>`).join('') || '<p class="lead-fups-empty">Sin reservas todavía.</p>'}</div>` : ''}
       ${s && isAdmin() ? '<div class="danger-zone full"><button type="button" class="btn ghost-danger small" id="supDel">Eliminar proveedor</button></div>' : ''}
       <div class="modal-actions"><button type="button" class="btn secondary close">${editable ? 'Cancelar' : 'Cerrar'}</button>${editable ? `<button type="submit" class="btn primary">${s ? 'Guardar cambios' : 'Agregar proveedor'}</button>` : ''}</div></form>`;
     openModal('CATÁLOGO DE PROVEEDORES', s ? s.name : 'Nuevo proveedor', html);
     if (editable) bindForm((f) => {
-      const body = { name: f.name, type: f.type, destinations: f.destinations, commission: f.commission, contact_name: f.contact_name, phone: f.phone, whatsapp: f.whatsapp, email: f.email, website: f.website, rates: f.rates, payment_terms: f.payment_terms, notes: f.notes, active: Boolean(f.active) };
+      const body = { name: f.name, type: f.type, model: f.model, commission_days: f.commission_days, destinations: f.destinations, commission: f.commission, contact_name: f.contact_name, phone: f.phone, whatsapp: f.whatsapp, email: f.email, website: f.website, rates: f.rates, payment_terms: f.payment_terms, notes: f.notes, active: Boolean(f.active) };
       return s ? mutate(() => send('PATCH', `/api/suppliers/${s.id}`, body), 'Proveedor actualizado') : mutate(() => send('POST', '/api/suppliers', body), 'Proveedor agregado');
     });
     const del = $('#supDel');

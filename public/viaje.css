@@ -181,3 +181,43 @@ body.dark .ref-box { background: rgba(0, 184, 200, .12); }
 .perf-total td { border-top: 2px solid var(--border); font-weight: 700; }
 .perf-table small { color: var(--muted); }
 @media (max-width: 800px) { .cv-touch { grid-template-columns: auto minmax(0, 1fr); } .cv-acts { grid-column: 1 / -1; justify-content: flex-start; } .cs-row { grid-template-columns: 1fr 80px; } }
+
+/* TP-204 · Contrato con firma */
+.ct-row { margin: 12px 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); font-size: 13px; line-height: 1.5; }
+.ct-row.ct-pending { border-color: #f1c66b; background: rgba(246, 185, 59, .10); }
+.ct-row.ct-signed { border-color: rgba(24, 129, 93, .35); background: rgba(24, 129, 93, .07); }
+.ct-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.ct-row .pax-alert { display: block; margin-top: 8px; }
+.ct-vars { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.ct-doc { font-size: 13px; line-height: 1.55; }
+.ct-doc h3 { text-align: center; text-transform: uppercase; color: var(--navy, #073b66); margin: 0 0 10px; }
+.ct-doc h4 { text-transform: uppercase; font-size: 12px; margin: 16px 0 6px; padding-bottom: 4px; border-bottom: 2px solid var(--border); }
+.ct-doc table { width: 100%; border-collapse: collapse; }
+.ct-doc td { padding: 5px 0; border-bottom: 1px dashed var(--border); vertical-align: top; }
+.ct-doc td:first-child { color: var(--muted); width: 32%; padding-right: 10px; }
+.ct-doc ol { padding-left: 20px; } .ct-doc li { margin-bottom: 8px; text-align: justify; }
+
+/* TP-205 · Comisiones de proveedores */
+.bk-comm { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.cm-group { margin-top: 14px; }
+.cm-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 2px; border-bottom: 2px solid var(--border); font-size: 14px; }
+.cm-head span { color: var(--muted); }
+.cm-group select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.danger-text { color: #c0392b; }
+#supCommissions { margin-bottom: 18px; }
+
+/* TP-206 · Metas y comisiones por vendedor */
+.goal-panel { margin-bottom: 18px; }
+.goal-list { display: grid; gap: 14px; }
+.goal-row { display: grid; gap: 6px; cursor: default; }
+.goal-top { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; font-size: 14px; }
+.goal-top small { color: var(--muted); margin-left: auto; }
+.goal-name { font-weight: 700; min-width: 130px; }
+.goal-row.big .goal-top { font-size: 16px; }
+.goal-pct { font-weight: 700; color: var(--teal); }
+.goal-pct.ok, .goal-foot .ok { color: #18815d; }
+.goal-bar.done i { background: linear-gradient(90deg, #18815d, #2fb37f) !important; }
+.goal-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; color: var(--muted); }
+.gs-table input { width: 100%; min-width: 90px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.goal-bar.pay-bar.big { margin: 2px 0; }
+.bk-pill.bk-due { background: #e8f8fa; color: #007985; }
