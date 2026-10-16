@@ -29,6 +29,7 @@ const hooks = require('./hooks');
 const { STAGES: TEMPLATE_STAGES, VARIABLES: TEMPLATE_VARIABLES, DEFAULT_TEMPLATES, sanitizeTemplates, readTemplates } = require('./templates');
 const { goalsFor } = require('./commissions');
 const TPFields = require('../public/campos-core');
+const { prefsFor } = require('./preferencias');
 
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
 const AGENCY_FIELDS = { name: 120, whatsapp: 40, email: 254, website: 200 };
@@ -224,9 +225,11 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     const ctx = await context(req);
     await refreshScores(ctx.data);
     const visible = filterData(ctx.scope, ctx.data);
+    const prefs = await prefsFor(dataStore, ctx.user.id); // avatares y recorrido guiado
+    const photo = (u) => (u?.photo_media_id ? `/api/media/${u.photo_media_id}` : null);
     const users = ctx.user.role === 'admin'
-      ? (await dataStore.listUsers()).map((u) => ({ id: u.id, name: u.name, role: u.role, active: u.active }))
-      : [{ id: ctx.user.id, name: ctx.user.name, role: ctx.user.role, active: true }];
+      ? (await dataStore.listUsers()).map((u) => ({ id: u.id, name: u.name, role: u.role, active: u.active, photoUrl: photo(u), avatar: prefs.avatars[String(u.id)] || null }))
+      : [{ id: ctx.user.id, name: ctx.user.name, role: ctx.user.role, active: true, photoUrl: photo(await dataStore.findUserById(ctx.user.id)), avatar: prefs.avatar }];
     res.json({
       ok: true,
       ...visible,
@@ -236,6 +239,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
       me: sellerInfo(await dataStore.findUserById(ctx.user.id)),
       suppliers: dataStore.listSuppliers ? await dataStore.listSuppliers() : [], // TP-305
       goals: await goalsFor(dataStore, ctx.user), // TP-206
+      prefs: { avatar: prefs.avatar, tour: prefs.tour },
       serverTime: nowCancun()
     });
   }));
