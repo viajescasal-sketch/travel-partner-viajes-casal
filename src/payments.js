@@ -13,6 +13,7 @@ const rateLimit = require('express-rate-limit');
 const { ENTITY_ORDER, ValidationError, nowCancun, sanitize } = require('./crm-schema');
 const { buildScope, isVisible, canWrite } = require('./access');
 const TPContract = require('../public/contrato-core');
+const hooks = require('./hooks');
 
 const SETTING = 'payments';
 const TOKEN_RE = /^[a-f0-9]{40}$/;
@@ -302,6 +303,7 @@ ${outro ? `<p style="font-size:14px">${escapeHtml(outro)}</p>` : ''}
           button: plan.balance > 0.5 && updated.pay_token ? { label: 'Ver mi plan de pagos', url: payUrl(updated) } : null
         }));
       }
+      await hooks.emit(dataStore, 'paymentReceived', { quote: updated, plan, amount, installment: inst, auto }); // TP-307
       return { quote: updated, plan, event };
     });
   }

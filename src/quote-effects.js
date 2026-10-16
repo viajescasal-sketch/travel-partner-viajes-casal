@@ -51,6 +51,7 @@ function createQuoteEffects(dataStore, { payments = null, onLeadUpdate = null } 
         }
         if (updated && onLeadUpdate) await onLeadUpdate(lead, updated, quote, ctx);
         if (updated?.stage === 'Vendido') await hooks.emit(dataStore, 'leadSold', updated); // TP-309
+        if (updated && updated.stage !== lead.stage) await hooks.emit(dataStore, 'leadStage', { before: lead, lead: updated }); // TP-307
       }
     }
     // TP-201: al aceptarse se arma el plan de pagos (anticipo + parcialidades) y la liga de pago.

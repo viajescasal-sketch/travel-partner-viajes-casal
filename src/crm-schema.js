@@ -29,7 +29,9 @@ const ENTITIES = {
       // TP-303: acompañantes frecuentes del cliente (se reutilizan en otros viajes)
       companions: { type: 'json', max: 40000, internal: true },
       // TP-309: código de referido y créditos ganados
-      referral: { type: 'json', max: 40000, internal: true }
+      referral: { type: 'json', max: 40000, internal: true },
+      // TP-306: campos personalizables { clave: valor } (los valida src/crm-routes.js con las definiciones)
+      custom: { type: 'json', max: 30000, internal: true }
     }
   },
   leads: {
@@ -62,7 +64,9 @@ const ENTITIES = {
       // TP-302: viaje armado en el lienzo (Canvas) antes de cotizar
       canvas: { type: 'json', max: 60000 },
       // TP-309: quién lo refirió y su descuento de bienvenida
-      referral: { type: 'json', max: 4000, internal: true }
+      referral: { type: 'json', max: 4000, internal: true },
+      // TP-306: campos personalizables
+      custom: { type: 'json', max: 30000, internal: true }
     }
   },
   quotes: {
@@ -122,7 +126,9 @@ const ENTITIES = {
       // TP-304: reservas centralizadas (solo por /api/trips/:id/bookings)
       bookings: { type: 'json', max: 60000, internal: true },
       // TP-308: encuesta postviaje (liga, envío y respuestas)
-      survey: { type: 'json', max: 8000, internal: true }
+      survey: { type: 'json', max: 8000, internal: true },
+      // TP-306: campos personalizables
+      custom: { type: 'json', max: 30000, internal: true }
     }
   },
   followups: {
@@ -136,7 +142,9 @@ const ENTITIES = {
       details: { type: 'text', max: 2000 },
       due_at: { type: 'datetime', required: true },
       done: { type: 'bool', default: false },
-      overdue_notified_at: { type: 'datetime', internal: true } // TP-110
+      overdue_notified_at: { type: 'datetime', internal: true }, // TP-110
+      // TP-307: creado por una automatización { rule_id, rule, template }
+      auto: { type: 'json', max: 2000, internal: true }
     }
   }
 };

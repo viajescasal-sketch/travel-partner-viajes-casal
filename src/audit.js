@@ -11,10 +11,11 @@ const FIELD_LABELS = {
   hotel: 'Hotel / paquete', price: 'Precio', mode: 'Modalidad', valid_until: 'Vigencia', status: 'Estado', services: 'Servicios',
   type: 'Tipo', title: 'Actividad', details: 'Detalles', due_at: 'Fecha y hora', done: 'Hecho',
   owner_id: 'Vendedor', contacted_at: 'Contactado',
-  details: 'Cotizador', confirmation: 'Confirmación de servicios', qualification: 'Calificación', itinerary: 'Itinerario digital', canvas: 'Canvas del viaje', birth_date: 'Fecha de nacimiento', no_marketing: 'No contactar en campañas'
+  details: 'Cotizador', confirmation: 'Confirmación de servicios', qualification: 'Calificación', itinerary: 'Itinerario digital', canvas: 'Canvas del viaje', birth_date: 'Fecha de nacimiento', no_marketing: 'No contactar en campañas', custom: 'Campos personalizados'
 };
 
 const MAX_TEXT = 120;
+const humanize = (key) => { const s = String(key).replace(/_/g, ' '); return s.charAt(0).toUpperCase() + s.slice(1); };
 const money = (n) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(Number(n) || 0);
 const clip = (text) => (text.length > MAX_TEXT ? `${text.slice(0, MAX_TEXT - 1)}…` : text);
 
@@ -66,6 +67,16 @@ function diffChanges(entityName, before, after, find) {
     const b = after?.[field] ?? null;
     if (ENTITIES[entityName].fields[field].type === 'json') {
       if (JSON.stringify(a) === JSON.stringify(b)) continue;
+      // TP-306: un cambio por campo personalizado
+      if (field === 'custom') {
+        const fmt = (v) => (v == null || v === '' ? null : Array.isArray(v) ? v.join(', ') : typeof v === 'boolean' ? (v ? 'Sí' : 'No') : clip(String(v)));
+        const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
+        for (const k of keys) {
+          if (JSON.stringify(a?.[k] ?? null) === JSON.stringify(b?.[k] ?? null)) continue;
+          changes.push({ field: `custom.${k}`, label: humanize(k), from: fmt(a?.[k]), to: fmt(b?.[k]) });
+        }
+        continue;
+      }
       if (field === 'qualification') {
         const text = (q) => (q && q.score != null ? `${q.score}% · ${q.level}` : null);
         if (text(a) !== text(b)) changes.push({ field, label: FIELD_LABELS[field], from: text(a), to: text(b) });

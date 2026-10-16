@@ -125,6 +125,7 @@ function createLeadIntake(dataStore, assignment) {
     // TP-309: código de referido (liga de referido o escrito en el mensaje del cliente).
     await hooks.emit(dataStore, 'leadIntake', { lead, client, notes, ref, channel: label });
     lead = (await dataStore.getRecord('leads', lead.id)) || lead;
+    if (action === 'created') { await hooks.emit(dataStore, 'leadCreated', { lead, client, channel: label }); lead = (await dataStore.getRecord('leads', lead.id)) || lead; } // TP-307
     return { action, lead, client, followup, seller, reason: pick?.reason || null };
   }
 

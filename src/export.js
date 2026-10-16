@@ -2,6 +2,8 @@
 
 // Arma las hojas de exportación (Excel/CSV) a partir de los datos visibles para el usuario.
 
+const TPFields = require('../public/campos-core');
+
 const SECTIONS = {
   clients: 'Clientes',
   leads: 'Leads',
@@ -24,7 +26,7 @@ const col = (header, type = 'text', width = 16) => ({ header, type, width });
 
 // data: { clients, leads, quotes, trips, followups }, users: lista, questions: preguntas de calificación
 // range: { from, to } en formato YYYY-MM-DD; filtra por fecha de creación (ventas: fecha de venta; seguimientos: fecha programada).
-function buildSheets(sectionList, data, { users = [], questions = [], range = null } = {}) {
+function buildSheets(sectionList, data, { users = [], questions = [], range = null, customFields = null } = {}) {
   const inRange = (value) => {
     if (!range || (!range.from && !range.to)) return true;
     const day = String(value || '').slice(0, 10);
@@ -114,6 +116,18 @@ function buildSheets(sectionList, data, { users = [], questions = [], range = nu
         columns: [col('ID', 'number', 7), col('Nombre', 'text', 24), col('Correo', 'text', 30), col('Rol', 'text', 15), col('Activo', 'text', 8), col('Último acceso', 'datetime', 17)],
         rows: users.map((u) => [u.id, u.name, u.email, { admin: 'Administrador', travel_partner: 'Vendedor', operaciones: 'Operaciones', consulta: 'Consulta' }[u.role] || u.role, yesNo(u.active), u.last_login_at])
       });
+    }
+  }
+  // TP-306: campos personalizables al final de Clientes, Leads y Viajes.
+  if (customFields) {
+    for (const entity of ['clients', 'leads', 'trips']) {
+      const defs = customFields[entity] || [];
+      const sheet = sheets.find((x) => x.name === SECTIONS[entity]);
+      if (!sheet || !defs.length) continue;
+      const list = data[entity].filter((r) => inRange(r.created_at));
+      const typeOf = (d) => (d.type === 'number' ? 'number' : d.type === 'date' ? 'date' : 'text');
+      sheet.columns.push(...defs.map((d) => col(d.label, typeOf(d), 18)));
+      sheet.rows.forEach((row, i) => row.push(...defs.map((d) => TPFields.plain(d, list[i]?.custom?.[d.key]))));
     }
   }
   return sheets;

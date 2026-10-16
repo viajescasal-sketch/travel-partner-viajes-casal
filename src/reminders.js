@@ -72,7 +72,7 @@ function emailFor({ to, title, lines, appUrl }) {
   return { subject: title.slice(0, 180), text, html };
 }
 
-function createReminders(dataStore, assignment, env = {}, { now = () => nowCancun(), payments = null, postventa = null, recompra = null } = {}) {
+function createReminders(dataStore, assignment, env = {}, { now = () => nowCancun(), payments = null, postventa = null, recompra = null, automations = null } = {}) {
   const appUrl = () => String(env.APP_URL || '').trim().replace(/\/+$/, '') || 'https://travelpartner.viajescasal.com';
   async function config() { return cleanConfig(await dataStore.getSetting('reminders')); }
 
@@ -203,7 +203,12 @@ function createReminders(dataStore, assignment, env = {}, { now = () => nowCancu
       try { const r = await recompra.runDaily({ workStart: cfg.workStart, workEnd: cfg.workEnd }); result.campaigns = r.created; } catch (error) { console.error('Campañas de recompra fallaron:', error.message); }
     }
 
-    const parts = [result.quotes && `${result.quotes} cotizaciones`, result.payments && `${result.payments} cobros`, result.overdue && `${result.overdue} seguimientos vencidos`, result.contact && `${result.contact} leads sin contacto`, result.escalated && `${result.escalated} avisos al administrador`, result.surveys && `${result.surveys} encuestas postviaje`, result.campaigns && `${result.campaigns} contactos de recompra`].filter(Boolean);
+    // 7) TP-307: automatizaciones por fecha (cada hora en horario laboral).
+    if (automations) {
+      try { const r = await automations.runScheduled({ workStart: cfg.workStart, workEnd: cfg.workEnd }); result.automations = r.fired; } catch (error) { console.error('Automatizaciones fallaron:', error.message); }
+    }
+
+    const parts = [result.quotes && `${result.quotes} cotizaciones`, result.payments && `${result.payments} cobros`, result.overdue && `${result.overdue} seguimientos vencidos`, result.contact && `${result.contact} leads sin contacto`, result.escalated && `${result.escalated} avisos al administrador`, result.surveys && `${result.surveys} encuestas postviaje`, result.campaigns && `${result.campaigns} contactos de recompra`, result.automations && `${result.automations} automatizaciones`].filter(Boolean);
     await dataStore.setSetting('reminders_state', { ...state, lastRunAt: current, lastResult: parts.length ? `Avisos: ${parts.join(', ')}` : 'Sin pendientes', ...(parts.length ? { lastAlertAt: current, lastAlert: parts.join(', ') } : {}) });
     return result;
   }

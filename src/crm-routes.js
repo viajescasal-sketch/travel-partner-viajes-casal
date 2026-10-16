@@ -28,6 +28,7 @@ const TPTrip = require('../public/viaje-core');
 const hooks = require('./hooks');
 const { STAGES: TEMPLATE_STAGES, VARIABLES: TEMPLATE_VARIABLES, DEFAULT_TEMPLATES, sanitizeTemplates, readTemplates } = require('./templates');
 const { goalsFor } = require('./commissions');
+const TPFields = require('../public/campos-core');
 
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
 const AGENCY_FIELDS = { name: 120, whatsapp: 40, email: 254, website: 200 };
@@ -177,6 +178,16 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     if (lead && lead.client_id !== clientId) throw new ValidationError('El lead no pertenece a ese cliente');
   }
 
+  // TP-306: campos personalizables. undefined = no se tocan; si vienen, se validan contra las definiciones.
+  const customDefs = async () => TPFields.cleanDefs(await dataStore.getSetting('custom_fields'));
+  async function customFor(entity, input, previous) {
+    if (input === undefined) return undefined;
+    if (input !== null && typeof input !== 'object') throw new ValidationError('Campos personalizados inválidos');
+    const { values, missing } = TPFields.cleanValues((await customDefs())[entity], input || {}, previous || {});
+    if (missing.length) throw new ValidationError(`Completa ${missing.length === 1 ? 'el campo' : 'los campos'}: ${missing.join(', ')}`);
+    return values;
+  }
+
   async function allSettings() {
     const questions = await dataStore.getSetting('lead_questions');
     return {
@@ -184,6 +195,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
       documents: { ...DEFAULT_DOCUMENTS, ...(await dataStore.getSetting('documents') || {}) },
       leadQuestions: normalizeQuestions(Array.isArray(questions) ? questions : DEFAULT_LEAD_QUESTIONS),
       scoring: cleanScoring(await dataStore.getSetting('lead_scoring')),
+      customFields: await customDefs(), // TP-306
       payments: payments ? { ...(await payments.settings()), mercadoPago: payments.mercadoPago.configured } : null,
       reminders: (({ enabled, contactHours, quoteHours, workStart, workEnd }) => ({ enabled, contactHours, quoteHours, workStart, workEnd }))(reminderConfig(await dataStore.getSetting('reminders')))
     };
@@ -237,6 +249,9 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     checkDateRange(preview);
     const clientData = body.client_id ? null : sanitize('clients', body.client);
     if (body.first_followup_at) sanitize('followups', { title: 'x', due_at: body.first_followup_at, type: body.first_followup_type || 'WhatsApp' });
+    const leadCustom = await customFor('leads', body.custom, null); // TP-306
+    const clientCustom = clientData ? await customFor('clients', body.client?.custom, null) : undefined;
+    if (clientData && clientCustom) clientData.custom = clientCustom;
 
     let ownerId = ctx.user.id;
     let autoReason = null;
@@ -277,6 +292,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     if (data.stage !== 'Perdido') data.lost_reason = null;
     else if (!String(data.lost_reason || '').trim()) throw new ValidationError('Elige el motivo de pérdida');
     data.stage_changed_at = nowCancun();
+    if (leadCustom) data.custom = leadCustom;
     // TP-106: si lo registra su propio vendedor, ya está en contacto; si se lo asignaron, corre el tiempo del primer contacto.
     if (ownerId === ctx.user.id || data.stage !== 'Nuevo') data.contacted_at = nowCancun();
     else data.assigned_at = nowCancun();
@@ -301,7 +317,8 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
       followup = await dataStore.insertRecord('followups', followupData, ownerId);
       await audit(req, 'create', 'followups', null, followup);
     }
-    res.status(201).json({ ok: true, record: lead, client, followup, warning });
+    await hooks.emit(dataStore, 'leadCreated', { lead, client, channel: 'Plataforma' }); // TP-307
+    res.status(201).json({ ok: true, record: await dataStore.getRecord('leads', lead.id) || lead, client, followup, warning });
   }));
 
   // Reasignar varios leads a la vez (administrador), con un solo aviso al vendedor.
@@ -345,6 +362,8 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     const current = ctx.mustSee('leads', id);
     const body = req.body || {};
     const data = sanitize('leads', body, { partial: true });
+    const custom = await customFor('leads', body.custom, current.custom); // TP-306
+    if (custom !== undefined) data.custom = custom;
     if (data.canvas) data.canvas = TPTrip.normalizeCanvas(data.canvas, current); // TP-302
     if (data.qualification) data.qualification = scoreQualification(data.qualification, (await allSettings()).leadQuestions);
     if (data.client_id && data.client_id !== current.client_id) ctx.checkRef('clients', data.client_id);
@@ -361,6 +380,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     let record = await dataStore.updateRecord('leads', id, data);
     await audit(req, 'update', 'leads', current, record);
     if (record.stage === 'Vendido' && current.stage !== 'Vendido') await hooks.emit(dataStore, 'leadSold', record); // TP-309
+    if (record.stage !== current.stage) await hooks.emit(dataStore, 'leadStage', { before: current, lead: record }); // TP-307
 
     if (body.owner_id !== undefined && Number(body.owner_id) !== current.owner_id) {
       if (ctx.user.role !== 'admin') throw forbidden('Solo el administrador puede reasignar leads');
@@ -378,7 +398,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
         await assignment.notifyAssigned(owner, [{ id, client: client?.name || 'Cliente', destination: record.destination, phone: client?.phone }], { by: ctx.user.name, req });
       }
     }
-    res.json({ ok: true, record });
+    res.json({ ok: true, record: (await dataStore.getRecord('leads', id)) || record });
   }));
 
   // ---- Cotizaciones: folio automático y efectos en el lead ----
@@ -391,6 +411,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     let record = await insertQuote(data, lead?.owner_id ?? ctx.user.id);
     record = await applyQuoteEffects(record, req);
     await audit(req, 'create', 'quotes', null, record);
+    if (record.status !== 'Borrador') await hooks.emit(dataStore, 'quoteStatus', { before: null, quote: record }); // TP-307
     res.status(201).json({ ok: true, record });
   }));
 
@@ -415,12 +436,15 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     let record = await dataStore.updateRecord('quotes', id, data);
     record = await applyQuoteEffects(record, req);
     await audit(req, 'update', 'quotes', current, record);
+    if (record.status !== current.status) await hooks.emit(dataStore, 'quoteStatus', { before: current, quote: record }); // TP-307
     res.json({ ok: true, record });
   }));
 
   // ---- Clientes ----
   router.post('/clients', requireWrite('clients'), wrap(async (req, res) => {
     const data = sanitize('clients', req.body);
+    const custom = await customFor('clients', req.body?.custom, null); // TP-306
+    if (custom) data.custom = custom;
     // TP-111: no crear un cliente que ya existe (a menos que se confirme).
     if (!req.body?.force) {
       const ctx = await context(req);
@@ -436,7 +460,10 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     const id = parseId(req.params.id);
     const ctx = await context(req);
     const current = ctx.mustSee('clients', id);
-    const record = await dataStore.updateRecord('clients', id, sanitize('clients', req.body, { partial: true }));
+    const data = sanitize('clients', req.body, { partial: true });
+    const custom = await customFor('clients', req.body?.custom, current.custom); // TP-306
+    if (custom !== undefined) data.custom = custom;
+    const record = await dataStore.updateRecord('clients', id, data);
     await audit(req, 'update', 'clients', current, record);
     res.json({ ok: true, record });
   }));
@@ -445,6 +472,8 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
   router.post('/trips', requireWrite('trips'), wrap(async (req, res) => {
     const ctx = await context(req);
     const data = sanitize('trips', req.body);
+    const custom = await customFor('trips', req.body?.custom, null); // TP-306
+    if (custom) data.custom = custom;
     if (data.canvas) data.canvas = TPTrip.normalizeCanvas(data.canvas, data); // TP-302
     checkDateRange(data);
     ctx.checkRef('clients', data.client_id);
@@ -460,6 +489,8 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     const ctx = await context(req);
     const current = ctx.mustSee('trips', id);
     const data = sanitize('trips', req.body, { partial: true });
+    const custom = await customFor('trips', req.body?.custom, current.custom); // TP-306
+    if (custom !== undefined) data.custom = custom;
     if (data.canvas) data.canvas = TPTrip.normalizeCanvas(data.canvas, { ...current, ...data }); // TP-302
     checkDateRange({ ...current, ...data });
     if (data.client_id !== undefined) ctx.checkRef('clients', data.client_id);
@@ -761,6 +792,18 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     res.json({ ok: true, documents });
   }));
 
+  // TP-306: definiciones de campos personalizables (las ve todo el equipo; las edita el administrador).
+  router.get('/custom-fields', wrap(async (req, res) => { res.json({ ok: true, fields: await customDefs(), types: TPFields.TYPES }); }));
+  router.put('/custom-fields', adminOnly, wrap(async (req, res) => {
+    const before = await customDefs();
+    const fields = TPFields.cleanDefs(req.body?.fields || {});
+    await dataStore.setSetting('custom_fields', fields);
+    const count = (f) => Object.entries(f).map(([e, l]) => `${TPFields.ENTITIES[e]} ${l.filter((d) => d.active).length}`).join(' · ');
+    const added = Object.entries(fields).flatMap(([e, l]) => l.filter((d) => !before[e].some((b) => b.key === d.key)).map((d) => d.label));
+    await log(req, 'crm_settings_update', { note: `Campos personalizables: ${count(fields)}${added.length ? ` · nuevos: ${added.join(', ')}` : ''}`.slice(0, 480) });
+    res.json({ ok: true, fields });
+  }));
+
   router.put('/settings/lead-questions', adminOnly, wrap(async (req, res) => {
     const questions = sanitizeQuestions(req.body);
     await dataStore.setSetting('lead_questions', questions);
@@ -831,7 +874,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     }
     const visible = filterData(ctx.scope, ctx.data);
     const users = (await dataStore.listUsers()).map(({ id, name, email, role, active, last_login_at }) => ({ id, name, email, role, active, last_login_at }));
-    const sheets = buildSheets(sections, visible, { users: ctx.user.role === 'admin' ? users : users.map(({ id, name }) => ({ id, name })), questions: (await allSettings()).leadQuestions, range });
+    const sheets = buildSheets(sections, visible, { users: ctx.user.role === 'admin' ? users : users.map(({ id, name }) => ({ id, name })), questions: (await allSettings()).leadQuestions, range, customFields: await customDefs() });
     const day = nowCancun().slice(0, 10);
     const base = sections.length === 1 ? SECTIONS[sections[0]].toLowerCase() : 'travel-partner';
     let file;

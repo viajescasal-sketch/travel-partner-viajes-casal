@@ -11,6 +11,7 @@ const { nowCancun } = require('./crm-schema');
 const { DEFAULT_DOCUMENTS, sellerInfo } = require('./documents');
 const { createQuoteEffects, quoteOptions } = require('./quote-effects');
 const TPContract = require('../public/contrato-core');
+const hooks = require('./hooks');
 
 const TOKEN_RE = /^[a-f0-9]{40}$/;
 const REVIEW_GAP_MS = 60 * 60 * 1000; // un aviso por hora como máximo
@@ -138,6 +139,7 @@ function createPublicQuote(dataStore, assignment, { publicDirectory, payments = 
       }
       let updated = await dataStore.updateRecord('quotes', quote.id, update);
       updated = await applyEffects(updated);
+      await hooks.emit(dataStore, 'quoteStatus', { before: quote, quote: updated }); // TP-307
       const client = await dataStore.getRecord('clients', quote.client_id);
       const lead = quote.lead_id ? await dataStore.getRecord('leads', quote.lead_id) : null;
       const note = `Aceptada en línea por el cliente (${name})${options.length > 1 ? ` · opción ${index + 1} de ${options.length}: ${option.label}` : ''} · ${money(updated.price)}`;

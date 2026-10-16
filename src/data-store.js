@@ -220,9 +220,12 @@ class MySQLDataStore {
     if (!notifCols.length) await this.pool.query('ALTER TABLE crm_notifications ADD COLUMN link VARCHAR(40) NULL AFTER lead_id');
     await this.pool.query(`CREATE TABLE IF NOT EXISTS crm_settings (
       setting_key VARCHAR(60) NOT NULL PRIMARY KEY,
-      setting_value TEXT NOT NULL,
+      setting_value MEDIUMTEXT NOT NULL,
       updated_at DATETIME NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+    // TP-307: las automatizaciones y su bitácora pueden pasar de 64 KB (TEXT) → MEDIUMTEXT.
+    const [settingCol] = await this.pool.query("SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'crm_settings' AND COLUMN_NAME = 'setting_value'");
+    if (settingCol[0] && String(settingCol[0].DATA_TYPE || settingCol[0].data_type).toLowerCase() === 'text') await this.pool.query('ALTER TABLE crm_settings MODIFY setting_value MEDIUMTEXT NOT NULL');
     await this.bootstrapUser(this.env.ADMIN_EMAIL, 'Administrador', 'admin', this.env.ADMIN_INITIAL_PASSWORD);
     await this.bootstrapUser(this.env.PARTNER_EMAIL, 'Paulina', 'travel_partner', this.env.PARTNER_INITIAL_PASSWORD);
   }
