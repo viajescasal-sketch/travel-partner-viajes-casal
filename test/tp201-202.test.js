@@ -114,6 +114,12 @@ test('liga de pago: plan al aceptar, Mercado Pago registra solo, pagos manuales 
   assert.equal(pub.plan.balance, 20000);
   assert.equal(pub.methods.mercadoPago, true);
 
+  // TP-204: con el contrato pendiente de firma no se puede pagar en línea; aquí el administrador lo marca firmado en papel.
+  assert.equal(pub.contract.state, 'pending');
+  assert.equal((await fetch(`${baseUrl}/api/public/pay/${token}/checkout`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 400);
+  assert.equal((await partner('POST', `/api/quotes/${quoteId}/contract`, { action: 'waive' })).status, 403, 'solo el administrador quita la firma');
+  assert.equal((await admin('POST', `/api/quotes/${quoteId}/contract`, { action: 'waive', reason: 'Firmado en papel' })).body.state, 'waived');
+
   // Pagar en línea: crea la preferencia de Mercado Pago (se reutiliza si no cambia el monto)
   const checkout = await (await fetch(`${baseUrl}/api/public/pay/${token}/checkout`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).json();
   assert.match(checkout.url, /mercadopago/);
