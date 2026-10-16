@@ -32,6 +32,7 @@ const { createPostventa } = require('./src/postventa');
 const { createRecompra } = require('./src/recompra');
 const { createContracts } = require('./src/contracts');
 const { createCommissions } = require('./src/commissions');
+const { createAutomations } = require('./src/automations');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -270,7 +271,9 @@ async function createApp(options = {}) {
   app.use(postventa.publicRouter);
   // TP-310: campañas de recompra (bandeja diaria).
   const recompra = createRecompra(dataStore, { assignment, mailer, env: process.env });
-  const reminders = createReminders(dataStore, assignment, process.env, { payments, postventa, recompra });
+  // TP-307: automatizaciones (eventos al momento y por fecha).
+  const automations = createAutomations(dataStore, { assignment, mailer, env: process.env, ...(options.automationsNow ? { now: options.automationsNow } : {}) });
+  const reminders = createReminders(dataStore, assignment, process.env, { payments, postventa, recompra, automations });
   if (!options.skipPurgeTimer && !options.skipReminderTimer) reminders.start();
   const webform = createWebform(dataStore, mailer, process.env, { assignment });
   app.use('/api', webform.router);
@@ -317,6 +320,7 @@ async function createApp(options = {}) {
   app.use('/api', postventa.apiRouter); // TP-308/309
   app.use('/api', recompra.router); // TP-310
   app.use('/api', contracts.apiRouter); // TP-204
+  app.use('/api', automations.router); // TP-307
   app.use('/api', createCommissions(dataStore).router); // TP-205/206
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
@@ -355,6 +359,7 @@ async function createApp(options = {}) {
   app.locals.payments = payments;
   app.locals.postventa = postventa;
   app.locals.recompra = recompra;
+  app.locals.automations = automations;
   return app;
 }
 

@@ -327,3 +327,19 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - **Dashboard**: el vendedor ve su avance del mes (vendido vs. meta, lo que falta) y su comisión por liberar / por pagar / pagada; el administrador ve a todo el equipo. *Ver comisiones* abre el detalle por venta.
 - La comisión queda **Por liberar** hasta que el cliente liquida su plan de pagos, luego **Por pagar**; el administrador la marca **Pagada** en Reportes › *Comisiones de vendedores* (se congela el monto pagado).
 - Cálculo en `public/comisiones-core.js`; rutas `GET|PUT /api/goals`, `POST /api/quotes/:id/seller-commission`. Campo interno `crm_quotes.seller_commission`.
+
+## Campos personalizables (TP-306)
+
+- Configuración › **Campos personalizables** (administrador): campos propios para **Leads, Clientes y Viajes** de tipo texto corto o largo, número, fecha, lista (una o varias opciones) y Sí/No; obligatorio, “Mostrar en tarjetas”, ayuda, orden y activar/desactivar (desactivar oculta el campo sin borrar lo capturado).
+- Aparecen en el formulario del lead, la ficha 360 del cliente (Datos del cliente y resumen en la línea de tiempo) y el viaje; como etiquetas en el tablero, la lista de leads y las tarjetas de viajes; en la búsqueda de leads; en la exportación a Excel/CSV; en la bitácora (un cambio por campo) y en las automatizaciones.
+- Los obligatorios se piden al crear o editar desde el formulario; mover un lead en el tablero o los leads del bot y del formulario web no los exigen.
+- Lógica en `public/campos-core.js`; API `GET|PUT /api/custom-fields`; campos internos `custom` en `crm_leads`, `crm_clients` y `crm_trips`.
+
+## Constructor de automatizaciones (TP-307)
+
+- Configuración › **Automatizaciones** (solo administrador): reglas “**Cuando** … **Si** … **Entonces** …” con interruptor de activa/apagada, duplicar, eliminar, historial de ejecuciones y **Probar sin hacer cambios** con un lead, viaje o cotización.
+- **Cuando:** llega un lead nuevo (plataforma, bot o formulario), cambia de etapa, una cotización cambia de estado, se recibe un pago (o se liquida el viaje), un lead lleva N días sin movimiento, faltan N días para un viaje, pasaron N días del regreso, o la fecha de un campo personalizado (antes/después, cada año). Las de fecha se revisan cada hora en horario laboral y no se repiten.
+- **Si:** condiciones sobre origen, destino, presupuesto, viajeros, etapa, prioridad, puntaje, vendedor, preferencias, monto, estado del viaje y cualquier campo personalizado (todas o alguna).
+- **Entonces:** crear seguimiento, **tarea de WhatsApp con plantilla** (el vendedor la abre desde el seguimiento con “💬 Abrir plantilla” y se marca hecha al enviarla), correo al cliente (respeta “No contactar”), aviso al equipo (campanita y correo opcional), cambiar etapa, asignar vendedor, llenar un campo personalizado y agregar preferencia. Textos con `{nombre}`, `{cliente}`, `{destino}`, `{fechas}`, `{vendedor}`, `{folio}`, `{etapa}`, `{monto}`, `{dias}`.
+- Se precargan 5 reglas de ejemplo **apagadas**. Los recordatorios existentes (TP-106, cobros, postviaje, campañas) siguen igual. Cada ejecución queda en la bitácora (“🤖 Automatización”).
+- Lógica en `public/automatizaciones-core.js` y `src/automations.js`; API `GET|POST /api/automations`, `PUT|DELETE /api/automations/:id`, `POST /api/automations/test`, `POST /api/automations/run`. Campo interno `crm_followups.auto`.
