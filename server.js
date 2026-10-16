@@ -30,6 +30,8 @@ const { createBookings } = require('./src/bookings');
 const { createSuppliers } = require('./src/suppliers');
 const { createPostventa } = require('./src/postventa');
 const { createRecompra } = require('./src/recompra');
+const { createContracts } = require('./src/contracts');
+const { createCommissions } = require('./src/commissions');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -258,7 +260,10 @@ async function createApp(options = {}) {
   // Formulario web público (sitio y landings): crea el lead sin sesión.
   // Recordatorios automáticos (TP-106): cotizaciones sin respuesta y leads sin contacto.
   // TP-201/202: plan de pagos, liga de pago (Mercado Pago opcional) y recordatorios de saldo.
-  const payments = createPayments(dataStore, { assignment, mailer, env: process.env, mercadoPago: options.mercadoPago, publicDirectory, ...(options.paymentsNow ? { now: options.paymentsNow } : {}) });
+  // TP-204: contrato con firma electrónica antes del anticipo (/contrato/<token>).
+  const contracts = createContracts(dataStore, { assignment, mailer, env: process.env, publicDirectory });
+  app.use(contracts.publicRouter);
+  const payments = createPayments(dataStore, { assignment, mailer, env: process.env, mercadoPago: options.mercadoPago, publicDirectory, contracts, ...(options.paymentsNow ? { now: options.paymentsNow } : {}) });
   app.use(payments.publicRouter);
   // TP-308/309: encuesta postviaje y programa de referidos (rutas públicas /encuesta y /r).
   const postventa = createPostventa(dataStore, { assignment, mailer, env: process.env, publicDirectory });
@@ -311,6 +316,8 @@ async function createApp(options = {}) {
   app.use('/api', createSuppliers(dataStore).router); // TP-305
   app.use('/api', postventa.apiRouter); // TP-308/309
   app.use('/api', recompra.router); // TP-310
+  app.use('/api', contracts.apiRouter); // TP-204
+  app.use('/api', createCommissions(dataStore).router); // TP-205/206
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');

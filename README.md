@@ -301,7 +301,29 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 ## Reportes por vendedor y por origen (TP-311)
 
 - **Reportes › Desempeño** con **Por vendedor / Por origen**, periodo (este mes, mes anterior, 90 días, este año, todo) y **CSV**.
-- Columnas: leads, % contactados, **1ª respuesta** (mediana entre la asignación y el primer contacto), cotizaciones enviadas, ventas, ingresos (cotización aceptada), ticket, conversión de los leads del periodo, perdidos, ganadas/cerradas, días al cierre y **utilidad** (venta − costo de las reservas registradas, TP-304). Totales al final.
+- Columnas: leads, % contactados, **1ª respuesta** (mediana entre la asignación y el primer contacto), cotizaciones enviadas, ventas, ingresos (cotización aceptada), ticket, conversión de los leads del periodo, perdidos, ganadas/cerradas, días al cierre y **utilidad** (reservas de tarifa neta: venta − costo; comisionables: comisión del proveedor, TP-205). Totales al final.
 - Leads, contacto y conversión cuentan los leads **creados** en el periodo; ventas, ingresos, perdidos y utilidad, los **cerrados** en el periodo. Por origen, los leads del programa de referidos (TP-309) aparecen como “Programa de referidos”.
-- La tarjeta **Satisfacción** de Reportes ya toma la calificación de las encuestas postviaje (TP-308). Las comisiones por vendedor se agregan con TP-206.
+- La tarjeta **Satisfacción** de Reportes ya toma la calificación de las encuestas postviaje (TP-308). Columna **Comisión vendedor** (TP-206) en la vista por vendedor.
 - Cálculo en `public/reportes-core.js` (también lo usan las pruebas).
+
+## Contrato y términos con firma (TP-204)
+
+- Al armarse el plan de pagos de una venta (aceptada en línea o en la plataforma) la cotización queda con **contrato pendiente de firma**. La liga de pago (`/pagar/<token>`) muestra primero “Paso 1: firma tu contrato” y no deja pagar en línea hasta firmar; al aceptar la cotización en línea, el botón lleva directo al contrato.
+- **Página del cliente `/contrato/<token>`** (misma liga de pago): datos del viaje, total y plan de pagos, cláusulas; el cliente escribe su nombre, marca la aceptación y **firma con el dedo o el mouse**. Se guarda copia del texto firmado, la imagen de la firma, fecha y hora, IP, dispositivo y **huella SHA-256**. Si el contrato cambió mientras lo leía, se le pide revisarlo de nuevo. Puede descargarlo/imprimirlo y le llega copia por correo; el vendedor y el administrador reciben aviso y queda en la ficha 360 y la bitácora.
+- En el **Plan de pagos** se ve el estado del contrato: pendiente (con *Ver contrato*), firmado (y aviso si el total cambió después de la firma), *Pedir firma al cliente* para ventas anteriores y *Lo firmó en papel* (solo administrador).
+- Configuración › **Contrato**: activar/desactivar, título, ciudad y cláusulas con variables (`{cliente}`, `{total}`, `{anticipo}`, `{politicas}`, `{terminos}`…) y vista previa. El texto sugerido es un punto de partida: debe revisarlo un abogado.
+- Lógica en `public/contrato-core.js`; rutas en `src/contracts.js` (`GET /contrato/:token`, `GET /api/public/contract/:token`, `POST /api/public/contract/:token/sign`, `GET|PUT /api/contract/settings`, `GET|POST /api/quotes/:id/contract`). Campo interno `crm_quotes.contract`.
+
+## Comisiones por proveedor (TP-205)
+
+- Cada proveedor indica **cómo ganas**: *Tarifa neta* (utilidad = venta − costo) o *Comisionable* (el proveedor paga un % después del viaje), su % y los **días para cobrar** la comisión (30 por omisión).
+- En **🧾 Reservas** cada servicio tiene *Cómo ganas*; las comisionables registran % y comisión esperada (se calcula sola), **fecha de cobro** (fin del servicio + días del proveedor) y estado **Pendiente / Facturada / Cobrada / Cancelada**, con aviso si se vence.
+- Proveedores › **Comisiones por cobrar**: totales por cobrar, vencidas y cobradas en el mes, agrupadas por proveedor; el administrador y Operaciones cambian el estado (factura y fecha de cobro). API `PATCH /api/trips/:id/bookings/:bid/commission`.
+- La utilidad de reportes y comisiones de vendedores ya suma estas comisiones.
+
+## Metas y comisiones por vendedor (TP-206)
+
+- Configuración › **Metas y comisiones**: meta mensual por vendedor (con ajuste para un mes específico), medida en ventas o en utilidad, y **% de comisión sobre la utilidad**.
+- **Dashboard**: el vendedor ve su avance del mes (vendido vs. meta, lo que falta) y su comisión por liberar / por pagar / pagada; el administrador ve a todo el equipo. *Ver comisiones* abre el detalle por venta.
+- La comisión queda **Por liberar** hasta que el cliente liquida su plan de pagos, luego **Por pagar**; el administrador la marca **Pagada** en Reportes › *Comisiones de vendedores* (se congela el monto pagado).
+- Cálculo en `public/comisiones-core.js`; rutas `GET|PUT /api/goals`, `POST /api/quotes/:id/seller-commission`. Campo interno `crm_quotes.seller_commission`.
