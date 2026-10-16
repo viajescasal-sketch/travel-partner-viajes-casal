@@ -343,3 +343,10 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - **Entonces:** crear seguimiento, **tarea de WhatsApp con plantilla** (el vendedor la abre desde el seguimiento con “💬 Abrir plantilla” y se marca hecha al enviarla), correo al cliente (respeta “No contactar”), aviso al equipo (campanita y correo opcional), cambiar etapa, asignar vendedor, llenar un campo personalizado y agregar preferencia. Textos con `{nombre}`, `{cliente}`, `{destino}`, `{fechas}`, `{vendedor}`, `{folio}`, `{etapa}`, `{monto}`, `{dias}`.
 - Se precargan 5 reglas de ejemplo **apagadas**. Los recordatorios existentes (TP-106, cobros, postviaje, campañas) siguen igual. Cada ejecución queda en la bitácora (“🤖 Automatización”).
 - Lógica en `public/automatizaciones-core.js` y `src/automations.js`; API `GET|POST /api/automations`, `PUT|DELETE /api/automations/:id`, `POST /api/automations/test`, `POST /api/automations/run`. Campo interno `crm_followups.auto`.
+
+## Diseño, avatares y recorrido guiado
+
+- **Pantallas de cualquier tamaño:** el menú lateral se desplaza y se compacta en pantallas bajas (laptops con zoom), y en celular se abre con el botón ☰. Archivo: `public/ui.css`.
+- **Íconos:** un solo juego de íconos de línea (estilo Lucide) en `public/iconos.js`. En HTML se usa `<i data-ic="nombre"></i>`; en JS, `icon('nombre')`.
+- **Avatar de cada agente:** clic en la foto del menú → subir foto o elegir uno de 12 animales ilustrados con movimiento suave (`public/avatares.js`). Sin elección, cada usuario recibe un animal fijo por defecto. Se guarda en el ajuste `ui_prefs` (`PUT /api/me/avatar`).
+- **Recorrido guiado:** aparece solo la primera vez que alguien entra, con la opción "No volver a mostrar". Se repite con "Abrir guía" en el menú, y cada sección tiene un botón **?** con su guía propia (`public/recorrido.js`). En Configuración → Usuarios, el administrador puede volver a mostrarlo a todo el equipo (`POST /api/tour/reset`).

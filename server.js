@@ -33,6 +33,7 @@ const { createRecompra } = require('./src/recompra');
 const { createContracts } = require('./src/contracts');
 const { createCommissions } = require('./src/commissions');
 const { createAutomations } = require('./src/automations');
+const { createPreferencias } = require('./src/preferencias');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -321,6 +322,7 @@ async function createApp(options = {}) {
   app.use('/api', recompra.router); // TP-310
   app.use('/api', contracts.apiRouter); // TP-204
   app.use('/api', automations.router); // TP-307
+  app.use('/api', createPreferencias(dataStore).router); // avatares y recorrido guiado
   app.use('/api', createCommissions(dataStore).router); // TP-205/206
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
