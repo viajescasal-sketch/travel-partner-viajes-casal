@@ -10,6 +10,7 @@ const {
   nowCancun
 } = require('./crm-schema');
 const { ROLE_LABELS, SELLER_ROLES, canWrite, buildScope, isVisible, filterData } = require('./access');
+const { prepareExternalQuote } = require('./quote-attachments'); // TP-113
 const { summaryFor, diffChanges } = require('./audit');
 const QRCode = require('qrcode');
 const {
@@ -408,6 +409,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
   // ---- Cotizaciones: folio automático y efectos en el lead ----
   router.post('/quotes', requireWrite('quotes'), wrap(async (req, res) => {
     const ctx = await context(req);
+    await prepareExternalQuote(req.body, null, dataStore); // TP-113: cotización adjunta (PDF o link)
     const data = sanitize('quotes', req.body);
     ctx.checkRef('clients', data.client_id);
     const lead = ctx.checkRef('leads', data.lead_id);
@@ -432,6 +434,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     const id = parseId(req.params.id);
     const ctx = await context(req);
     const current = ctx.mustSee('quotes', id);
+    await prepareExternalQuote(req.body, current, dataStore); // TP-113
     const data = sanitize('quotes', req.body, { partial: true });
     const clientId = data.client_id ?? current.client_id;
     if (data.client_id !== undefined) ctx.checkRef('clients', data.client_id);
