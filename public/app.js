@@ -751,7 +751,7 @@ function renderQuotes() {
   $('#multiSend').classList.toggle('hidden', !editable);
   renderPayDue();
   $('#quoteGrid').innerHTML = list.length ? list.map((x) =>
-    `<article class="card"><div class="card-top"><div>${editable ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span>${x.status === 'Enviada' && x.reminder_at ? '<span class="contact-chip late" title="Se programó un seguimiento automático">⏰ Sin respuesta</span>' : ''}${x.status === 'Aceptada' && x.acceptance?.by === 'cliente' ? `<span class="contact-chip seen" title="Aceptada por ${escapeHtml(x.acceptance.name)} el ${escapeHtml(fmtDue(x.acceptance.at))}">✅ En línea</span>` : ''}${x.viewed_at ? `<span class="contact-chip seen" title="El cliente abrió la liga ${x.view_count || 1} ${Number(x.view_count) === 1 ? 'vez' : 'veces'}">👀 Vista</span>` : ''}<h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button><button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button></div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}${payStrip(x)}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">Ver PDF</button>${editable ? `<button class="btn secondary small" data-share-quote="${x.id}" title="Liga privada para el cliente">🔗 Liga</button><button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
+    `<article class="card"><div class="card-top"><div>${editable && !x.details?.external ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}${x.details?.external ? `<span class="contact-chip ext-chip" title="Cotización hecha fuera del CRM">📎 ${x.details.external.kind === 'link' ? 'Link' : 'Adjunta'}</span>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span>${x.status === 'Enviada' && x.reminder_at ? '<span class="contact-chip late" title="Se programó un seguimiento automático">⏰ Sin respuesta</span>' : ''}${x.status === 'Aceptada' && x.acceptance?.by === 'cliente' ? `<span class="contact-chip seen" title="Aceptada por ${escapeHtml(x.acceptance.name)} el ${escapeHtml(fmtDue(x.acceptance.at))}">✅ En línea</span>` : ''}${x.viewed_at ? `<span class="contact-chip seen" title="El cliente abrió la liga ${x.view_count || 1} ${Number(x.view_count) === 1 ? 'vez' : 'veces'}">👀 Vista</span>` : ''}<h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button>${x.details?.external ? '' : `<button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button>`}</div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}${payStrip(x)}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">${x.details?.external ? (x.details.external.kind === 'link' ? '🔗 Abrir link' : '📄 Abrir archivo') : 'Ver PDF'}</button>${editable ? `${x.details?.external ? '' : `<button class="btn secondary small" data-share-quote="${x.id}" title="Liga privada para el cliente">🔗 Liga</button>`}<button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
     : `<p class="empty-note">${db.quotes.length ? 'Ninguna cotización coincide con la búsqueda.' : 'Aún no hay cotizaciones. Crea la primera con “+ Nueva cotización”.'}</p>`;
 }
 
@@ -767,6 +767,7 @@ function toggleQuote(id, checked) {
 
 // Abre la cotización o la confirmación con el diseño de Viajes Casal en otra pestaña.
 function openDocument(kind, id, win) {
+  if (kind === 'cotizacion' && typeof isExternalQuote === 'function' && isExternalQuote(quoteById(id))) { openExternalQuote(quoteById(id), win); return; } // TP-113
   const url = `/documento.html?tipo=${kind}&id=${Number(id)}`;
   if (win) { win.location.href = url; return; }
   const opened = window.open(url, '_blank');
@@ -779,13 +780,13 @@ function prepareWhatsapp(ids) {
   if (!chosen.length) { toast('Selecciona al menos una cotización'); return; }
   if (chosen.length > 3 || new Set(chosen.map((q) => q.client_id)).size !== 1) { toast('Selecciona hasta 3 cotizaciones del mismo cliente'); return; }
   const client = clientById(chosen[0].client_id);
-  const single = chosen.length === 1 && chosen[0].details ? chosen[0] : null;
+  const single = chosen.length === 1 && chosen[0].details && !chosen[0].details.external ? chosen[0] : null; // TP-113: las adjuntas usan el mensaje simple
   const lines = single ? [TPDocs.buildQuoteMessage(TPDocs.quoteModel({
     quote: single, client, lead: single.lead_id ? leadById(single.lead_id) : null,
     seller: { name: userName(single.owner_id) }, documents: db.documents, agency: db.agency
   }))] : [
     `Hola ${client?.name || ''}, preparamos estas propuestas para tu viaje:`, '',
-    ...chosen.flatMap((q, i) => [`${i + 1}. ${q.destination} — ${q.hotel}`, `${q.folio} · ${money(q.price)} (${q.mode.toLowerCase()})`, '']),
+    ...chosen.flatMap((q, i) => [`${i + 1}. ${q.destination} — ${q.hotel}`, `${q.folio} · ${money(q.price)} (${q.mode.toLowerCase()})`, ...(q.details?.external?.kind === 'link' ? [q.details.external.url] : []), '']),
     'Quedo atenta a tus comentarios.'
   ];
   const pending = chosen.filter((q) => ['Borrador', 'PDF generado'].includes(q.status));
@@ -1171,6 +1172,7 @@ function leadFollowupsHtml(lead) {
 }
 function leadModal(id, presetClientId) {
   if (!canWrite('leads')) return;
+  if (id && typeof leadFile === 'function') { leadFile(Number(id)); return; } // TP-008: ficha del lead con pestañas
   const lead = id ? leadById(id) : null;
   const client = lead ? clientById(lead.client_id) : presetClientId ? clientById(presetClientId) : null;
   const clientFields = client
@@ -1355,6 +1357,7 @@ function proposalHtml(det, p, i) {
 }
 
 function quoteModal(id, preset = {}) {
+  if (id && typeof isExternalQuote === 'function' && isExternalQuote(quoteById(id))) { externalQuoteModal(Number(id)); return; } // TP-113
   if (!canWrite('quotes')) { if (id) openDocument('cotizacion', id); return; }
   const quote = id ? quoteById(id) : null;
   if (!quote && !db.clients.length) { toast('Primero registra un lead o un cliente'); return; }
@@ -1630,7 +1633,7 @@ function clientModal(id) {
     ${typeof customFieldsHtml === 'function' ? customFieldsHtml('clients', c?.custom) : ''}
     <p class="full dupe-warn hidden"></p>
     </fieldset>
-    ${c ? `<div class="full quick-actions">${canWrite('leads') ? `<button type="button" class="btn secondary small" data-new-lead-client="${c.id}">Nuevo lead</button>` : ''}${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-quote-for="${c.id}">Nueva cotización</button>` : ''}${canWrite('trips') ? `<button type="button" class="btn secondary small" data-new-trip-client="${c.id}">Nuevo viaje</button>` : ''}</div>` : ''}
+    ${c ? `<div class="full quick-actions">${canWrite('leads') ? `<button type="button" class="btn secondary small" data-new-lead-client="${c.id}">Nuevo lead</button>` : ''}${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-quote-for="${c.id}">Nueva cotización</button><button type="button" class="btn secondary small" data-attach-quote-client="${c.id}">📎 Adjuntar cotización</button>` : ''}${canWrite('trips') ? `<button type="button" class="btn secondary small" data-new-trip-client="${c.id}">Nuevo viaje</button>` : ''}</div>` : ''}
     ${history}
     ${c ? historyButton('clients', c.id) : ''}
     ${deleteBlock('cliente y todo su historial', c?.id)}
@@ -2018,7 +2021,7 @@ async function clientFile(id, opts = {}) {
     <div class="c360-actions">
       ${c.phone ? `<button type="button" class="btn primary small" data-c360="wa">💬 WhatsApp</button>` : ''}
       ${write ? '<button type="button" class="btn secondary small" data-c360="payment">💰 Registrar pago</button><button type="button" class="btn secondary small" data-c360="review">⭐ Registrar reseña</button><button type="button" class="btn secondary small" data-c360="note">📝 Agregar nota</button>' : ''}
-      ${canWrite('leads') ? `<button type="button" class="btn secondary small" data-new-lead-client="${c.id}">+ Lead</button>` : ''}${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-quote-for="${c.id}">+ Cotización</button>` : ''}${canWrite('trips') ? `<button type="button" class="btn secondary small" data-new-trip-client="${c.id}">+ Viaje</button>` : ''}
+      ${canWrite('leads') ? `<button type="button" class="btn secondary small" data-new-lead-client="${c.id}">+ Lead</button>` : ''}${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-quote-for="${c.id}">+ Cotización</button><button type="button" class="btn secondary small" data-attach-quote-client="${c.id}">📎 Adjuntar cotización</button>` : ''}${canWrite('trips') ? `<button type="button" class="btn secondary small" data-new-trip-client="${c.id}">+ Viaje</button>` : ''}
     </div>
     <div class="c360-tabs"><button type="button" data-c360-tab="timeline">Línea de tiempo</button><button type="button" data-c360-tab="data">Datos del cliente</button></div>
     <section class="c360-pane" data-pane="timeline">

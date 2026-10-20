@@ -1,0 +1,88 @@
+/* TP-008 · Ficha del lead (Registro comercial) */
+.lf { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.lf > * { min-width: 0; }
+.lf-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; }
+.lf-who { display: grid; gap: 8px; min-width: 0; }
+.lf-who .client b { font-size: 15px; }
+.lf-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lf-chips .qual-chip { margin-left: 0; font-size: 11px; padding: 3px 9px; }
+.lf-stage { font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 20px; background: #e8f8fa; color: #007985; }
+.lf-stage.s-Vendido { background: #e8f7ef; color: #18815d; }
+.lf-stage.s-Perdido { background: #fdecec; color: #b13e3e; }
+.lf-contact { display: flex; flex-wrap: wrap; gap: 6px; }
+.lf-contact .btn { text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.lf-sub { margin: -4px 2px 0; font-size: 13px; color: var(--text); }
+.lf-sub small { color: var(--muted); }
+
+/* Barra de etapas */
+.lf-stages { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
+.lf-stages button { flex: 1 0 auto; border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 10px; padding: 9px 12px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.lf-stages button:hover { border-color: var(--teal); color: var(--text); }
+.lf-stages button.done { background: rgba(0, 184, 200, .08); color: #007985; border-color: rgba(0, 184, 200, .35); }
+.lf-stages button.on { background: linear-gradient(135deg, var(--teal), #058ab6); color: #fff; border-color: transparent; }
+.lf-stages button.lost { flex: 0 0 auto; color: #b13e3e; }
+.lf-stages button.lost.on { background: #b13e3e; color: #fff; }
+.lf-lost { margin: -6px 2px 0; font-size: 12px; color: #b13e3e; }
+
+/* Acciones rápidas */
+.lf-actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.lf-actions button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 12px; padding: 10px 6px; font-size: 11px; font-weight: 700; cursor: pointer; display: grid; justify-items: center; gap: 4px; text-align: center; line-height: 1.2; }
+.lf-actions button span { font-size: 20px; }
+.lf-actions button:hover { border-color: var(--teal); background: rgba(0, 184, 200, .06); }
+
+/* Pestañas */
+.lf-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.lf-tabs button { border: 0; background: transparent; color: var(--muted); padding: 10px 12px; font-weight: 700; font-size: 13px; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; }
+.lf-tabs button.on { color: var(--text); border-bottom-color: var(--teal); }
+.lf-tabs em { font-style: normal; background: var(--coral); color: #fff; border-radius: 10px; padding: 0 6px; font-size: 10px; margin-left: 3px; }
+.lf-panel { display: grid; gap: 12px; min-height: 120px; }
+.lf-panel .modal-form { margin: 0; }
+.lf-tab-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Resumen */
+.lf-next { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; text-align: left; border: 1px solid rgba(0, 184, 200, .45); background: rgba(0, 184, 200, .08); color: var(--text); border-radius: 14px; padding: 12px 14px; cursor: pointer; }
+.lf-next.late { border-color: rgba(177, 62, 62, .45); background: rgba(177, 62, 62, .07); }
+.lf-next-ico { font-size: 22px; }
+.lf-next small { display: block; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--teal); font-weight: 800; }
+.lf-next b { display: block; }
+.lf-next em { font-style: normal; font-size: 12px; color: var(--muted); }
+.lf-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.lf-facts button { text-align: left; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 10px; padding: 9px 10px; cursor: pointer; display: grid; gap: 2px; min-width: 0; }
+.lf-facts small { font-size: 10px; color: var(--muted); }
+.lf-facts b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lf-block { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: grid; gap: 8px; }
+.lf-block-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.lf-notes { margin: 0; white-space: pre-wrap; color: var(--text); font-size: 13px; }
+.lf-quote { display: flex; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; background: var(--bg); }
+.lf-quote-main { flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 10px; align-items: center; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; padding: 2px; }
+.lf-quote-main small { display: block; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lf-quote-main > span:first-child { min-width: 0; }
+.lf-quote-price { display: grid; justify-items: end; gap: 3px; font-weight: 800; white-space: nowrap; }
+.lf-quote-acts { display: flex; gap: 4px; }
+.lf-timeline { display: grid; gap: 2px; }
+.lf-timeline > div { display: grid; grid-template-columns: 28px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.lf-timeline p { margin: 0; color: var(--text); }
+.lf-timeline small { display: block; color: var(--muted); font-size: 11px; }
+
+/* TP-113 · Cotización adjunta */
+.ext-chip { background: #eef2ff; color: #4651b5; }
+.xq-kind { display: flex; gap: 6px; }
+.xq-kind button { flex: 1; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 10px; padding: 10px; font-weight: 700; cursor: pointer; }
+.xq-kind button.on { border-color: var(--teal); background: rgba(0, 184, 200, .1); }
+.xq-drop { display: grid; justify-items: center; gap: 4px; border: 2px dashed var(--border); border-radius: 14px; padding: 22px 12px; cursor: pointer; text-align: center; }
+.xq-drop.over, .xq-drop:hover { border-color: var(--teal); background: rgba(0, 184, 200, .06); }
+.xq-drop small { color: var(--muted); font-weight: 500; }
+.xq-busy { color: var(--teal); font-weight: 700; }
+.xq-file { display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
+
+@media (max-width: 760px) {
+  .lf-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lf-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lf-quote { flex-wrap: wrap; }
+}
+@media (max-width: 520px) {
+  .lf-head { padding: 10px; }
+  .lf-contact .btn { flex: 1 1 auto; justify-content: center; }
+  .lf-actions button { font-size: 10px; padding: 8px 4px; }
+  .lf-quote-main { flex-wrap: wrap; }
+}
