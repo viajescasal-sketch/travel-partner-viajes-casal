@@ -116,7 +116,7 @@ test('TP-009: solicitud de precio → cotización → aceptación → confirmaci
   const dec = await partner('POST', `/api/trips/${trip.id}/bookings/rtras01/portal/decision`, { accept: true });
   assert.equal(dec.status, 200);
   assert.equal(dec.body.booking.cost, 1250);
-  assert.equal(dec.body.booking.supplier_due, '2026-12-20');
+  assert.equal(dec.body.booking.supplier_due, '2026-12-15', 'sin fecha de pago: 5 días antes del viaje');
   assert.equal((await partner('POST', `/api/trips/${trip.id}/bookings/rtras01/portal/decision`, { accept: true })).status, 400, 'una sola decisión');
   assert.equal((await provider('POST', `/api/proveedor/services/${trip.id}/rtras01/quote`, { amount: 2000 })).status, 400, 'ya no cambia el precio');
 
@@ -205,5 +205,9 @@ test('TP-009: utilidades del portal (secciones, pagos y calendario)', () => {
   assert.equal(g[0].date, '2026-11-30', 'empieza en lunes');
   assert.equal(g.length % 7, 0);
   assert.equal(P.shiftMonth('2026-12', 1), '2027-01');
+  assert.equal(P.defaultPayDue('2026-12-20', '2026-12-22', '2026-10-20'), '2026-12-15');
+  assert.equal(P.defaultPayDue('2026-03-03', '', '2026-02-01'), '2026-02-26', 'cruza de mes');
+  assert.equal(P.defaultPayDue('2026-10-22', '', '2026-10-20'), '2026-10-20', 'si ya pasó, queda hoy');
+  assert.equal(P.defaultPayDue('', '2026-12-22', '2026-10-20'), '2026-12-17', 'sin viaje, usa la fecha del servicio');
   assert.equal(P.cleanDetails({ adults: -3, return_date: '2026-01-01', service_date: '2026-02-01' }).return_date, '2026-02-01');
 });
