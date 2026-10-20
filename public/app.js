@@ -31,12 +31,13 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const money = (n) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(Number(n) || 0);
 const initials = (n) => String(n || '?').split(' ').filter(Boolean).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
-const ROLE_LABELS = { admin: 'Administrador', travel_partner: 'Vendedor', operaciones: 'Operaciones', consulta: 'Consulta' };
+const ROLE_LABELS = { admin: 'Administrador', travel_partner: 'Vendedor', operaciones: 'Operaciones', consulta: 'Consulta', proveedor: 'Proveedor' };
 const WRITE_RULES = {
   admin: ['clients', 'leads', 'quotes', 'trips', 'followups'],
   travel_partner: ['clients', 'leads', 'quotes', 'trips', 'followups'],
   operaciones: ['trips', 'followups'],
-  consulta: []
+  consulta: [],
+  proveedor: []
 };
 const isAdmin = () => currentUser?.role === 'admin';
 const isOps = () => currentUser?.role === 'operaciones';
@@ -3067,7 +3068,7 @@ function fmtStamp(value) {
 function renderUsers() {
   $('#userRows').innerHTML = usersCache.length ? usersCache.map((u) => `<tr>
     <td>${clientCell({ name: u.name }, u.email)}</td>
-    <td>${escapeHtml(u.roleLabel)}</td>
+    <td>${escapeHtml(u.roleLabel)}${u.role === 'proveedor' ? `<br><small class="muted">${escapeHtml((db.suppliers || []).find((s) => s.id === u.supplierId)?.name || 'Sin proveedor ligado')}</small>` : ''}</td>
     <td><span class="status ${u.active ? (u.mustChangePassword ? 'quoted' : 'accepted') : 'pill-off'}">${u.active ? (u.mustChangePassword ? 'Pendiente de primer acceso' : 'Activo') : 'Desactivado'}</span></td>
     <td>${u.twofa ? (u.twofaApp ? 'App' : 'Correo') : '—'}</td>
     <td>${escapeHtml(fmtStamp(u.lastLoginAt))}</td>
@@ -3096,24 +3097,27 @@ function userModal(id) {
     ${field('Nombre*', `<input name="name" required maxlength="120" value="${escapeHtml(u?.name)}">`)}
     ${field('Correo*', `<input name="email" type="email" required maxlength="254" value="${escapeHtml(u?.email)}" ${u ? 'disabled' : ''}>`)}
     ${field('Rol', `<select name="role" ${self ? 'disabled' : ''}>${roleOptions}</select>`)}
+    <label class="full${(u?.role || 'travel_partner') === 'proveedor' ? '' : ' hidden'}" data-user-supplier>Proveedor del catálogo<select name="supplier_id"><option value="">Elige el proveedor…</option>${options((db.suppliers || []).filter((s) => s.active !== false || s.id === u?.supplierId).map((s) => [String(s.id), `${s.name} · ${s.type}`]), u?.supplierId ? String(u.supplierId) : '')}</select><small class="muted">Este usuario solo verá su portal: solicitudes de precio, servicios por confirmar y su calendario de pagos.</small></label>
     ${u ? field('Estado', `<select name="active" ${self ? 'disabled' : ''}>${options([['1', 'Activo'], ['0', 'Desactivado']], u.active ? '1' : '0')}</select>`) : ''}
     ${self ? '<p class="full note-warn">No puedes cambiar tu propio rol ni desactivar tu cuenta.</p>' : ''}
     ${u ? '' : '<p class="full muted">Al guardar se genera una contraseña temporal para compartir con el usuario.</p>'}
-    ${u && u.role !== 'consulta' ? `<div class="full"><button type="button" class="link" data-user-profile="${u.id}">Foto, WhatsApp y presentación para documentos</button></div>` : ''}
+    ${u && !['consulta', 'proveedor'].includes(u.role) ? `<div class="full"><button type="button" class="link" data-user-profile="${u.id}">Foto, WhatsApp y presentación para documentos</button></div>` : ''}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${u ? 'Guardar cambios' : 'Crear usuario'}</button></div></form>`;
   openModal('USUARIOS', u ? `Editar a ${u.name}` : 'Nuevo usuario', html);
+  const roleSel = $('#modalBody select[name="role"]');
+  if (roleSel) roleSel.onchange = () => $('#modalBody [data-user-supplier]').classList.toggle('hidden', roleSel.value !== 'proveedor'); // TP-009
   bindForm(async (v) => {
     try {
       if (u) {
         const body = { name: v.name };
-        if (!self) { body.role = v.role; body.active = v.active === '1'; }
+        if (!self) { body.role = v.role; body.active = v.active === '1'; if (v.role === 'proveedor') body.supplier_id = Number(v.supplier_id) || null; }
         await send('PATCH', `/api/users/${u.id}`, body);
         toast(body.active === false ? `${v.name} ya no puede entrar` : 'Usuario actualizado');
         await loadAll();
         await loadUsers();
         return true;
       }
-      const result = await send('POST', '/api/users', { name: v.name, email: v.email, role: v.role });
+      const result = await send('POST', '/api/users', { name: v.name, email: v.email, role: v.role, ...(v.role === 'proveedor' ? { supplier_id: Number(v.supplier_id) || null } : {}) });
       await loadAll();
       await loadUsers();
       showTemporaryPassword(result.user, result.temporaryPassword, `Usuario creado con el rol ${result.user.roleLabel}.`);
@@ -3221,6 +3225,8 @@ function showLogin() {
   $('#loginPassword').value = '';
 }
 function applyUser(user) {
+  // TP-009: el proveedor trabaja en su propio portal.
+  if (user.role === 'proveedor' && !user.mustChangePassword) { location.replace('/proveedor'); return; }
   currentUser = user;
   $('#profileName').textContent = user.name;
   $('#profileInitial').textContent = user.name.charAt(0).toUpperCase();
@@ -3253,6 +3259,7 @@ function showPasswordChange() {
       await send('POST', '/api/auth/change-password', { currentPassword: values.currentPassword, newPassword: values.newPassword });
       passwordChangeRequired = false;
       currentUser.mustChangePassword = false;
+      if (currentUser.role === 'proveedor') { location.replace('/proveedor'); return; } // TP-009
       $('#closeModal').classList.remove('hidden');
       close();
       toast('Contraseña actualizada correctamente');

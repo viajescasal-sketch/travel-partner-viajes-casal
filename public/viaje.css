@@ -273,3 +273,13 @@ body.dark .ref-box { background: rgba(0, 184, 200, .12); }
 .au-match { max-width: 260px; }
 .au-editor code { font-size: 11px; background: var(--bg); padding: 1px 4px; border-radius: 4px; }
 @media (max-width: 640px) { .au-rule { grid-template-columns: auto minmax(0, 1fr); } .au-acts { grid-column: 1 / -1; justify-content: flex-start; } .au-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+/* TP-009 · Portal del proveedor dentro de la reserva */
+.pt-box { margin-top: 10px; border: 1px dashed var(--border); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; font-size: 12px; background: var(--bg); }
+.pt-box > span { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pt-box.pt-quoted { border-style: solid; border-color: var(--teal); background: rgba(0, 184, 200, .07); }
+.pt-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pt-actions { gap: 8px; }
+.bk-pill.pt-quoted { background: #e8f8fa; color: #007985; }
+.pt-log summary { cursor: pointer; color: var(--muted); font-size: 11px; }
+.pt-log div { padding: 3px 0; border-bottom: 1px solid var(--border); }

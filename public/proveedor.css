@@ -1,0 +1,122 @@
+/* TP-009 · Portal del proveedor (pensado primero para celular) */
+:root { --navy: #073b66; --teal: #00b8c8; --coral: #ff7959; --gold: #f6b93b; --green: #18815d; --red: #b13e3e; --bg: #f4f7f9; --surface: #fff; --text: #203342; --muted: #6c7b87; --border: #dce6ea; --shadow: 0 10px 28px rgba(7, 59, 102, .08); }
+body.dark { --bg: #0e1720; --surface: #16222d; --text: #edf4f7; --muted: #99a9b4; --border: #2b3a46; --shadow: 0 10px 28px rgba(0, 0, 0, .3); }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+h2, h3 { font-family: Manrope, Inter, sans-serif; margin: 0; color: var(--navy); }
+body.dark h2, body.dark h3 { color: #fff; }
+button, input, select, textarea { font: inherit; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+
+.pv-top { position: sticky; top: 0; z-index: 30; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; background: var(--navy); color: #fff; }
+.pv-brand { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.pv-brand img { width: 36px; height: 36px; border-radius: 50%; background: #fff; border: 2px solid var(--gold); object-fit: contain; }
+.pv-brand div { display: flex; flex-direction: column; min-width: 0; }
+.pv-brand small { color: #a9c9d9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv-top-actions { position: relative; display: flex; gap: 6px; }
+.pv-icon { width: 38px; height: 38px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .12); color: inherit; cursor: pointer; font-weight: 800; }
+.pv-modal .pv-icon { background: var(--bg); }
+.pv-menu { position: absolute; right: 0; top: 46px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 8px; min-width: 220px; display: grid; }
+.pv-menu p { margin: 4px 8px 8px; font-size: 12px; color: var(--muted); }
+.pv-menu button { border: 0; background: transparent; text-align: left; padding: 10px; border-radius: 8px; cursor: pointer; color: var(--text); }
+.pv-menu button:hover { background: var(--bg); }
+
+.pv-tabs { position: sticky; top: 58px; z-index: 20; display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.pv-tabs button { border: 0; background: transparent; padding: 9px 12px; border-radius: 10px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.pv-tabs button.active { background: rgba(0, 184, 200, .14); color: var(--text); }
+.pv-tabs em { font-style: normal; background: var(--coral); color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 11px; margin-left: 2px; }
+.pv-tabs em:empty { display: none; }
+
+.pv-main { max-width: 980px; margin: 0 auto; padding: 16px; }
+.pv-loading { text-align: center; color: var(--muted); padding: 40px 0; }
+.pv-head { margin: 4px 0 14px; }
+.pv-head p { margin: 4px 0 0; color: var(--muted); }
+.pv-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+.pv-kpis button, .pv-kpis div { text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; box-shadow: var(--shadow); color: var(--text); display: flex; flex-direction: column; gap: 4px; cursor: default; }
+.pv-kpis button { cursor: pointer; }
+.pv-kpis span { font-size: 11px; color: var(--muted); }
+.pv-kpis b { font-size: 22px; }
+.pv-kpis small { font-size: 11px; color: var(--muted); }
+.pv-kpis .warn b { color: #b07200; }
+.pv-kpis .danger b { color: var(--red); }
+.pv-sub { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.pv-sub button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 20px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+.pv-sub button.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.pv-day { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--teal); margin: 16px 0 8px; }
+.pv-empty { background: var(--surface); border: 1px dashed var(--border); border-radius: 14px; padding: 22px; text-align: center; color: var(--muted); }
+
+.pv-card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--teal); border-radius: 14px; padding: 14px; margin-bottom: 10px; box-shadow: var(--shadow); display: grid; gap: 8px; }
+.pv-card.s-Solicitada { border-left-color: var(--coral); }
+.pv-card.s-Cotizada { border-left-color: var(--gold); }
+.pv-card.s-Aceptada { border-left-color: var(--coral); }
+.pv-card.s-Confirmada { border-left-color: var(--green); }
+.pv-card.closed { opacity: .65; border-left-color: var(--border); }
+.pv-card-top { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+.pv-card-top h3 { font-size: 15px; }
+.pv-when { font-weight: 800; font-size: 15px; white-space: nowrap; }
+.pv-pill { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; background: var(--bg); color: var(--muted); white-space: nowrap; }
+.pv-pill.p-Solicitada, .pv-pill.p-Aceptada { background: #fff0ec; color: #c2502f; }
+.pv-pill.p-Cotizada { background: #fff5d9; color: #916300; }
+.pv-pill.p-Confirmada { background: #e8f7ef; color: var(--green); }
+.pv-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; font-size: 13px; }
+.pv-facts div { display: flex; flex-direction: column; min-width: 0; }
+.pv-facts span { font-size: 11px; color: var(--muted); }
+.pv-facts b { font-weight: 600; overflow-wrap: anywhere; }
+.pv-facts .full { grid-column: 1 / -1; }
+.pv-note { background: var(--bg); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+.pv-note.ok { background: rgba(24, 129, 93, .1); }
+.pv-note.bad { background: rgba(177, 62, 62, .09); }
+.pv-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pv-form label { font-size: 12px; font-weight: 700; display: grid; gap: 4px; }
+.pv-form .full { grid-column: 1 / -1; }
+.pv-form input, .pv-form textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); }
+.pv-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.pv-btn { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
+.pv-btn.primary { background: linear-gradient(135deg, var(--teal), #058ab6); color: #fff; }
+.pv-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+.pv-btn.link { background: transparent; color: var(--red); padding: 10px 6px; }
+.pv-btn:disabled { opacity: .55; cursor: wait; }
+.pv-wa { color: var(--green); font-weight: 700; text-decoration: none; }
+details.pv-log summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+details.pv-log div { font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+
+/* Calendario de pagos */
+.pv-cal-head { display: flex; justify-content: space-between; align-items: center; margin: 6px 0 10px; }
+.pv-cal-head button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 10px; width: 38px; height: 38px; cursor: pointer; font-size: 18px; }
+.pv-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-bottom: 14px; }
+.pv-cal > span { font-size: 11px; text-align: center; color: var(--muted); font-weight: 700; }
+.pv-cal .d { min-height: 66px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px; display: flex; flex-direction: column; gap: 3px; font-size: 11px; cursor: default; text-align: left; color: var(--text); }
+.pv-cal .d.out { opacity: .4; }
+.pv-cal .d.today { outline: 2px solid var(--teal); }
+.pv-cal .d.has { cursor: pointer; }
+.pv-cal .d.sel { background: rgba(0, 184, 200, .12); }
+.pv-cal .d i { font-style: normal; font-weight: 700; border-radius: 6px; padding: 2px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-cal .d i.paid { background: #e8f7ef; color: var(--green); }
+.pv-cal .d i.due { background: #fff5d9; color: #916300; }
+.pv-cal .d i.late { background: #fdecec; color: var(--red); }
+.pv-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.pv-legend i { border: 1px solid var(--border); display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.pv-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--surface); border-radius: 12px; overflow: hidden; }
+.pv-table th, .pv-table td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); }
+.pv-table th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.pv-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+.pv-notice { display: block; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 8px; color: var(--text); }
+.pv-notice.unread { border-left: 4px solid var(--teal); }
+.pv-notice small { display: block; color: var(--muted); margin-top: 3px; }
+
+.pv-modal-bg { position: fixed; inset: 0; background: rgba(5, 20, 32, .6); display: grid; place-items: center; z-index: 100; padding: 16px; }
+.pv-modal { background: var(--surface); color: var(--text); width: min(460px, 100%); border-radius: 18px; padding: 20px; max-height: 90vh; overflow: auto; }
+.pv-modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.pv-toasts { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 120; display: grid; gap: 6px; width: min(420px, calc(100% - 32px)); }
+.pv-toast { background: var(--navy); color: #fff; padding: 12px 14px; border-radius: 10px; border-left: 4px solid var(--teal); }
+
+@media (max-width: 720px) {
+  .pv-kpis { grid-template-columns: repeat(2, 1fr); }
+  .pv-cal .d { min-height: 48px; }
+  .pv-cal .d i { font-size: 10px; padding: 1px 2px; }
+}
+@media (max-width: 420px) {
+  .pv-facts, .pv-form { grid-template-columns: 1fr; }
+  .pv-card-top { flex-direction: column; }
+}

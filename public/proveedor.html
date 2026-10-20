@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Portal de proveedores · Viajes Casal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/proveedor.css?v=tp009" />
+    <link rel="icon" href="/brand/logo-mark.png" />
+  </head>
+  <body>
+    <header class="pv-top">
+      <div class="pv-brand">
+        <img src="/brand/logo-mark.png" alt="" />
+        <div><b>Portal de proveedores</b><small id="pvSupplier">Viajes Casal</small></div>
+      </div>
+      <div class="pv-top-actions">
+        <button type="button" class="pv-icon" id="pvTheme" title="Modo oscuro" aria-label="Cambiar tema">☾</button>
+        <button type="button" class="pv-icon" id="pvMenuBtn" aria-haspopup="true" aria-expanded="false" title="Mi cuenta"><span id="pvInitial">·</span></button>
+        <div class="pv-menu hidden" id="pvMenu" role="menu">
+          <p id="pvUser"></p>
+          <button type="button" role="menuitem" id="pvPass">Cambiar mi contraseña</button>
+          <button type="button" role="menuitem" id="pvLogout">Cerrar sesión</button>
+        </div>
+      </div>
+    </header>
+    <nav class="pv-tabs" id="pvTabs" aria-label="Secciones">
+      <button type="button" data-tab="home" class="active">Inicio</button>
+      <button type="button" data-tab="requests">Solicitudes <em id="cntRequests"></em></button>
+      <button type="button" data-tab="services">Servicios <em id="cntServices"></em></button>
+      <button type="button" data-tab="payments">Pagos</button>
+      <button type="button" data-tab="notices">Avisos <em id="cntNotices"></em></button>
+    </nav>
+    <main class="pv-main">
+      <p class="pv-loading" id="pvLoading">Cargando tu portal…</p>
+      <section id="tab-home" class="pv-tab"></section>
+      <section id="tab-requests" class="pv-tab hidden"></section>
+      <section id="tab-services" class="pv-tab hidden"></section>
+      <section id="tab-payments" class="pv-tab hidden"></section>
+      <section id="tab-notices" class="pv-tab hidden"></section>
+    </main>
+    <div class="pv-modal-bg hidden" id="pvModalBg"><div class="pv-modal" role="dialog" aria-modal="true" aria-labelledby="pvModalTitle"><div class="pv-modal-head"><h3 id="pvModalTitle"></h3><button type="button" class="pv-icon" id="pvModalClose" aria-label="Cerrar">✕</button></div><div id="pvModalBody"></div></div></div>
+    <div class="pv-toasts" id="pvToasts" aria-live="polite"></div>
+    <script src="/proveedor-core.js?v=tp009"></script>
+    <script src="/proveedor.js?v=tp009"></script>
+  </body>
+</html>

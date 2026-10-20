@@ -414,12 +414,15 @@
       cost: numOr(raw.cost), price: numOr(raw.price),
       supplier_due: isDate(raw.supplier_due) ? raw.supplier_due : '',
       supplier_paid: raw.supplier_paid === true,
+      supplier_paid_at: raw.supplier_paid === true && isDate(raw.supplier_paid_at) ? raw.supplier_paid_at : '',
       voucher_ids: (Array.isArray(raw.voucher_ids) ? raw.voucher_ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 10),
       source: /^b[a-z0-9]{3,12}$/.test(String(raw.source || '')) ? raw.source : '',
       notes: t('notes', 1000),
       // TP-205: comisión del proveedor
       model: PROFIT_MODELS.includes(raw.model) ? raw.model : 'neta',
-      commission_pct: '', commission_amount: '', commission_due: '', commission_status: 'Pendiente', commission_invoice: '', commission_paid_at: ''
+      commission_pct: '', commission_amount: '', commission_due: '', commission_status: 'Pendiente', commission_invoice: '', commission_paid_at: '',
+      // TP-009: solicitud al proveedor por su portal. Solo el servidor la escribe (rutas del portal).
+      portal: raw.portal && typeof raw.portal === 'object' && !Array.isArray(raw.portal) ? raw.portal : null
     };
     if (b.end_date && b.start_date && b.end_date < b.start_date) b.end_date = b.start_date;
     if (b.model === 'comision') {

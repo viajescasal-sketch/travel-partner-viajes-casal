@@ -29,6 +29,83 @@
   window.supplierCommission = (id) => { const s = supById(id); return s ? ` <small class="muted">· ${H(s.type)}${s.commission !== '' && s.commission != null ? ` · ${s.commission}% comisión` : ''}</small>` : ''; };
   window.matchSupplier = (name) => T.findSupplierByName((db.suppliers || []).filter((s) => s.active !== false), name);
 
+  /* ---------------- TP-009 · Portal del proveedor (desde la reserva) ---------------- */
+  const PV = window.TPProv;
+  const PT_CLASS = { Solicitada: 'bk-req', Cotizada: 'pt-quoted', Aceptada: 'bk-req', Confirmada: 'bk-ok', Rechazada: 'bk-off', 'No disponible': 'bk-off', Cancelada: 'bk-off' };
+  let portalLinks = null; // { [supplierId]: [{ id, name, active }] }
+  async function loadPortalLinks(force) {
+    if (portalLinks && !force) return portalLinks;
+    try { portalLinks = (await api('/api/supplier-portal/links')).suppliers || {}; } catch { portalLinks = portalLinks || {}; }
+    return portalLinks;
+  }
+  window.loadPortalLinks = loadPortalLinks;
+  const hasPortal = (sid) => Boolean(sid && (portalLinks?.[sid] || []).some((u) => u.active));
+  function portalHtml(b, saved, editable) {
+    const p = b.portal;
+    const sup = b.supplier_id ? supById(b.supplier_id) : null;
+    if (!p) {
+      if (!sup || b.status === 'Cancelada') return '';
+      if (!hasPortal(sup.id)) return sup.type === 'Traslados' ? `<div class="pt-box muted">🚐 ${H(sup.name)} aún no tiene acceso al portal del proveedor${isAdmin() ? ' · créalo en Configuración › Usuarios (rol Proveedor)' : ''}.</div>` : '';
+      return `<div class="pt-box"><span>🚐 <b>Portal del proveedor</b> · ${H(sup.name)} puede cotizar y confirmar en línea.</span>${editable ? (saved ? '<button type="button" class="btn primary small" data-pt-request>📨 Pedir precio al proveedor</button>' : '<small class="muted">Guarda las reservas para poder enviarle la solicitud.</small>') : ''}</div>`;
+    }
+    const d = p.details || {};
+    const q = p.quote;
+    const actions = !editable ? '' : [
+      p.state === 'Cotizada' ? '<button type="button" class="btn primary small" data-pt-accept>✓ Aceptar precio</button><button type="button" class="btn secondary small" data-pt-reject>Rechazar</button>' : '',
+      p.state === 'Solicitada' ? '<button type="button" class="btn secondary small" data-pt-request>Editar solicitud</button>' : '',
+      PV.CLOSED.includes(p.state) && b.status !== 'Cancelada' ? '<button type="button" class="btn secondary small" data-pt-request>📨 Volver a pedir precio</button>' : '',
+      !PV.CLOSED.includes(p.state) ? '<button type="button" class="link danger-link" data-pt-cancel>Cancelar solicitud</button>' : ''
+    ].join('');
+    return `<div class="pt-box ${PT_CLASS[p.state] || ''}">
+      <div class="pt-row"><span class="bk-pill ${PT_CLASS[p.state] || ''}">🚐 ${H(PV.TEAM_LABELS[p.state] || p.state)}</span><b>${H(p.folio || '')}</b><small class="muted">${H(d.kind || '')} · ${H(d.service_date ? fmtDate(d.service_date) : '')}${d.pickup_time ? ` ${H(d.pickup_time)}` : ''} · ${H(PV.paxText(d))}</small></div>
+      ${q ? `<div class="pt-row">Precio del proveedor: <b>${money(q.amount)}</b>${q.notes ? ` · <span class="muted">${H(q.notes)}</span>` : ''}${b.price !== '' && b.price != null ? ` · <small class="muted">venta ${money(b.price)} → utilidad ${money(Number(b.price) - Number(q.amount))}</small>` : ''}</div>` : ''}
+      ${p.decision_note ? `<div class="pt-row muted">Nota: ${H(p.decision_note)}</div>` : ''}
+      ${p.driver && (p.driver.name || p.driver.unit) ? `<div class="pt-row">Chofer: <b>${H(p.driver.name || '—')}</b>${p.driver.phone ? ` · ${H(p.driver.phone)}` : ''}${p.driver.unit ? ` · ${H(p.driver.unit)}` : ''}${p.driver.notes ? ` · <span class="muted">${H(p.driver.notes)}</span>` : ''}</div>` : ''}
+      ${actions ? `<div class="pt-row pt-actions">${actions}</div>` : ''}
+      ${(p.log || []).length ? `<details class="pt-log"><summary>Historial (${p.log.length})</summary>${p.log.slice().reverse().map((l) => `<div><small>${H(fmtStamp(l.at))} · ${H(l.who)}</small> ${H(l.text)}</div>`).join('')}</details>` : ''}
+    </div>`;
+  }
+  // Formulario con los datos operativos que verá el proveedor (se llena con lo que ya sabe el viaje).
+  function portalRequestModal(t, b) {
+    const pax = t.passengers?.list || [];
+    const holder = pax.find((x) => x.holder) || pax[0];
+    const client = clientById(t.client_id);
+    const lead = db.leads.find((l) => l.client_id === t.client_id && l.destination === t.destination) || db.leads.find((l) => l.client_id === t.client_id);
+    const hotel = (t.bookings?.list || []).find((x) => x.type === 'Hotel' && x.status !== 'Cancelada');
+    const flight = (t.bookings?.list || []).find((x) => x.type === 'Vuelo' && x.status !== 'Cancelada');
+    const d = b.portal?.details || {
+      kind: PV.SERVICE_KINDS[0], passenger: holder?.name || client?.name || '', phone: holder?.phone || client?.phone || '',
+      adults: pax.length ? pax.filter((x) => x.type === 'Adulto').length : Number(lead?.travelers) || 2, minors: pax.filter((x) => x.type !== 'Adulto').length,
+      service_date: b.start_date || t.start_date, pickup_time: b.time || '', pickup_place: 'Aeropuerto de Cancún (CUN)', dropoff_place: hotel ? (hotel.supplier_name || hotel.description) : '',
+      flight: flight ? [flight.description, flight.time].filter(Boolean).join(' · ') : '', return_date: '', return_time: '', return_flight: '', vehicle: '', notes: b.description || ''
+    };
+    const html = `<form class="modal-form">
+      <p class="full muted-note">${H(b.supplier_name)} verá <b>solo</b> estos datos para cotizar y operar el servicio. Nunca ve tu precio de venta, comisiones ni el correo del cliente.</p>
+      ${field('Tipo de servicio', `<select name="kind">${options(PV.SERVICE_KINDS, d.kind)}</select>`)}
+      ${field('Unidad o preferencia', `<input name="vehicle" maxlength="80" value="${H(d.vehicle)}" placeholder="Privado · Van · Suburban">`)}
+      ${field('Pasajero titular*', `<input name="passenger" required maxlength="120" value="${H(d.passenger)}">`)}
+      ${field('WhatsApp del pasajero', `<input name="phone" maxlength="40" value="${H(d.phone)}" placeholder="Para el chofer el día del servicio">`)}
+      ${field('Adultos', `<input name="adults" type="number" min="0" max="60" value="${H(d.adults)}">`)}
+      ${field('Menores', `<input name="minors" type="number" min="0" max="60" value="${H(d.minors)}">`)}
+      ${field('Fecha del servicio*', `<input name="service_date" type="date" required value="${H(d.service_date)}">`)}
+      ${field('Hora de recogida / llegada del vuelo', `<input name="pickup_time" type="time" value="${H(d.pickup_time)}">`)}
+      ${field('Recoger en*', `<input name="pickup_place" required maxlength="160" value="${H(d.pickup_place)}">`)}
+      ${field('Llevar a*', `<input name="dropoff_place" required maxlength="160" value="${H(d.dropoff_place)}">`)}
+      ${field('Vuelo de llegada', `<input name="flight" maxlength="80" value="${H(d.flight)}" placeholder="Y4 123 · llega 13:40">`, true)}
+      ${field('Regreso: fecha', `<input name="return_date" type="date" value="${H(d.return_date)}">`)}
+      ${field('Regreso: hora de recogida', `<input name="return_time" type="time" value="${H(d.return_time)}">`)}
+      ${field('Vuelo de regreso', `<input name="return_flight" maxlength="80" value="${H(d.return_flight)}">`, true)}
+      ${field('Indicaciones para el proveedor', `<textarea name="notes" rows="3" maxlength="800" placeholder="Silla para bebé, equipaje extra, letrero con nombre…">${H(d.notes)}</textarea>`, true)}
+      <div class="modal-actions"><button type="button" class="btn secondary" data-pt-back>Volver a reservas</button><button type="submit" class="btn primary">${b.portal?.state === 'Solicitada' ? 'Actualizar solicitud' : 'Enviar solicitud de precio'}</button></div></form>`;
+    openModal('PORTAL DEL PROVEEDOR', `${b.portal?.folio ? `${b.portal.folio} · ` : ''}Solicitud a ${b.supplier_name}`, html);
+    $('#modalBody [data-pt-back]').onclick = () => bookingsModal(t.id);
+    bindForm(async (v) => {
+      const ok = await mutate(() => send('POST', `/api/trips/${t.id}/bookings/${b.id}/portal/request`, { details: { ...v, adults: Number(v.adults) || 0, minors: Number(v.minors) || 0 } }), `Solicitud enviada a ${b.supplier_name}`);
+      if (ok) bookingsModal(t.id);
+      return false;
+    });
+  }
+
   /* ---------------- TP-304 · Reservas del viaje ---------------- */
   const allBookings = () => db.trips.flatMap((t) => (t.bookings?.list || []).map((b) => ({ b, t })));
   window.tripBookingBadge = (t) => {
@@ -82,6 +159,7 @@
       </div>
       <div data-bk-comm>${commHtml(b)}</div>
       <div data-bk-sup>${supInfo(b)}</div>
+      <div data-bk-portal>${portalHtml(b, isSaved(b), editable)}</div>
       ${docsHtml(b)}
       <div class="pax-foot">${alertsHtml(b)}</div>
     </div>`;
@@ -90,6 +168,11 @@
       return `<div class="pax-summary"><span><b>${s.total}</b> ${s.total === 1 ? 'reserva' : 'reservas'} · ${s.confirmed} confirmada${s.confirmed === 1 ? '' : 's'}</span>${s.pending ? `<span class="warn">${s.pending} por confirmar</span>` : s.total ? '<span class="ok">✓ Todo confirmado</span>' : ''}${s.danger ? `<span class="danger">⛔ ${s.danger} urgente${s.danger > 1 ? 's' : ''}</span>` : ''}<span>Venta ${money(s.price)} · Utilidad ${s.profit == null ? '—' : money(s.profit)}${s.profitMissing ? ` <small>(${s.profitMissing} sin costo o comisión)</small>` : ''}</span>${s.toCollect ? `<span class="ok">Comisiones por cobrar ${money(s.toCollect)}</span>` : ''}${s.owed ? `<span class="warn">Por pagar a proveedores ${money(s.owed)}</span>` : ''}</div>`;
     };
     const canGenerate = () => t.canvas?.blocks?.length || t.confirmation;
+    // TP-009: la solicitud al proveedor sale de la reserva ya guardada (sin cambios pendientes).
+    const savedList = t.bookings?.list || [];
+    const isSaved = (b) => { const s = savedList.find((x) => x.id === b.id); return Boolean(s) && JSON.stringify(s) === JSON.stringify(b); };
+    const dirty = () => JSON.stringify(list) !== JSON.stringify(savedList);
+    if (!portalLinks) loadPortalLinks().then(() => { if ($('#bkList')) $$('#bkList [data-bi]').forEach((row) => { const b = list[Number(row.dataset.bi)]; row.querySelector('[data-bk-portal]').innerHTML = portalHtml(b, isSaved(b), editable); }); });
 
     function render() {
       paintDatalist();
@@ -156,6 +239,18 @@
         const del = e.target.closest('[data-bk-del]');
         const unlink = e.target.closest('[data-bk-unlink]');
         if (e.target.closest('[data-bk-back]')) { tripModal(t.id); return; }
+        const pt = e.target.closest('[data-pt-request],[data-pt-accept],[data-pt-reject],[data-pt-cancel]');
+        if (pt) {
+          const r = rowOf(pt);
+          if (!r) return;
+          if (dirty()) { toast('Primero guarda los cambios de las reservas'); return; }
+          const b = r.b;
+          if (pt.matches('[data-pt-request]')) { portalRequestModal(t, b); return; }
+          const go = async (path, body, msg) => { pt.disabled = true; const ok = await mutate(() => send('POST', `/api/trips/${t.id}/bookings/${b.id}/portal/${path}`, body), msg); if (ok) bookingsModal(t.id); else pt.disabled = false; };
+          if (pt.matches('[data-pt-accept]')) { if (confirm(`¿Aceptar ${money(b.portal.quote?.amount)} de ${b.supplier_name}? Se registra como costo neto y se le pide confirmar el servicio.`)) go('decision', { accept: true }, 'Precio aceptado: el proveedor ya puede confirmar'); return; }
+          if (pt.matches('[data-pt-reject]')) { const note = prompt('¿Por qué no se acepta? (lo verá el proveedor)', ''); if (note !== null) go('decision', { accept: false, note }, 'Precio rechazado'); return; }
+          if (pt.matches('[data-pt-cancel]')) { const note = prompt(`Se avisará a ${b.supplier_name} que el servicio se cancela. Motivo (opcional):`, ''); if (note !== null) go('cancel', { note }, 'Solicitud cancelada'); return; }
+        }
         if (unlink) { const r = rowOf(unlink); r.b.voucher_ids = r.b.voucher_ids.filter((x) => x !== Number(unlink.dataset.bkUnlink)); render(); return; }
         if (del) { const i = Number(del.dataset.bkDel); if ((list[i].confirmation || list[i].supplier_name) && !confirm('¿Quitar esta reserva del viaje? Si ya existe con el proveedor, mejor márcala como Cancelada.')) return; list.splice(i, 1); render(); return; }
         if (e.target.id === 'bkAdd') { list.push(blank()); render(); $$('#bkList [data-bf="supplier_name"]').pop()?.focus(); return; }
@@ -193,15 +288,17 @@
     const dueSoon = rows.filter(({ b }) => b.status !== 'Cancelada' && b.supplier_due && !b.supplier_paid && b.supplier_due <= T.addDays(today, 7));
     const owed = rows.filter(({ b }) => b.status !== 'Cancelada' && !b.supplier_paid).reduce((s, { b }) => s + (Number(b.cost) || 0), 0);
     const suppliersUsed = [...new Set(rows.map(({ b }) => b.supplier_name).filter(Boolean))].sort();
-    const view = rows.filter(({ b, t }) => (!rv.status || b.status === rv.status) && (!rv.supplier || b.supplier_name === rv.supplier) && (!rv.pending || T.bookingAlerts(b, t, today).some((a) => a.level !== 'info') || b.status === 'Por reservar' || b.status === 'Solicitada'))
+    const view = rows.filter(({ b, t }) => (!rv.status || b.status === rv.status) && (!rv.supplier || b.supplier_name === rv.supplier) && (!rv.pending || T.bookingAlerts(b, t, today).some((a) => a.level !== 'info') || b.status === 'Por reservar' || b.status === 'Solicitada' || b.portal?.state === 'Cotizada'))
       .sort((a, c) => (a.b.start_date || a.t.start_date || '').localeCompare(c.b.start_date || c.t.start_date || ''));
+    const toReview = rows.filter(({ b }) => b.portal?.state === 'Cotizada');
     const tripsWithout = db.trips.filter((t) => t.status !== 'Cerrado' && t.end_date >= today && !(t.bookings?.list || []).length).length;
     box.innerHTML = `<div class="panel-head"><div><h3>🧾 Reservas</h3><p>Todas las reservas de los viajes abiertos, con su proveedor, clave y pago al proveedor.</p></div></div>
       <div class="mini bk-kpis"><div>Por reservar<b>${count('Por reservar')}</b></div><div>Solicitadas<b>${count('Solicitada')}</b></div><div>Confirmadas<b>${count('Confirmada')}</b></div><div>Por pagar a proveedores<b>${money(owed)}</b><small>${dueSoon.length ? `${dueSoon.length} vence${dueSoon.length > 1 ? 'n' : ''} en 7 días` : ''}</small></div></div>
+      ${toReview.length ? `<p class="note-warn">🚐 ${toReview.length} precio${toReview.length > 1 ? 's' : ''} del portal de proveedores por aceptar o rechazar: ${toReview.slice(0, 4).map(({ b, t }) => `<button type="button" class="link" data-bk-trip="${t.id}">${H(b.portal.folio)} · ${H(clientName(t.client_id))}</button>`).join(' · ')}</p>` : ''}
       ${tripsWithout ? `<p class="note-warn">${tripsWithout} viaje${tripsWithout > 1 ? 's' : ''} próximo${tripsWithout > 1 ? 's' : ''} sin reservas registradas.</p>` : ''}
       <div class="toolbar"><select id="rvStatus"><option value="">Todos los estados</option>${options(T.BOOKING_STATUSES, rv.status)}</select><select id="rvSupplier"><option value="">Todos los proveedores</option>${options(suppliersUsed, rv.supplier)}</select><label class="kb-check"><input type="checkbox" id="rvPending" ${rv.pending ? 'checked' : ''}> Solo lo que requiere atención</label></div>
       <div class="table"><table><thead><tr><th>Viaje</th><th>Servicio</th><th>Proveedor</th><th>Clave</th><th>Estado</th><th>Pago proveedor</th><th>Avisos</th></tr></thead><tbody>
-      ${view.map(({ b, t }) => { const al = T.bookingAlerts(b, t, today); return `<tr class="clickable" data-bk-trip="${t.id}"><td><b>${H(clientName(t.client_id))}</b><br><small>${H(t.destination)} · ${H(fmtDate(t.start_date))}</small></td><td>${T.BOOKING_ICONS[b.type]} ${H(b.description || b.type)}<br><small>${H(b.start_date ? fmtDate(b.start_date) : '')}${b.time ? ` ${H(b.time)}` : ''}</small></td><td>${H(b.supplier_name || '—')}</td><td>${H(b.confirmation || '—')}</td><td><span class="bk-pill ${STATUS_CLASS[b.status]}">${H(b.status)}</span></td><td>${b.supplier_paid ? '✓ Pagado' : b.cost !== '' ? `${money(b.cost)}${b.supplier_due ? `<br><small>antes del ${H(fmtDate(b.supplier_due))}</small>` : ''}` : '—'}</td><td>${al.map((a) => `<span class="pax-alert ${a.level}">${ALERT_ICON[a.level]} ${H(a.text)}</span>`).join(' ')}</td></tr>`; }).join('') || `<tr><td colspan="7" class="empty-note">${rows.length ? 'Nada pendiente con estos filtros.' : 'Aún no hay reservas. Ábrelas desde cada viaje con 🧾 Reservas.'}</td></tr>`}
+      ${view.map(({ b, t }) => { const al = T.bookingAlerts(b, t, today); return `<tr class="clickable" data-bk-trip="${t.id}"><td><b>${H(clientName(t.client_id))}</b><br><small>${H(t.destination)} · ${H(fmtDate(t.start_date))}</small></td><td>${T.BOOKING_ICONS[b.type]} ${H(b.description || b.type)}<br><small>${H(b.start_date ? fmtDate(b.start_date) : '')}${b.time ? ` ${H(b.time)}` : ''}</small></td><td>${H(b.supplier_name || '—')}</td><td>${H(b.confirmation || '—')}</td><td><span class="bk-pill ${STATUS_CLASS[b.status]}">${H(b.status)}</span>${b.portal ? `<br><small class="muted">🚐 ${H(b.portal.folio)} · ${H(PV.TEAM_LABELS[b.portal.state] || b.portal.state)}</small>` : ''}</td><td>${b.supplier_paid ? '✓ Pagado' : b.cost !== '' ? `${money(b.cost)}${b.supplier_due ? `<br><small>antes del ${H(fmtDate(b.supplier_due))}</small>` : ''}` : '—'}</td><td>${al.map((a) => `<span class="pax-alert ${a.level}">${ALERT_ICON[a.level]} ${H(a.text)}</span>`).join(' ')}</td></tr>`; }).join('') || `<tr><td colspan="7" class="empty-note">${rows.length ? 'Nada pendiente con estos filtros.' : 'Aún no hay reservas. Ábrelas desde cada viaje con 🧾 Reservas.'}</td></tr>`}
       </tbody></table></div>`;
     $('#rvStatus').onchange = (e) => { rv.status = e.target.value; if (rv.status) rv.pending = false; renderReservas(); };
     $('#rvSupplier').onchange = (e) => { rv.supplier = e.target.value; renderReservas(); };
