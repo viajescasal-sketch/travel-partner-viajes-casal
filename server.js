@@ -35,6 +35,7 @@ const { createCommissions } = require('./src/commissions');
 const { createAutomations } = require('./src/automations');
 const { createPreferencias } = require('./src/preferencias');
 const { createProveedorPortal, providerGate } = require('./src/proveedor-portal');
+const { createQuoteAttachments } = require('./src/quote-attachments');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -329,6 +330,7 @@ async function createApp(options = {}) {
   app.use('/api', createPreferencias(dataStore).router); // avatares y recorrido guiado
   app.use('/api', createCommissions(dataStore).router); // TP-205/206
   app.use('/api', proveedorPortal.router); // TP-009
+  app.use('/api', createQuoteAttachments(dataStore).router); // TP-113
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');

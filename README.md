@@ -273,6 +273,19 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - Se precargaron HotelDO, Azabache, Grupo Xcaret y Travel Shop (una sola vez; completa contacto y comisión).
 - Tabla `crm_suppliers` (se crea sola) e incluida en el respaldo JSON. API: `GET|POST /api/suppliers`, `PATCH|DELETE /api/suppliers/:id`.
 
+## Ficha del lead (TP-008)
+
+- Al abrir un lead (tarjeta, lista o tablero) se ve la **ficha**: encabezado con el cliente, etapa, puntaje y botones **💬 WhatsApp · 📞 Llamar · ✉️ Correo · 👤 Ficha 360**; resumen del viaje en una línea; **barra de etapas** clicable (Nuevo → Calificado → Cotizado → Negociación → Vendido, y Perdido; Vendido y Perdido piden lo mismo que el tablero); y **acciones rápidas**: plantilla de WhatsApp, nueva cotización, adjuntar cotización, programar llamada o seguimiento y Canvas.
+- **Pestañas:** *Resumen* (siguiente paso sugerido, primer contacto, datos clave, últimas cotizaciones, notas y referido) · *Viaje y datos* (formulario editable, vendedor, campos personalizados y eliminar) · *Cotizaciones* · *Seguimientos* · *Calificación* (automática + preguntas) · *Historial* (línea de tiempo y bitácora completa). Al guardar, la ficha sigue abierta.
+- El alta de un lead nuevo conserva el formulario de siempre. Archivos: `public/ficha-lead.js` y `public/ficha-lead.css`.
+
+## Adjuntar cotización ya trabajada (TP-113)
+
+- Botón **📎 Adjuntar cotización** en Cotizaciones, en la ficha del lead y en la Ficha 360 del cliente. Se sube un **PDF o imagen** (JPG, PNG, WebP; máx. 5 MB, se puede arrastrar) o se pega un **link** (Drive, Canva, portal del mayorista).
+- Queda como **cotización real** con folio `COT-…`, destino, hotel o descripción, monto, modalidad, estado, vigencia, fecha original, referencia y notas, marcada **📎 Adjunta / Link**. Cuenta en el embudo y reportes, mueve el lead a *Cotizado* y, si se acepta, sigue el flujo normal (lead Vendido, plan de pagos, viaje).
+- “Ver PDF” abre el archivo o el link; no se duplica ni se manda por la liga privada; el WhatsApp usa el mensaje simple (incluye el link si es link).
+- Archivo: `POST /api/quote-files` (cuerpo binario, valida que sea PDF/imagen real) → se guarda en `crm_media`; la cotización lleva `details.external` (`{ kind: 'file', media_id, name, mime }` o `{ kind: 'link', url }`, más `ref`, `date`, `notes`), validado en el servidor (`src/quote-attachments.js`). Interfaz: `public/cotizacion-externa.js`.
+
 ## Portal del proveedor de traslados (TP-009)
 
 - **Acceso:** Configuración › Usuarios › Nuevo usuario con rol **Proveedor** y el proveedor del catálogo al que pertenece (obligatorio). Entra por la misma página de inicio, cambia su contraseña temporal y lo lleva solo a **`/proveedor`**. En la API solo puede usar `/api/proveedor/*`, su cuenta y sus avisos; todo lo demás responde 403. No aparece en las listas del equipo.
