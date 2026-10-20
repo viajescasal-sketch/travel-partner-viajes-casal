@@ -179,7 +179,7 @@ function createProveedorPortal(dataStore, { assignment, mailer, env = {} } = {})
       const portal = bump({ ...b.portal, state: accept ? 'Aceptada' : 'Rechazada', decision_note: note, decided_at: now });
       P.addLog(portal, req.session.user.name, accept ? `Precio aceptado ${money(b.portal.quote?.amount)}` : `Precio rechazado${note ? `: ${note}` : ''}`, now);
       const patch = accept
-        ? { model: 'neta', cost: b.portal.quote?.amount, supplier_due: b.supplier_due || b.portal.details?.service_date || b.start_date || '' }
+        ? { model: 'neta', cost: b.portal.quote?.amount, supplier_due: b.supplier_due || P.defaultPayDue(trip.start_date, b.portal.details?.service_date || b.start_date, now.slice(0, 10)) }
         : {};
       const next = TPTrip.cleanBooking({ ...b, ...patch, portal });
       await saveBooking(trip, next);
