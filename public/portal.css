@@ -1,0 +1,19 @@
+/* TP-313 · Portal del cliente (complementa itinerario.css, mismo diseño) */
+.hidden{display:none!important}
+.code-card{text-align:center}
+.code-in{display:block;width:100%;max-width:240px;margin:12px auto 0;text-align:center;font-size:28px;letter-spacing:10px;font-weight:bold;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--text)}
+.btn[disabled]{opacity:.6;cursor:wait}
+.msg{margin-top:10px;font-size:13px}.msg.err-t{color:#b13e3e}.msg.ok-t{color:var(--ok)}
+.q-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.q-head small{color:var(--muted);font-weight:bold;letter-spacing:.04em}
+.q-price{font-size:22px;font-weight:bold;color:var(--coral);margin:6px 0 2px}
+.pill{display:inline-block;font-size:11px;font-weight:bold;padding:3px 9px;border-radius:999px;background:#e8f8fa;color:#007985}
+.pill.ok{background:#e8f7ef;color:var(--ok)}.pill.warn{background:#fff5d9;color:#916300}.pill.off{background:var(--bg);color:var(--muted)}
+.bar{height:8px;border-radius:8px;background:var(--line);overflow:hidden;margin:10px 0 4px}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--teal),var(--ok))}
+.inst{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}.inst:first-child{border-top:0}.inst em{font-style:normal;color:var(--muted);font-size:12px}
+.trip-h{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.trip-h h3{margin:0;font-size:18px}
+.form{display:grid;gap:10px}.form label{display:grid;gap:4px;font-size:13px;font-weight:bold}
+.form input,.form textarea{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);font:inherit}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ref-code{font-size:22px;font-weight:bold;letter-spacing:2px;color:var(--navy);text-align:center;margin:8px 0}@media (prefers-color-scheme:dark){.ref-code{color:var(--teal)}}
+.logout{background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;font:inherit;font-size:12px}
+button.btn{width:100%}.row2 button.btn{width:auto}
