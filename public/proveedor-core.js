@@ -130,11 +130,21 @@
   }
   const shiftMonth = (ym, n) => { const [y, m] = String(ym).split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
 
+  // Fecha de pago al proveedor por omisión al aceptar su precio: 5 días antes del viaje
+  // (si ya pasó esa fecha, queda hoy). Sin fecha de viaje se usa la del servicio.
+  const PAY_DAYS_BEFORE = 5;
+  function defaultPayDue(tripStart, serviceDate, today) {
+    const base = isDate(tripStart) ? tripStart : isDate(serviceDate) ? serviceDate : '';
+    if (!base) return '';
+    const due = new Date(Date.parse(`${base}T12:00:00Z`) - PAY_DAYS_BEFORE * 86400000).toISOString().slice(0, 10);
+    return isDate(today) && due < today ? today : due;
+  }
+
   const addLog = (portal, who, text, at) => { portal.log = [...(portal.log || []), { at, who: str(who).slice(0, 80), text: str(text).slice(0, 300) }].slice(-MAX_LOG); };
 
   global.TPProv = {
     STATES, STATE_LABELS, TEAM_LABELS, CLOSED, SERVICE_KINDS, cleanDetails, detailsError, route, paxText,
-    providerView, sections, payments, monthGrid, shiftMonth, addLog, num, isDate
+    providerView, sections, payments, monthGrid, shiftMonth, addLog, num, isDate, PAY_DAYS_BEFORE, defaultPayDue
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.TPProv;
 }(typeof window !== 'undefined' ? window : globalThis));

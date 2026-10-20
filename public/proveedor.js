@@ -54,7 +54,7 @@
           <div class="pv-actions full"><button type="button" class="pv-btn link" data-decline="${H(s.key)}">No tengo disponibilidad</button><button class="pv-btn primary">${s.state === 'Cotizada' ? 'Actualizar precio' : 'Enviar precio'}</button></div>
         </form>`;
     } else if (s.state === 'Aceptada') {
-      body = `<div class="pv-note ok">✓ Precio aceptado: <b>${money(s.amount)} MXN</b>${s.decision_note ? ` · ${H(s.decision_note)}` : ''}. Confirma el servicio con tu folio y los datos del chofer.</div>
+      body = `<div class="pv-note ok">✓ Precio aceptado: <b>${money(s.amount)} MXN</b>${s.decision_note ? ` · ${H(s.decision_note)}` : ''}. Confirma el servicio con tu folio y los datos del chofer.${s.due ? ` Fecha de pago: <b>${H(fmtDate(s.due))}</b>.` : ''}</div>
         <div class="pv-actions"><button type="button" class="pv-btn primary" data-confirm="${H(s.key)}">Confirmar servicio</button></div>`;
     } else if (s.state === 'Confirmada') {
       const dr = s.driver || {};
