@@ -72,6 +72,7 @@ Los enlaces persistentes de PDF se habilitarán cuando se conecte Google Drive; 
 | Vendedor (`travel_partner`) | Sus leads y los clientes, cotizaciones, viajes y seguimientos que cuelgan de ellos | Crear y editar dentro de lo suyo |
 | Operaciones (`operaciones`) | Todos los clientes, cotizaciones y viajes; no ve leads | Crear y editar viajes y sus propios seguimientos |
 | Consulta (`consulta`) | Todo | Solo lectura (rol heredado) |
+| Proveedor (`proveedor`) | Solo su portal `/proveedor` (TP-009) | Cotizar, confirmar y ver sus pagos |
 
 - Las reglas viven en `src/access.js` y se aplican en el servidor; un registro ajeno responde 404.
 - El administrador crea usuarios en **Configuración › Usuarios**. Se genera una contraseña temporal de 14 caracteres que el usuario cambia en su primer acceso.
@@ -271,6 +272,17 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - Se elige al cotizar (proveedor de cada bloque del Canvas y hotel del Cotizador) y al reservar. Con comisión registrada, el costo neto se calcula solo.
 - Se precargaron HotelDO, Azabache, Grupo Xcaret y Travel Shop (una sola vez; completa contacto y comisión).
 - Tabla `crm_suppliers` (se crea sola) e incluida en el respaldo JSON. API: `GET|POST /api/suppliers`, `PATCH|DELETE /api/suppliers/:id`.
+
+## Portal del proveedor de traslados (TP-009)
+
+- **Acceso:** Configuración › Usuarios › Nuevo usuario con rol **Proveedor** y el proveedor del catálogo al que pertenece (obligatorio). Entra por la misma página de inicio, cambia su contraseña temporal y lo lleva solo a **`/proveedor`**. En la API solo puede usar `/api/proveedor/*`, su cuenta y sus avisos; todo lo demás responde 403. No aparece en las listas del equipo.
+- **Flujo:** en **🧾 Reservas** del viaje, una reserva guardada con un proveedor que tiene acceso muestra **📨 Pedir precio al proveedor**. El formulario se llena con lo que ya sabe el viaje (titular, WhatsApp, adultos/menores, fecha, hora, aeropuerto → hotel, vuelo, regreso, unidad e indicaciones) y se envía con folio `TR-0001`. Estados: *Por cotizar → Precio enviado → (aceptado) Por confirmar → Confirmado*, o *Precio no aceptado*, *No disponible* y *Cancelado*.
+- **El proveedor** (celular o computadora): *Inicio* (por cotizar, por confirmar, próximos 7 días, por cobrar), *Solicitudes* (envía o corrige su precio, o “No tengo disponibilidad”), *Servicios* (por confirmar con folio, chofer, celular y unidad; próximos; realizados; cancelados), *Pagos* (por cobrar, vencido, pagado en el mes y **calendario mensual** por fecha de pago) y *Avisos*.
+- **El equipo:** acepta el precio (pasa a **costo neto** de la reserva, tarifa neta, y la fecha de pago al proveedor queda en la fecha del servicio si estaba vacía) o lo rechaza con un motivo; puede cancelar la solicitud. Al confirmar, la reserva queda *Confirmada* con el folio del proveedor y el chofer. Al marcar “Pagado” en la reserva se guarda la fecha y el proveedor la ve en su calendario. **Viajes › Reservas** avisa de los precios por revisar.
+- **Avisos:** campanita (y correo si hay SMTP) al proveedor por solicitud nueva/actualizada, precio aceptado o rechazado y cancelación; al vendedor del viaje, administradores y Operaciones cuando el proveedor envía precio, no tiene disponibilidad o confirma.
+- **Privacidad:** el proveedor solo ve los datos operativos que se le enviaron en la solicitud; nunca el precio de venta, comisiones, correo del cliente ni otras reservas.
+- **Protecciones:** si alguien guarda las reservas con una copia vieja mientras el proveedor respondía, se conserva lo del proveedor; no se puede cambiar de proveedor ni quitar una reserva con solicitud abierta (primero se cancela). Todo queda en la bitácora.
+- Reglas en `public/proveedor-core.js`; rutas en `src/proveedor-portal.js` (`GET /api/proveedor/portal`, `POST /api/proveedor/services/:viaje/:reserva/{quote|decline|confirm}`, `POST /api/trips/:id/bookings/:bid/portal/{request|decision|cancel}`, `GET /api/supplier-portal/links`). Campo interno `portal` en cada reserva; liga usuario → proveedor en `crm_settings` (`supplier_portal`). El rol se agrega solo a la tabla `users` al iniciar.
 
 ## Encuesta y reseña postviaje (TP-308)
 

@@ -34,6 +34,7 @@ const { createContracts } = require('./src/contracts');
 const { createCommissions } = require('./src/commissions');
 const { createAutomations } = require('./src/automations');
 const { createPreferencias } = require('./src/preferencias');
+const { createProveedorPortal, providerGate } = require('./src/proveedor-portal');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -303,6 +304,9 @@ async function createApp(options = {}) {
     }
     return next();
   });
+  // TP-009: el usuario proveedor solo usa su portal (y su cuenta).
+  app.use('/api', providerGate);
+  const proveedorPortal = createProveedorPortal(dataStore, { assignment, mailer, env: process.env });
   app.use('/api/account', loginFlow.account);
   app.post('/api/users/:id/reset-2fa', requireRole('admin'), loginFlow.adminReset);
   app.use('/api', createMailAdminRouter(dataStore, mailer, resetService, { requireRole }, process.env));
@@ -324,6 +328,7 @@ async function createApp(options = {}) {
   app.use('/api', automations.router); // TP-307
   app.use('/api', createPreferencias(dataStore).router); // avatares y recorrido guiado
   app.use('/api', createCommissions(dataStore).router); // TP-205/206
+  app.use('/api', proveedorPortal.router); // TP-009
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');
@@ -339,6 +344,8 @@ async function createApp(options = {}) {
     res.set('Cache-Control', 'public, max-age=300');
     res.sendFile(path.join(publicDirectory, req.path.slice(1)));
   });
+  // TP-009: portal del proveedor (la sesión y los permisos los revisa la API).
+  app.get(['/proveedor', '/proveedor/'], (req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(path.join(publicDirectory, 'proveedor.html')); });
   app.use(express.static(publicDirectory, { index: false, dotfiles: 'ignore' }));
 
   app.get('*', (req, res, next) => {
