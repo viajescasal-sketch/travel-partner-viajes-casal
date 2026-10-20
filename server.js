@@ -36,6 +36,7 @@ const { createAutomations } = require('./src/automations');
 const { createPreferencias } = require('./src/preferencias');
 const { createProveedorPortal, providerGate } = require('./src/proveedor-portal');
 const { createQuoteAttachments } = require('./src/quote-attachments');
+const { createClientPortal } = require('./src/client-portal');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -288,6 +289,9 @@ async function createApp(options = {}) {
   // TP-301: itinerario digital para el celular (sin sesión).
   const itinerary = createItinerary(dataStore, { publicDirectory, env: process.env });
   app.use(itinerary.publicRouter);
+  // TP-313: portal del cliente (/mi-portal/<token>, entra con código la primera vez en cada equipo).
+  const clientPortal = createClientPortal(dataStore, { assignment, mailer, postventa, env: process.env, publicDirectory, isProduction });
+  app.use(clientPortal.publicRouter);
   app.use('/api', authenticate);
   // Si el servidor estuvo dormido a la hora del respaldo, se revisa al primer uso (máximo cada 5 minutos).
   let lastBackupCheck = 0;
@@ -331,6 +335,7 @@ async function createApp(options = {}) {
   app.use('/api', createCommissions(dataStore).router); // TP-205/206
   app.use('/api', proveedorPortal.router); // TP-009
   app.use('/api', createQuoteAttachments(dataStore).router); // TP-113
+  app.use('/api', clientPortal.apiRouter); // TP-313
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');

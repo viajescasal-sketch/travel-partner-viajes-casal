@@ -273,6 +273,13 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - Se precargaron HotelDO, Azabache, Grupo Xcaret y Travel Shop (una sola vez; completa contacto y comisión).
 - Tabla `crm_suppliers` (se crea sola) e incluida en el respaldo JSON. API: `GET|POST /api/suppliers`, `PATCH|DELETE /api/suppliers/:id`.
 
+## Portal del cliente (TP-313)
+
+- **Equipo:** botón **🌐 Portal del cliente** en la Ficha 360 y **🌐 Portal** en la ficha del lead: activar la liga `/mi-portal/<token>`, copiarla, mandarla por WhatsApp con mensaje listo, ver último acceso y equipos recordados, **generar liga nueva** (la anterior deja de servir y se cierran los equipos) o desactivarla.
+- **Acceso del cliente:** la primera vez en cada equipo pide un **código de 6 dígitos** que llega a su correo (vence en 10 min, 5 intentos, máx. 1 por minuto y 5 por hora). Si el cliente no tiene correo (o no hay SMTP), el código le llega al asesor en la campanita para enviarlo por WhatsApp. El equipo queda recordado 90 días (cookie `tp.cp`, guardada solo como hash).
+- **Qué ve (mismo diseño que el itinerario digital):** *Pagos* (avance, próximo pago, cuotas, firmar contrato y liga de pago) · *Mis viajes* (cuenta regresiva, servicios confirmados, itinerario si el equipo ya lo activó, encuesta postviaje pendiente) · *Cotizaciones* enviadas o aceptadas (abre la liga de la cotización para verla y aceptarla; se crea sola; las adjuntas TP-113 abren su archivo) · *Nueva cotización* (crea un lead nuevo con su asesor, seguimiento inmediato y aviso por campanita y correo) · *Recomienda* (código y liga de referidos, si el programa está activo y ya viajó) · *Mi asesor* (foto, WhatsApp y correo). Nunca ve borradores, costos, notas internas ni datos de otros clientes.
+- Rutas en `src/client-portal.js` (`GET|POST|DELETE /api/clients/:id/portal`; públicas `/mi-portal/:token`, `/api/public/portal/:token` y `/code`, `/verify`, `/logout`, `/request`, `/file/:id`). Liga y equipos en `crm_settings` (`client_portal`). Página: `public/portal.html`, `portal.js`, `portal.css` (usa `itinerario.css`); equipo: `public/portal-equipo.js`.
+
 ## Ficha del lead (TP-008)
 
 - Al abrir un lead (tarjeta, lista o tablero) se ve la **ficha**: encabezado con el cliente, etapa, puntaje y botones **💬 WhatsApp · 📞 Llamar · ✉️ Correo · 👤 Ficha 360**; resumen del viaje en una línea; **barra de etapas** clicable (Nuevo → Calificado → Cotizado → Negociación → Vendido, y Perdido; Vendido y Perdido piden lo mismo que el tablero); y **acciones rápidas**: plantilla de WhatsApp, nueva cotización, adjuntar cotización, programar llamada o seguimiento y Canvas.
