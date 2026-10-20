@@ -7,7 +7,8 @@ const ROLE_LABELS = {
   admin: 'Administrador',
   travel_partner: 'Vendedor',
   operaciones: 'Operaciones',
-  consulta: 'Consulta'
+  consulta: 'Consulta',
+  proveedor: 'Proveedor'
 };
 const ROLES = Object.keys(ROLE_LABELS);
 // Roles que pueden tener leads asignados.
@@ -18,7 +19,8 @@ const WRITE_RULES = {
   admin: ['clients', 'leads', 'quotes', 'trips', 'followups'],
   travel_partner: ['clients', 'leads', 'quotes', 'trips', 'followups'],
   operaciones: ['trips', 'followups'],
-  consulta: []
+  consulta: [],
+  proveedor: []
 };
 
 const canWrite = (user, entity) => (WRITE_RULES[user.role] || []).includes(entity);
@@ -26,6 +28,10 @@ const canWrite = (user, entity) => (WRITE_RULES[user.role] || []).includes(entit
 // Devuelve, por entidad, el conjunto de ids visibles o null cuando ve todo.
 function buildScope(user, data) {
   const me = user.id;
+  // TP-009: el proveedor no ve nada del CRM; solo su portal (/api/proveedor).
+  if (user.role === 'proveedor') {
+    return { clients: new Set(), leads: new Set(), quotes: new Set(), trips: new Set(), followups: new Set() };
+  }
   if (user.role === 'admin' || user.role === 'consulta') {
     return { clients: null, leads: null, quotes: null, trips: null, followups: null };
   }

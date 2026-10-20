@@ -228,7 +228,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     const prefs = await prefsFor(dataStore, ctx.user.id); // avatares y recorrido guiado
     const photo = (u) => (u?.photo_media_id ? `/api/media/${u.photo_media_id}` : null);
     const users = ctx.user.role === 'admin'
-      ? (await dataStore.listUsers()).map((u) => ({ id: u.id, name: u.name, role: u.role, active: u.active, photoUrl: photo(u), avatar: prefs.avatars[String(u.id)] || null }))
+      ? (await dataStore.listUsers()).filter((u) => u.role !== 'proveedor').map((u) => ({ id: u.id, name: u.name, role: u.role, active: u.active, photoUrl: photo(u), avatar: prefs.avatars[String(u.id)] || null }))
       : [{ id: ctx.user.id, name: ctx.user.name, role: ctx.user.role, active: true, photoUrl: photo(await dataStore.findUserById(ctx.user.id)), avatar: prefs.avatar }];
     res.json({
       ok: true,

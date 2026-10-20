@@ -115,7 +115,7 @@ class MySQLDataStore {
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       email VARCHAR(254) NOT NULL UNIQUE,
       name VARCHAR(120) NOT NULL,
-      role ENUM('admin','travel_partner','operaciones','consulta') NOT NULL,
+      role ENUM('admin','travel_partner','operaciones','consulta','proveedor') NOT NULL,
       password_hash VARCHAR(100) NOT NULL,
       active BOOLEAN NOT NULL DEFAULT TRUE,
       must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
@@ -236,8 +236,9 @@ class MySQLDataStore {
       "SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'"
     );
     const role = columns.find((c) => c.COLUMN_NAME === 'role');
-    if (role && !String(role.COLUMN_TYPE).includes('operaciones')) {
-      await this.pool.query("ALTER TABLE users MODIFY role ENUM('admin','travel_partner','operaciones','consulta') NOT NULL");
+    // TP-009: rol proveedor (portal del proveedor de traslados).
+    if (role && !String(role.COLUMN_TYPE).includes('proveedor')) {
+      await this.pool.query("ALTER TABLE users MODIFY role ENUM('admin','travel_partner','operaciones','consulta','proveedor') NOT NULL");
     }
     if (!columns.some((c) => c.COLUMN_NAME === 'last_login_at')) {
       await this.pool.query('ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER must_change_password');
@@ -343,7 +344,7 @@ class MySQLDataStore {
   }
 
   async listNotifications(userId, limit = 30) {
-    const [rows] = await this.pool.execute(`SELECT id, kind, title, body, lead_id, read_at, created_at FROM crm_notifications WHERE user_id = ? ORDER BY id DESC LIMIT ${Math.min(Math.max(Number(limit) || 30, 1), 100)}`, [userId]);
+    const [rows] = await this.pool.execute(`SELECT id, kind, title, body, lead_id, link, read_at, created_at FROM crm_notifications WHERE user_id = ? ORDER BY id DESC LIMIT ${Math.min(Math.max(Number(limit) || 30, 1), 100)}`, [userId]);
     const [[count]] = await this.pool.execute('SELECT COUNT(*) AS n FROM crm_notifications WHERE user_id = ? AND read_at IS NULL', [userId]);
     return { items: rows.map(normalizeNotification), unread: Number(count.n) };
   }

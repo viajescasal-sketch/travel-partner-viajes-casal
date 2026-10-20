@@ -25,6 +25,7 @@ function temporaryPassword() {
   return chars.join('');
 }
 
+const PORTAL_SETTING = 'supplier_portal'; // TP-009: usuario proveedor → ficha del catálogo
 const publicUser = (u) => ({
   id: Number(u.id), email: u.email, name: u.name, role: u.role, roleLabel: ROLE_LABELS[u.role] || u.role,
   active: Boolean(u.active), mustChangePassword: Boolean(u.must_change_password),
@@ -68,8 +69,24 @@ function createUserRouter(dataStore, { requireRole, destroyUserSessions }) {
     }
   }
 
+  // TP-009: un usuario con rol Proveedor siempre queda ligado a una ficha del catálogo.
+  const readLinks = async () => { const raw = (await dataStore.getSetting(PORTAL_SETTING)) || {}; return { users: { ...(raw.users || {}) }, seq: Number.isInteger(raw.seq) ? raw.seq : 0 }; };
+  async function supplierIdFor(role, value, current) {
+    if (role !== 'proveedor') return null;
+    const id = value === undefined ? current : Number(value);
+    const ok = id && dataStore.listSuppliers && (await dataStore.listSuppliers()).some((s) => s.id === Number(id));
+    if (!ok) throw new ValidationError('Elige el proveedor del catálogo al que pertenece este usuario');
+    return Number(id);
+  }
+  async function linkSupplier(userId, supplierId) {
+    const links = await readLinks();
+    if (supplierId) links.users[String(userId)] = supplierId; else delete links.users[String(userId)];
+    await dataStore.setSetting(PORTAL_SETTING, links);
+  }
+
   router.get('/', wrap(async (_req, res) => {
-    res.json({ ok: true, users: (await dataStore.listUsers()).map(publicUser), roles: ROLE_LABELS });
+    const links = (await readLinks()).users;
+    res.json({ ok: true, users: (await dataStore.listUsers()).map((u) => ({ ...publicUser(u), supplierId: links[String(u.id)] || null })), roles: ROLE_LABELS });
   }));
 
   router.post('/', wrap(async (req, res) => {
@@ -79,10 +96,12 @@ function createUserRouter(dataStore, { requireRole, destroyUserSessions }) {
     const name = cleanName(body.name);
     const role = cleanRole(body.role);
     if (await dataStore.findUserByEmail(email)) throw httpError(409, 'Ya existe un usuario con ese correo');
+    const supplierId = await supplierIdFor(role, body.supplier_id, null);
     const password = temporaryPassword();
     const user = await dataStore.createUser({ email, name, role, passwordHash: await bcrypt.hash(password, 12) });
-    await log(req, 'user_create', { id: user.id, role });
-    res.status(201).json({ ok: true, user: publicUser(user), temporaryPassword: password });
+    if (supplierId) await linkSupplier(user.id, supplierId);
+    await log(req, 'user_create', { id: user.id, role, ...(supplierId ? { supplierId } : {}) });
+    res.status(201).json({ ok: true, user: { ...publicUser(user), supplierId }, temporaryPassword: password });
   }));
 
   router.patch('/:id', wrap(async (req, res) => {
@@ -100,10 +119,12 @@ function createUserRouter(dataStore, { requireRole, destroyUserSessions }) {
       throw new ValidationError('No puedes quitarte el rol de administrador ni desactivar tu propia cuenta');
     }
     if (user.role === 'admin') await assertAdminRemains(id, nextRole, nextActive);
+    const supplierId = await supplierIdFor(nextRole, body.supplier_id, (await readLinks()).users[String(id)]);
     const updated = await dataStore.updateUser(id, fields);
+    await linkSupplier(id, supplierId);
     if (!nextActive) await destroyUserSessions(id);
     await log(req, 'user_update', { id, ...fields });
-    res.json({ ok: true, user: publicUser(updated) });
+    res.json({ ok: true, user: { ...publicUser(updated), supplierId } });
   }));
 
   router.post('/:id/reset-password', wrap(async (req, res) => {

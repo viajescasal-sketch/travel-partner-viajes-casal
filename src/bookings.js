@@ -7,6 +7,7 @@ const express = require('express');
 const { ENTITY_ORDER, ValidationError, nowCancun } = require('./crm-schema');
 const { buildScope, isVisible, canWrite } = require('./access');
 const TPTrip = require('../public/viaje-core');
+const TPProv = require('../public/proveedor-core');
 
 const FINANCE_ROLES = ['admin', 'operaciones'];
 
@@ -39,9 +40,21 @@ function createBookings(dataStore) {
     const vouchers = new Set((trip.vouchers || []).map((v) => Number(v.id)));
     const before = trip.bookings?.list || [];
     const finance = FINANCE_ROLES.includes(req.session.user.role);
+    const today = nowCancun().slice(0, 10);
+    const openPortal = (b) => b?.portal?.state && !TPProv.CLOSED.includes(b.portal.state);
     const list = TPTrip.cleanBookings(req.body.list).map((b) => {
       const sup = b.supplier_id ? suppliers.find((s) => s.id === b.supplier_id) : null;
       const out = { ...b, supplier_id: sup ? sup.id : null, supplier_name: sup ? sup.name : b.supplier_name, voucher_ids: b.voucher_ids.filter((v) => vouchers.has(v)) };
+      // TP-009: la solicitud al portal del proveedor solo cambia por sus rutas. Si el proveedor respondió
+      // mientras el equipo tenía abiertas las reservas, se conserva lo que él escribió.
+      const prevB = before.find((x) => x.id === out.id);
+      out.portal = prevB?.portal || null;
+      if (prevB && openPortal(prevB)) {
+        if (out.supplier_id !== prevB.supplier_id) throw new ValidationError(`La reserva ${prevB.portal.folio || ''} tiene una solicitud abierta con ${prevB.supplier_name}: cancélala antes de cambiar de proveedor`.replace('  ', ' '));
+        if (Number(b.portal?.rev || 0) !== Number(prevB.portal.rev || 0)) ['status', 'confirmation', 'cost', 'supplier_due', 'model'].forEach((k) => { out[k] = prevB[k]; });
+      }
+      // Fecha en que se pagó al proveedor (la ve el proveedor en su calendario de pagos).
+      out.supplier_paid_at = out.supplier_paid ? (TPTrip.isDate(b.supplier_paid_at) ? b.supplier_paid_at : prevB?.supplier_paid_at || today) : '';
       if (out.model === 'comision') {
         // TP-205: fecha de cobro por omisión = fin del servicio + días del proveedor.
         if (!out.commission_due) out.commission_due = TPTrip.commissionDueDefault(out, trip, sup);
@@ -53,6 +66,8 @@ function createBookings(dataStore) {
       }
       return out;
     });
+    const removedOpen = before.filter((p) => openPortal(p) && !list.some((b) => b.id === p.id));
+    if (removedOpen.length) throw new ValidationError(`No quites la reserva ${removedOpen[0].portal.folio || ''} de ${removedOpen[0].supplier_name}: tiene una solicitud abierta en el portal del proveedor. Cancélala primero.`);
     const updated = await dataStore.updateRecord('trips', trip.id, { bookings: { list, updated_at: new Date().toISOString().slice(0, 19) } });
     const changes = [];
     list.forEach((b) => {
