@@ -86,3 +86,6 @@
   .lf-actions button { font-size: 10px; padding: 8px 4px; }
   .lf-quote-main { flex-wrap: wrap; }
 }
+/* Barras que se deslizan sin mostrar la barra de desplazamiento (Windows) */
+.lf-stages, .lf-tabs { scrollbar-width: none; }
+.lf-stages::-webkit-scrollbar, .lf-tabs::-webkit-scrollbar { display: none; }
