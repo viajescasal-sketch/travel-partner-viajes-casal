@@ -89,3 +89,10 @@
 /* Barras que se deslizan sin mostrar la barra de desplazamiento (Windows) */
 .lf-stages, .lf-tabs { scrollbar-width: none; }
 .lf-stages::-webkit-scrollbar, .lf-tabs::-webkit-scrollbar { display: none; }
+
+/* Solicitar traslado */
+.tr-form .section-label{margin:6px 0 0;font-weight:800;color:var(--navy)}
+.tr-new .tr-grid{grid-template-columns:2fr 1fr 1fr}
+.tr-done{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.tr-done li{background:var(--bg);border-radius:10px;padding:10px 12px;font-size:13px}
+@media(max-width:520px){.tr-new .tr-grid{grid-template-columns:1fr}}

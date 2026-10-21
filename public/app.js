@@ -2023,7 +2023,7 @@ async function clientFile(id, opts = {}) {
     <div class="c360-actions">
       ${c.phone ? `<button type="button" class="btn primary small" data-c360="wa">💬 WhatsApp</button>` : ''}
       ${write ? '<button type="button" class="btn secondary small" data-c360="payment">💰 Registrar pago</button><button type="button" class="btn secondary small" data-c360="review">⭐ Registrar reseña</button><button type="button" class="btn secondary small" data-c360="note">📝 Agregar nota</button>' : ''}
-      ${canWrite('leads') ? `<button type="button" class="btn secondary small" data-new-lead-client="${c.id}">+ Lead</button>` : ''}${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-quote-for="${c.id}">+ Cotización</button><button type="button" class="btn secondary small" data-attach-quote-client="${c.id}">📎 Adjuntar cotización</button>` : ''}${canWrite('trips') ? `<button type="button" class="btn secondary small" data-new-trip-client="${c.id}">+ Viaje</button>` : ''}<button type="button" class="btn secondary small" data-portal-client="${c.id}">🌐 Portal del cliente</button>
+      ${canWrite('leads') ? `<button type="button" class="btn secondary small" data-new-lead-client="${c.id}">+ Lead</button>` : ''}${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-quote-for="${c.id}">+ Cotización</button><button type="button" class="btn secondary small" data-attach-quote-client="${c.id}">📎 Adjuntar cotización</button>` : ''}${canWrite('trips') ? `<button type="button" class="btn secondary small" data-new-trip-client="${c.id}">+ Viaje</button>` : ''}${typeof transferButtonHtml === 'function' ? transferButtonHtml(c) : ''}<button type="button" class="btn secondary small" data-portal-client="${c.id}">🌐 Portal del cliente</button>
     </div>
     <div class="c360-tabs"><button type="button" data-c360-tab="timeline">Línea de tiempo</button><button type="button" data-c360-tab="data">Datos del cliente</button></div>
     <section class="c360-pane" data-pane="timeline">
@@ -2042,6 +2042,7 @@ async function clientFile(id, opts = {}) {
         ${field('Preferencias (separadas por coma)', `<input name="tags" maxlength="255" placeholder="Pareja, Todo incluido" value="${escapeHtml(c.tags)}">`)}
         ${field('Fecha de nacimiento', `<input name="birth_date" type="date" value="${escapeHtml(c.birth_date)}">`)}
         <label class="kb-check"><input type="checkbox" name="no_marketing" ${c.no_marketing ? 'checked' : ''}> No contactar en campañas de recompra</label>
+        <label class="kb-check" title="Muestra el botón “Solicitar traslado” aunque su cotización no se haya hecho en el CRM"><input type="checkbox" name="includes_transfer" ${c.includes_transfer ? 'checked' : ''}> 🚐 Incluye traslado</label>
         ${field('Notas fijas del cliente', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(c.notes)}</textarea>`, true)}
         ${typeof customFieldsHtml === 'function' ? customFieldsHtml('clients', c.custom) : ''}
         <p class="full dupe-warn hidden"></p>
@@ -2090,7 +2091,7 @@ async function clientFile(id, opts = {}) {
     else if (a === 'note') eventModal(c, 'note');
   };
   bindForm((v, form) => {
-    const body = clean({ name: v.name, phone: v.phone || null, email: v.email || null, tags: v.tags || null, notes: v.notes || null, birth_date: v.birth_date || null, no_marketing: Boolean(v.no_marketing) });
+    const body = clean({ name: v.name, phone: v.phone || null, email: v.email || null, tags: v.tags || null, notes: v.notes || null, birth_date: v.birth_date || null, no_marketing: Boolean(v.no_marketing), includes_transfer: Boolean(v.includes_transfer) });
     if (typeof readCustomFields === 'function') { const cfv = readCustomFields('clients', form); if (cfv) body.custom = cfv; } // TP-306
     return mutate(() => send('PATCH', `/api/clients/${c.id}`, body), 'Cliente actualizado');
   });
