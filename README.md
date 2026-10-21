@@ -196,7 +196,7 @@ Además del formulario del CRM (`/formulario`, incrustado con `formulario-embed.
 - **Arrastrar para reprogramar:** en Semana/Día cambia día y hora (bloques de 30 min); en Mes cambia el día y conserva la hora. Doble clic en un horario vacío crea un seguimiento a esa hora.
 - **Desde la ficha del lead:** botones *Programar llamada*, *Programar WhatsApp* y *Otro seguimiento*, y la lista de seguimientos del lead. La ficha del seguimiento trae atajos de fecha (en 1 hora, mañana 10:00, lunes…), *Abrir WhatsApp*, *Llamar* y *Agregar a Google Calendar*.
 - **Google Calendar (suscripción, una vía):** botón *Google Calendar* → liga privada `/calendario/<token>.ics` por usuario (`src/calendar.js`). El vendedor la agrega en Google Calendar › Agregar desde URL. Incluye seguimientos de los últimos 60 días y los próximos, con aviso 10 min antes. *Generar liga nueva* invalida la anterior. Las ligas viven en `crm_settings` (`calendar_feeds`).
-- Pendiente: sincronización completa en dos vías con la API de Google Calendar (OAuth).
+- Sincronización completa en dos vías: ver TP-112.
 
 ## Recordatorios automáticos (TP-106)
 
@@ -272,6 +272,15 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - Se elige al cotizar (proveedor de cada bloque del Canvas y hotel del Cotizador) y al reservar. Con comisión registrada, el costo neto se calcula solo.
 - Se precargaron HotelDO, Azabache, Grupo Xcaret y Travel Shop (una sola vez; completa contacto y comisión).
 - Tabla `crm_suppliers` (se crea sola) e incluida en el respaldo JSON. API: `GET|POST /api/suppliers`, `PATCH|DELETE /api/suppliers/:id`.
+
+## Google Calendar en dos vías (TP-112)
+
+- **Activar (administrador, una sola vez):** Configuración › Integraciones › *Google Calendar (dos vías)* trae la guía paso a paso para crear el proyecto en Google Cloud (API de Google Calendar, pantalla de consentimiento **publicada**, cliente OAuth tipo *Aplicación web* con el origen y la URI de redirección `APP_URL/api/gcal/callback` que muestra la propia tarjeta) y los campos para pegar el ID y el secreto (el secreto se guarda cifrado en `crm_settings` › `gcal_config`; también se aceptan las variables `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`).
+- **Cada vendedor:** Seguimientos › *Google Calendar* › **Conectar con Google**. El CRM crea en su cuenta el calendario **“Travel Partner”** (permiso `calendar.app.created`: solo ve los calendarios que crea la app, nunca los personales).
+- **CRM → Google** (unos segundos después de cada cambio y cada 5 minutos): sus **seguimientos** (con hora, color por tipo y aviso 10 min antes), los **viajes** que ve (día completo), los **pagos por cobrar** del plan de pagos y los **pagos a proveedores** pendientes (aviso el día anterior); de 30 días atrás a 400 adelante. Al completar un seguimiento, pagar una cuota o pagar al proveedor, el evento se quita.
+- **Google → CRM** (seguimientos): mover el evento cambia la fecha y hora, cambiarle el título lo cambia en el CRM, **borrarlo lo marca como hecho**, y un evento nuevo creado en el calendario “Travel Partner” se vuelve un seguimiento. Viajes y pagos son de solo lectura allá: si se mueven o borran, el CRM los regresa. Todo queda en la bitácora.
+- Si Google retira el permiso, el vendedor recibe un aviso para volver a conectar. *Desconectar* revoca el permiso (el calendario se queda en su Google). La liga `.ics` de solo lectura (TP-105) sigue disponible como opción simple.
+- Lógica en `src/gcal-sync.js` (API de Google por HTTP, sin dependencias nuevas): `GET /api/gcal/status`, `GET|PUT /api/gcal/config` (admin), `GET /api/gcal/connect`, `GET /api/gcal/callback`, `POST /api/gcal/sync`, `POST /api/gcal/disconnect`. Estado por usuario en `crm_settings` › `gcal_users` (token cifrado, id del calendario, syncToken y eventos). Pantalla: `public/gcal-ui.js`.
 
 ## App instalable para vendedores (TP-312)
 

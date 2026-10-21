@@ -38,6 +38,7 @@ const { createProveedorPortal, providerGate } = require('./src/proveedor-portal'
 const { createQuoteAttachments } = require('./src/quote-attachments');
 const { createClientPortal } = require('./src/client-portal');
 const { createPush } = require('./src/push');
+const { createGcalSync } = require('./src/gcal-sync');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -341,6 +342,11 @@ async function createApp(options = {}) {
   app.use('/api', createQuoteAttachments(dataStore).router); // TP-113
   app.use('/api', clientPortal.apiRouter); // TP-313
   app.use('/api', push.router); // TP-312
+  // TP-112: Google Calendar en dos vías (calendario "Travel Partner" por vendedor).
+  const gcal = createGcalSync(dataStore, { env: process.env, assignment, ...(options.gcalFetch ? { fetchImpl: options.gcalFetch } : {}), ...(options.gcalNow ? { now: options.gcalNow } : {}) });
+  gcal.attach();
+  if (!options.skipPurgeTimer) gcal.start();
+  app.use('/api', gcal.router);
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');
@@ -385,6 +391,7 @@ async function createApp(options = {}) {
   app.locals.recompra = recompra;
   app.locals.automations = automations;
   app.locals.push = push;
+  app.locals.gcal = gcal;
   return app;
 }
 
