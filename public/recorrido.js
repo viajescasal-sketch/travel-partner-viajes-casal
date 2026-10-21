@@ -74,7 +74,7 @@
     if (t?.kind === 'main') {
       const off = t.off;
       send('POST', '/api/me/tour', { action: off ? 'off' : 'seen' }).then((r) => { db.prefs = { ...(db.prefs || {}), tour: r.tour }; }).catch(() => {});
-      if (reason === 'done') toast('¡Listo! Puedes repetir el recorrido con “Abrir guía” y ver la guía de cada página con el botón ?.', 6000);
+      if (reason === 'done') toast('¡Listo! En “Abrir guía” tienes el Centro de ayuda con el paso a paso de cada función.', 6000);
     }
     if (t?.kind === 'help' && reason === 'done') toast('¡Listo! Encuentra más guías en “¿Necesitas ayuda?” › Abrir guía.', 5000);
   }
@@ -135,6 +135,7 @@
     const a = b.dataset.tour;
     if (a === 'off') { tour.off = b.checked; return; }
     if (a === 'close') endTour('closed');
+    if (a === 'help') { endTour('closed'); if (typeof window.helpCenter === 'function') window.helpCenter(); }
     if (a === 'prev') { tour.i = Math.max(0, tour.i - 1); showStep(); }
     if (a === 'next') { if (tour.i >= tour.steps.length - 1) endTour('done'); else { tour.i += 1; showStep(); } }
   });
@@ -149,7 +150,7 @@
   /* ---------------- Contenido ---------------- */
   const admin = () => isAdmin(), ops = () => isOps(), sales = () => !isOps();
   const MAIN = () => [
-    { icon: 'sparkles', title: `¡Hola${currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}! Bienvenido a Travel Partner`, text: 'Te muestro en 2 minutos para qué sirve cada parte de la plataforma. Puedes salir cuando quieras y repetirlo con el botón “Abrir guía”.' },
+    { icon: 'sparkles', title: `¡Hola${currentUser?.name ? `, ${currentUser.name.split(' ')[0]}` : ''}! Bienvenido a Travel Partner`, html: 'Te muestro en 2 minutos para qué sirve cada parte de la plataforma.<br><br>¿Buscas cómo hacer algo en específico (registrar un pago, enviar la liga al cliente, reservar un traslado…)? Abre el <b>Centro de ayuda</b>: tiene el paso a paso de cada función.<br><button type="button" class="btn secondary small tour-help" style="margin-top:10px" data-tour="help">📘 Abrir Centro de ayuda</button>' },
     { el: '#nav [data-page="dashboard"]', icon: 'home', title: 'Dashboard', text: 'Tu resumen del día: indicadores del mes, tu meta y comisión, el embudo de ventas, las prioridades de hoy y las oportunidades recientes.' },
     { el: '#nav [data-page="leads"]', icon: 'target', when: sales, title: 'Leads', text: 'Todas las oportunidades (del bot de WhatsApp, del formulario web o que registras tú) en un tablero por etapa: Nuevo → Calificado → Cotizado → Negociación → Vendido. Arrástralos para avanzar; cada lead tiene su calificación automática.' },
     { el: '#nav [data-page="quotes"]', icon: 'file', title: 'Cotizaciones', text: 'Arma cotizaciones con hasta 4 opciones, mándalas por WhatsApp con su liga privada y el cliente las acepta en línea. Al aceptar se arma el plan de pagos, el contrato con firma y la liga para pagar.' },
@@ -165,7 +166,7 @@
     { el: '#bellBtn', icon: 'bell', title: 'Avisos', text: 'La campanita junta todo lo que necesita tu atención: leads nuevos, cotizaciones vistas, pagos recibidos, contratos firmados y seguimientos vencidos.' },
     { el: 'header [data-action="lead"]', icon: 'plus', when: sales, title: 'Registrar un lead', text: 'Desde aquí das de alta una oportunidad nueva en segundos.' },
     { el: '#profileAvatar', icon: 'camera', title: 'Tu avatar', text: 'Toca tu imagen para subir tu foto o elegir un animal. Tu foto también aparece en las cotizaciones que envías.' },
-    { el: '#tourStart', icon: 'compass', title: '¿Dudas? Aquí está la guía', html: 'Con <b>Abrir guía</b> repites este recorrido, y en cada página el botón <b>?</b> te explica esa sección paso a paso.' }
+    { el: '#tourStart', icon: 'compass', title: '¿Dudas? Aquí está la guía', html: 'Con <b>Abrir guía</b> entras al <b>Centro de ayuda</b>: el paso a paso interactivo de cada función (y desde ahí repites este recorrido). En cada página, el botón <b>?</b> te explica esa sección.' }
   ];
   const SECTIONS = {
     dashboard: [
