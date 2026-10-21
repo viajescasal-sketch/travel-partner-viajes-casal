@@ -76,6 +76,7 @@
       send('POST', '/api/me/tour', { action: off ? 'off' : 'seen' }).then((r) => { db.prefs = { ...(db.prefs || {}), tour: r.tour }; }).catch(() => {});
       if (reason === 'done') toast('¡Listo! Puedes repetir el recorrido con “Abrir guía” y ver la guía de cada página con el botón ?.', 6000);
     }
+    if (t?.kind === 'help' && reason === 'done') toast('¡Listo! Encuentra más guías en “¿Necesitas ayuda?” › Abrir guía.', 5000);
   }
   function placeCard(card, rect) {
     const pad = 14, w = card.offsetWidth, h = card.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
@@ -112,7 +113,7 @@
     if (rect) Object.assign(hole.style, { display: 'block', left: `${rect.left - 6}px`, top: `${rect.top - 6}px`, width: `${rect.width + 12}px`, height: `${rect.height + 12}px` });
     else Object.assign(hole.style, { display: 'block', left: '50%', top: '50%', width: '0px', height: '0px' });
     const n = tour.steps.length, i = tour.i;
-    card.innerHTML = `<div class="tour-top">${s.icon ? icon(s.icon) : ''}<span>${tour.kind === 'main' ? 'Recorrido guiado' : 'Guía de la sección'} · ${i + 1} de ${n}</span><button type="button" class="tour-x" data-tour="close" aria-label="Cerrar">×</button></div>
+    card.innerHTML = `<div class="tour-top">${s.icon ? icon(s.icon) : ''}<span>${tour.kind === 'main' ? 'Recorrido guiado' : tour.kind === 'help' ? 'Guía paso a paso' : 'Guía de la sección'} · ${i + 1} de ${n}</span><button type="button" class="tour-x" data-tour="close" aria-label="Cerrar">×</button></div>
       <h3>${H(s.title)}</h3><p>${s.html || H(s.text)}</p>
       <div class="tour-dots">${tour.steps.map((_, k) => `<i class="${k === i ? 'on' : k < i ? 'done' : ''}"></i>`).join('')}</div>
       ${tour.kind === 'main' && i === 0 ? `<label class="tour-off"><input type="checkbox" data-tour="off" ${tour.off ? 'checked' : ''}> No volver a mostrar al entrar</label>` : ''}
@@ -218,8 +219,9 @@
     ]
   };
   window.startMainTour = () => startTour(MAIN(), 'main');
+  window.tpTour = (steps) => startTour(steps, 'help'); // Centro de ayuda (ayuda.js)
   window.startSectionGuide = (page) => startTour((SECTIONS[page] || []).map((s) => ({ ...s, page })), 'section');
-  $('#tourStart')?.addEventListener('click', () => { if (mobile()) $('#sidebar')?.classList.remove('open'); window.startMainTour(); });
+  $('#tourStart')?.addEventListener('click', () => { if (mobile()) $('#sidebar')?.classList.remove('open'); if (typeof window.helpCenter === 'function') window.helpCenter(); else window.startMainTour(); });
 
   // Botón “?” en el encabezado de cada página.
   $$('#platform .page').forEach((sec) => {

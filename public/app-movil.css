@@ -24,3 +24,25 @@ body.is-offline .toasts { bottom: 74px; }
 @media (max-width: 720px) { .gcal-cfg { grid-template-columns: 1fr; } }
 .gcal-guide li b, .gcal-guide li code { display: inline; font-size: inherit; margin: 0; }
 .gcal-secret { -webkit-text-security: disc; }
+/* Centro de ayuda */
+.hc { display: grid; gap: 10px; }
+.hc-top input { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); color: var(--text); font-size: 14px; }
+.hc-cats { display: flex; gap: 6px; flex-wrap: wrap; }
+.hc-cats button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 20px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.hc-cats button.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.hc-cat { margin: 8px 2px 0; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--teal); }
+.hc-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.hc-item { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; text-align: left; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+.hc-item:hover { border-color: var(--teal); background: rgba(0, 184, 200, .06); }
+.hc-item b { font-size: 13px; }
+.hc-item small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+.hc-ico { font-size: 22px; width: 36px; height: 36px; display: grid; place-items: center; background: var(--bg); border-radius: 10px; }
+.hc-ico.big { font-size: 28px; width: 52px; height: 52px; }
+.hc-go { color: var(--muted); font-size: 20px; }
+.hc-badge { font-style: normal; font-size: 10px; font-weight: 800; background: var(--coral); color: #fff; border-radius: 10px; padding: 1px 7px; }
+.hc-head { display: flex; gap: 12px; align-items: center; }
+.hc-head small { color: var(--teal); font-weight: 800; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.hc-head h3 { margin: 2px 0; font-size: 18px; }
+.hc-steps { margin: 4px 0; padding-left: 22px; display: grid; gap: 8px; font-size: 14px; line-height: 1.5; }
+.hc-steps li::marker { color: var(--teal); font-weight: 800; }
+@media (max-width: 720px) { .hc-list { grid-template-columns: 1fr; } }
