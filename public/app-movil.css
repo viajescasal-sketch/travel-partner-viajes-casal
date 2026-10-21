@@ -23,3 +23,4 @@ body.is-offline .toasts { bottom: 74px; }
 .gcal-cfg input { padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
 @media (max-width: 720px) { .gcal-cfg { grid-template-columns: 1fr; } }
 .gcal-guide li b, .gcal-guide li code { display: inline; font-size: inherit; margin: 0; }
+.gcal-secret { -webkit-text-security: disc; }

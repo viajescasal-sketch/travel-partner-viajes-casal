@@ -55,12 +55,13 @@
         <li>Copia el <b>ID de cliente</b> y el <b>Secreto del cliente</b> (empieza con GOCSPX-) y pégalos aquí abajo.</li>
         <li>Cada vendedor entra a <b>Seguimientos › Google Calendar › Conectar con Google</b>. Si Google avisa “no verificó esta app”, es normal: <b>Configuración avanzada → Ir a Travel Partner</b>.</li>
       </ol></details>
-      ${c.fromEnv ? '<p class="muted-note">Las credenciales vienen de las variables del servidor (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).</p>' : `<form id="gcalCfg" class="gcal-cfg"><label>ID de cliente<input name="client_id" required value="${H(c.client_id)}" placeholder="123456-abc.apps.googleusercontent.com" autocomplete="off"></label><label>Secreto del cliente<input name="client_secret" type="password" autocomplete="off" placeholder="${c.hasSecret ? '•••••••• (guardado; escribe uno nuevo solo para cambiarlo)' : 'GOCSPX-…'}"></label><button class="btn primary small">Guardar</button></form>`}
+      ${c.fromEnv ? '<p class="muted-note">Las credenciales vienen de las variables del servidor (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).</p>' : `<form id="gcalCfg" class="gcal-cfg" autocomplete="off"><label>ID de cliente<input name="client_id" required value="${H(c.client_id)}" placeholder="123456-abc.apps.googleusercontent.com" autocomplete="off" data-lpignore="true" data-1p-ignore spellcheck="false"></label><label>Secreto del cliente<input name="client_secret" class="gcal-secret" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore spellcheck="false" placeholder="${c.hasSecret ? '•••••••• (guardado; escribe uno nuevo solo para cambiarlo)' : 'GOCSPX-…'}"></label><button class="btn primary small">Guardar</button></form>`}
     </div>`;
     const form = document.getElementById('gcalCfg');
     if (form) form.onsubmit = async (e) => {
       e.preventDefault();
       const v = formValues(form);
+      if (/@/.test(v.client_id)) { toast('Ese es tu correo (lo llenó el navegador). Pega el ID de cliente de Google: termina en .apps.googleusercontent.com', 8000); return; }
       try { await send('PUT', '/api/gcal/config', { client_id: v.client_id, client_secret: v.client_secret }); toast('Google Calendar listo: cada vendedor ya puede conectarse'); renderGcalCard(); } catch (err) { toast(err.message, 6000); }
     };
   };
