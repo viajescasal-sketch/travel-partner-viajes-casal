@@ -37,6 +37,7 @@ const { createPreferencias } = require('./src/preferencias');
 const { createProveedorPortal, providerGate } = require('./src/proveedor-portal');
 const { createQuoteAttachments } = require('./src/quote-attachments');
 const { createClientPortal } = require('./src/client-portal');
+const { createPush } = require('./src/push');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -82,6 +83,9 @@ async function createApp(options = {}) {
   const dataStore = options.dataStore || createDataStore(process.env);
   await dataStore.initialize();
   const mailer = options.mailer || createMailer(process.env);
+  // TP-312: cada aviso de la campanita también sale como notificación push al celular.
+  const push = createPush(dataStore, { env: process.env, ...(options.webPush ? { webPush: options.webPush } : {}) });
+  push.attach();
   const resetService = createPasswordResetService(dataStore, mailer, process.env);
   // Conserva la bitácora 2 años: limpia al iniciar y una vez al día.
   const purge = () => dataStore.purgeActivity(ACTIVITY_RETENTION_DAYS)
@@ -336,6 +340,7 @@ async function createApp(options = {}) {
   app.use('/api', proveedorPortal.router); // TP-009
   app.use('/api', createQuoteAttachments(dataStore).router); // TP-113
   app.use('/api', clientPortal.apiRouter); // TP-313
+  app.use('/api', push.router); // TP-312
   app.use('/api', createCrmRouter(dataStore, { requireRole, assignment, payments }));
   // La página del formulario se puede mostrar dentro de otros sitios (iframe); el resto de la plataforma no.
   const formPage = path.join(publicDirectory, 'formulario.html');
@@ -351,6 +356,9 @@ async function createApp(options = {}) {
     res.set('Cache-Control', 'public, max-age=300');
     res.sendFile(path.join(publicDirectory, req.path.slice(1)));
   });
+  // TP-312: app instalable. El service worker y el manifiesto no se guardan en caché del navegador.
+  app.get('/sw.js', (req, res) => { res.set('Cache-Control', 'no-cache'); res.type('application/javascript'); res.sendFile(path.join(publicDirectory, 'sw.js')); });
+  app.get('/manifest.webmanifest', (req, res) => { res.set('Cache-Control', 'no-cache'); res.type('application/manifest+json'); res.sendFile(path.join(publicDirectory, 'manifest.webmanifest')); });
   // TP-009: portal del proveedor (la sesión y los permisos los revisa la API).
   app.get(['/proveedor', '/proveedor/'], (req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(path.join(publicDirectory, 'proveedor.html')); });
   app.use(express.static(publicDirectory, { index: false, dotfiles: 'ignore' }));
@@ -376,6 +384,7 @@ async function createApp(options = {}) {
   app.locals.postventa = postventa;
   app.locals.recompra = recompra;
   app.locals.automations = automations;
+  app.locals.push = push;
   return app;
 }
 

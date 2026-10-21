@@ -273,6 +273,14 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - Se precargaron HotelDO, Azabache, Grupo Xcaret y Travel Shop (una sola vez; completa contacto y comisión).
 - Tabla `crm_suppliers` (se crea sola) e incluida en el respaldo JSON. API: `GET|POST /api/suppliers`, `PATCH|DELETE /api/suppliers/:id`.
 
+## App instalable para vendedores (TP-312)
+
+- **Instalar:** botón 📱 en la barra superior → *Instalar Travel Partner* (Chrome/Android/computadora) o instrucciones para iPhone (Safari → Compartir → Agregar a inicio). Queda con el ícono de Viajes Casal, pantalla completa y color de marca (`public/manifest.webmanifest`, íconos en `public/app/`).
+- **Notificaciones push:** en el mismo botón, *Activar notificaciones en este equipo* (y *Enviar prueba*). **Todo aviso de la campanita** llega también al teléfono aunque la app esté cerrada; al tocarlo abre el lead, viaje, cotización o seguimiento. En iPhone requiere la app instalada (iOS 16.4+). Hasta 6 equipos por usuario; los que el navegador da de baja se quitan solos. Claves VAPID: variables `VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY` o, si no existen, se generan una vez y se guardan en `crm_settings` (`push_vapid`). Rutas `GET /api/push/key`, `POST /api/push/subscribe|unsubscribe|test` (`src/push.js`, dependencia `web-push`).
+- **Sin conexión:** el service worker (`public/sw.js`) guarda la página, estilos, scripts e íconos, y la última copia de `/api/crm`, la sesión, preferencias y avisos. Sin señal la app abre en **modo consulta** con aviso “Sin conexión”; al intentar guardar muestra un mensaje claro y al volver la señal recarga los datos. Al cerrar sesión se borra la copia. Las páginas públicas (cotización, pago, contrato, itinerario, encuesta, portal del cliente y del proveedor) no pasan por el service worker.
+- **Atajos del ícono:** *Nuevo lead* (`/?go=nuevo-lead`), *Seguimientos de hoy* (`/?go=hoy`) y *Cotizaciones* (`/?go=cotizaciones`). **Compartir a la app** (Android): desde WhatsApp u otra app → Compartir → Travel Partner abre *Nuevo lead* con el texto en notas y el teléfono detectado.
+- Interfaz en `public/app-movil.js` y `public/app-movil.css`. Para publicar una versión nueva de los archivos sin `?v=` cambia `VERSION` en `sw.js`.
+
 ## Portal del cliente (TP-313)
 
 - **Equipo:** botón **🌐 Portal del cliente** en la Ficha 360 y **🌐 Portal** en la ficha del lead: activar la liga `/mi-portal/<token>`, copiarla, mandarla por WhatsApp con mensaje listo, ver último acceso y equipos recordados, **generar liga nueva** (la anterior deja de servir y se cierran los equipos) o desactivarla.
