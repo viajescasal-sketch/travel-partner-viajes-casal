@@ -984,7 +984,9 @@ function googleCalendarLink(f) {
   return `https://calendar.google.com/calendar/render?${q.toString()}`;
 }
 
-async function googleCalendarModal() {
+// TP-112: la conexión en dos vías (gcal-ui.js) es la principal; la liga .ics queda como opción simple.
+function googleCalendarModal() { if (typeof gcalModal === 'function') return gcalModal(); return googleCalendarFeedModal(); }
+async function googleCalendarFeedModal() {
   let url = '';
   try { url = (await api('/api/calendar/feed')).url; } catch (error) { toast(error.message); return; }
   const html = `<div class="gcal">
@@ -2953,6 +2955,7 @@ function renderIntegrations() {
     + card(`Reseñas de Google ${reviews ? '<span class="tag-ok">Listo</span>' : '<span class="tag-soon">Sin enlace</span>'}`, reviews ? 'Aparece al pie de la cotización y la confirmación. Comparte el QR al terminar cada viaje.' : 'Agrega el enlace en Plantilla PDF.', reviews, reviews)
     + '<div id="botCard" class="integration"><div class="int-main"><b>Bot de WhatsApp → CRM</b><small>Cargando…</small></div></div>'
     + '<div id="webformCard" class="integration"><div class="int-main"><b>Formulario web → CRM</b><small>Cargando…</small></div></div>'
+    + '<div id="gcalCard" class="integration"><div class="int-main"><b>Google Calendar (dos vías)</b><small>Cargando…</small></div></div>'
     + `<div class="int-soon"><div><b>Respaldos y exportación <span class="tag-ok">Activo</span></b>Copia diaria a las 2:00 a.m. y descarga a Excel/CSV. <button class="link" data-settings-tab="backupsPanel">Ver respaldos</button></div></div>`;
 }
 $('#integrationCards').addEventListener('click', async (e) => {
@@ -3157,7 +3160,7 @@ function showSettingsTab(tab) {
   $$('#settingsNav [data-settings-tab]').forEach((b) => b.classList.toggle('active', b.dataset.settingsTab === tab));
   $$('.settings-panel').forEach((p) => { p.hidden = p.id !== tab; });
   if (tab === 'usersPanel') loadUsers();
-  if (tab === 'integrationsPanel') { loadMailStatus(); renderIntegrations(); renderBotCard(); renderWebformCard(); }
+  if (tab === 'integrationsPanel') { loadMailStatus(); renderIntegrations(); renderBotCard(); renderWebformCard(); if (typeof renderGcalCard === 'function') renderGcalCard(); }
   if (tab === 'pdfPanel') renderDocSettings();
   if (tab === 'questionsPanel') { renderQuestionsEditor(true); renderScoringSettings(); }
   if (tab === 'backupsPanel') loadBackups();

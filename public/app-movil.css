@@ -11,3 +11,15 @@ body.is-offline .toasts { bottom: 74px; }
   .platform header { padding-top: env(safe-area-inset-top); height: calc(72px + env(safe-area-inset-top)); }
   aside { padding-top: calc(20px + env(safe-area-inset-top)); }
 }
+/* TP-112 · Google Calendar en dos vías */
+.gcal-ok { font-weight: 600; }
+.gcal-what { margin: 6px 0 10px; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+.gcal-ics { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.gcal-ics summary, .gcal-guide summary { cursor: pointer; font-weight: 700; font-size: 12px; color: var(--teal); }
+.gcal-guide ol { font-size: 12px; line-height: 1.7; padding-left: 18px; margin: 8px 0; }
+.gcal-guide code { background: var(--bg); padding: 2px 6px; border-radius: 6px; font-size: 11px; word-break: break-all; }
+.gcal-cfg { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; margin-top: 8px; }
+.gcal-cfg label { font-size: 11px; font-weight: 700; display: grid; gap: 4px; }
+.gcal-cfg input { padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+@media (max-width: 720px) { .gcal-cfg { grid-template-columns: 1fr; } }
+.gcal-guide li b, .gcal-guide li code { display: inline; font-size: inherit; margin: 0; }
