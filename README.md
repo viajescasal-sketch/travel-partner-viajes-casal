@@ -273,6 +273,13 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - Se precargaron HotelDO, Azabache, Grupo Xcaret y Travel Shop (una sola vez; completa contacto y comisión).
 - Tabla `crm_suppliers` (se crea sola) e incluida en el respaldo JSON. API: `GET|POST /api/suppliers`, `PATCH|DELETE /api/suppliers/:id`.
 
+## Centro de ayuda
+
+- Menú **¿Necesitas ayuda? › Abrir guía** (abajo a la izquierda): buscador y categorías con **todas las funciones** (primeros pasos, leads, seguimientos, cotizaciones, cobros y pagos, clientes, viajes, proveedores, campañas y reportes, configuración).
+- Cada guía trae el **paso a paso**, avisa si falta algo para usarla (por ejemplo, el plan de pagos requiere una cotización *Aceptada*), **▶ Guíame en pantalla** (recorrido interactivo que abre la pantalla real y resalta cada botón) e **Ir ahora**. Solo muestra las guías del rol de quien la abre.
+- El recorrido general sigue disponible como primera guía y el botón **?** de cada página sigue igual.
+- Contenido en `public/ayuda.js` (arreglo de guías: texto, `go()` y `tour()` con selectores reales); motor de recorrido en `public/recorrido.js` (`window.tpTour`). **Cada función nueva debe agregar aquí su guía.**
+
 ## Google Calendar en dos vías (TP-112)
 
 - **Activar (administrador, una sola vez):** Configuración › Integraciones › *Google Calendar (dos vías)* trae la guía paso a paso para crear el proyecto en Google Cloud (API de Google Calendar, pantalla de consentimiento **publicada**, cliente OAuth tipo *Aplicación web* con el origen y la URI de redirección `APP_URL/api/gcal/callback` que muestra la propia tarjeta) y los campos para pegar el ID y el secreto (el secreto se guarda cifrado en `crm_settings` › `gcal_config`; también se aceptan las variables `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`).
