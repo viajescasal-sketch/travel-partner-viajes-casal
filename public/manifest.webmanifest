@@ -1,0 +1,29 @@
+{
+  "id": "/?app=travel-partner",
+  "name": "Travel Partner · Viajes Casal",
+  "short_name": "Travel Partner",
+  "description": "CRM de Viajes Casal: leads, cotizaciones, clientes, viajes y seguimientos.",
+  "lang": "es-MX",
+  "start_url": "/?app=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#073b66",
+  "background_color": "#073b66",
+  "categories": ["business", "productivity", "travel"],
+  "icons": [
+    { "src": "/app/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/app/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/app/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Nuevo lead", "short_name": "Nuevo lead", "url": "/?go=nuevo-lead", "icons": [{ "src": "/app/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Seguimientos de hoy", "short_name": "Hoy", "url": "/?go=hoy", "icons": [{ "src": "/app/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Cotizaciones", "short_name": "Cotizaciones", "url": "/?go=cotizaciones", "icons": [{ "src": "/app/icon-192.png", "sizes": "192x192" }] }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": { "title": "share_title", "text": "share_text", "url": "share_url" }
+  }
+}
