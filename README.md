@@ -328,6 +328,14 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - **Protecciones:** si alguien guarda las reservas con una copia vieja mientras el proveedor respondía, se conserva lo del proveedor; no se puede cambiar de proveedor ni quitar una reserva con solicitud abierta (primero se cancela). Todo queda en la bitácora.
 - Reglas en `public/proveedor-core.js`; rutas en `src/proveedor-portal.js` (`GET /api/proveedor/portal`, `POST /api/proveedor/services/:viaje/:reserva/{quote|decline|confirm}`, `POST /api/trips/:id/bookings/:bid/portal/{request|decision|cancel}`, `GET /api/supplier-portal/links`). Campo interno `portal` en cada reserva; liga usuario → proveedor en `crm_settings` (`supplier_portal`). El rol se agrega solo a la tabla `users` al iniciar.
 
+## Solicitar traslado desde la ficha del cliente
+
+- En la Ficha 360 aparece **🚐 Solicitar traslado** si alguna cotización del cliente (no rechazada) incluye Traslados (o los menciona en sus servicios), o si su ficha tiene marcado **🚐 Incluye traslado** (campo `includes_transfer`, para ventas cerradas sin cotización del CRM).
+- `POST /api/clients/:id/transfer` (`src/traslados.js`) en un paso: usa el viaje elegido o crea uno nuevo, agrega la reserva **Traslado** (fecha de pago al proveedor 5 días antes del viaje), envía la solicitud de precio al portal del proveedor (TP-009, si tiene acceso) y crea hasta 3 tareas: **Confirmar con el proveedor** (24 h), **Pagar al proveedor** (fecha de pago) y **Enviar datos del traslado al cliente** (2 días antes).
+- Las tareas quedan ligadas a la reserva (`followups.auto = { kind: 'traslado', trip_id, booking_id, task }`) y se mantienen solas: se cierran cuando el proveedor responde, cuando la reserva se marca pagada o si se cancela; la de pago muestra el monto al aceptar el precio. Si el vendedor mueve una tarea a mano, se respeta.
+- En Google Calendar el pago de un traslado con tarea aparece una sola vez (como tarea), sin duplicarse como “Pagar a proveedor”.
+- Reglas compartidas en `public/traslado-core.js`; pantalla en `public/traslado.js`; pruebas en `test/traslado.test.js`.
+
 ## Encuesta y reseña postviaje (TP-308)
 
 - **Automática:** el motor de recordatorios (cada 5 min, en horario laboral) genera la liga privada `/encuesta/<token>` **1 día después del regreso** (configurable): correo al cliente si tiene, aviso al vendedor y seguimiento de WhatsApp con la liga; el viaje pasa a *Solicitar reseña*. Solo viajes que regresan desde que se activó la función.

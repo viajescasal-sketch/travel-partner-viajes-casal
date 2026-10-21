@@ -39,6 +39,7 @@ const { createQuoteAttachments } = require('./src/quote-attachments');
 const { createClientPortal } = require('./src/client-portal');
 const { createPush } = require('./src/push');
 const { createGcalSync } = require('./src/gcal-sync');
+const { createTransfers } = require('./src/traslados');
 
 const PORT = process.env.PORT || 3000;
 const ACTIVITY_RETENTION_DAYS = 730;
@@ -339,6 +340,10 @@ async function createApp(options = {}) {
   app.use('/api', createPreferencias(dataStore).router); // avatares y recorrido guiado
   app.use('/api', createCommissions(dataStore).router); // TP-205/206
   app.use('/api', proveedorPortal.router); // TP-009
+  // Solicitar traslado desde la ficha del cliente (reserva + portal del proveedor + tareas que se mantienen solas).
+  const transfers = createTransfers(dataStore, { portal: proveedorPortal });
+  transfers.attach();
+  app.use('/api', transfers.router);
   app.use('/api', createQuoteAttachments(dataStore).router); // TP-113
   app.use('/api', clientPortal.apiRouter); // TP-313
   app.use('/api', push.router); // TP-312
