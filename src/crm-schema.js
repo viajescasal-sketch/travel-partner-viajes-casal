@@ -25,6 +25,8 @@ const ENTITIES = {
       // TP-310: cumpleaños, no contactar en campañas y bandeja de campañas de recompra
       birth_date: { type: 'date' },
       no_marketing: { type: 'bool', default: false },
+      // Solicitar traslado: el cliente lo tiene incluido aunque su cotización no se haya hecho en el CRM
+      includes_transfer: { type: 'bool', default: false },
       campaigns: { type: 'json', max: 30000, internal: true },
       // TP-303: acompañantes frecuentes del cliente (se reutilizan en otros viajes)
       companions: { type: 'json', max: 40000, internal: true },

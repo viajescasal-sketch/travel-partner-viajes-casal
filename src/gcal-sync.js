@@ -85,6 +85,8 @@ function desiredEvents(user, data, { appUrl = '', today = nowCancun().slice(0, 1
     };
     for (const b of t.bookings?.list || []) {
       if (b.status === 'Cancelada' || b.supplier_paid || !isDate(b.supplier_due) || b.cost === '' || b.cost == null) continue;
+      // Si el traslado ya tiene su tarea “Pagar al proveedor”, esa tarea es la que aparece en el calendario.
+      if ((data.followups || []).some((f) => !f.done && f.auto?.kind === 'traslado' && f.auto.task === 'pay' && f.auto.trip_id === t.id && f.auto.booking_id === b.id)) continue;
       if (b.supplier_due < from || b.supplier_due > to) continue;
       out[`s:${t.id}:${b.id}`] = {
         summary: `🏦 Pagar a ${b.supplier_name || 'proveedor'}: ${money(b.cost)}`,

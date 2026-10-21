@@ -66,10 +66,10 @@ function createProveedorPortal(dataStore, { assignment, mailer, env = {} } = {})
     return trip;
   }
   // Viaje visible y editable para alguien del equipo.
-  async function teamTrip(req) {
+  async function teamTrip(req, tripId = req.params.id) {
     const user = req.session.user;
     if (!canWrite(user, 'trips')) throw fail(403, 'Tu rol no permite esta acción');
-    const id = Number(req.params.id);
+    const id = Number(tripId);
     if (!Number.isInteger(id) || id < 1) throw new ValidationError('Identificador inválido');
     const data = {};
     for (const name of ENTITY_ORDER) data[name] = await dataStore.listRecords(name);
@@ -136,10 +136,11 @@ function createProveedorPortal(dataStore, { assignment, mailer, env = {} } = {})
   }));
 
   // Enviar (o reenviar) la solicitud de precio al proveedor.
-  router.post('/trips/:id/bookings/:bid/portal/request', wrap(async (req, res) => {
-    const out = await serial(`trip:${req.params.id}`, async () => {
-      const { trip, client } = await teamTrip(req);
-      const b = findBooking(trip, req.params.bid);
+  // También la usa “Solicitar traslado” desde la ficha del cliente (src/traslados.js).
+  async function sendRequest(req, tripId, bid, rawDetails) {
+    const out = await serial(`trip:${tripId}`, async () => {
+      const { trip, client } = await teamTrip(req, tripId);
+      const b = findBooking(trip, bid);
       if (!b) throw fail(404, 'No se encontró la reserva. Guarda las reservas antes de enviar la solicitud.');
       if (b.status === 'Cancelada') throw new ValidationError('La reserva está cancelada');
       if (!b.supplier_id) throw new ValidationError('Elige un proveedor del catálogo para esta reserva');
@@ -148,7 +149,7 @@ function createProveedorPortal(dataStore, { assignment, mailer, env = {} } = {})
       if (!(await portalUsersOf(supplier.id)).length) throw new ValidationError(`${supplier.name} aún no tiene acceso al portal. Créale un usuario con rol Proveedor en Configuración › Usuarios.`);
       const prev = b.portal;
       if (prev && ['Aceptada', 'Confirmada'].includes(prev.state)) throw new ValidationError('El servicio ya fue aceptado; si cambió algo, cancela la solicitud y envía una nueva');
-      const details = P.cleanDetails(req.body?.details);
+      const details = P.cleanDetails(rawDetails);
       const err = P.detailsError(details);
       if (err) throw new ValidationError(err);
       const now = nowCancun();
@@ -163,7 +164,11 @@ function createProveedorPortal(dataStore, { assignment, mailer, env = {} } = {})
       return { next, supplier, folio, resend, details };
     });
     await notifyProvider(out.supplier.id, { req, title: out.resend ? `Solicitud ${out.folio} actualizada` : `Nueva solicitud de precio ${out.folio}`, body: `${out.details.kind} · ${out.details.service_date}${out.details.pickup_time ? ` ${out.details.pickup_time}` : ''} · ${P.paxText(out.details)} · ${P.route(out.details)}` });
-    res.json({ ok: true, booking: out.next });
+    return out.next;
+  }
+  router.post('/trips/:id/bookings/:bid/portal/request', wrap(async (req, res) => {
+    const booking = await sendRequest(req, req.params.id, req.params.bid, req.body?.details);
+    res.json({ ok: true, booking });
   }));
 
   // Aceptar o rechazar el precio del proveedor.
@@ -306,7 +311,7 @@ function createProveedorPortal(dataStore, { assignment, mailer, env = {} } = {})
     res.json({ ok: true, service: P.providerView(out.trip, out.next) });
   }));
 
-  return { router, providerGate, readLinks, supplierOf };
+  return { router, providerGate, readLinks, supplierOf, sendRequest, portalUsersOf };
 }
 
 module.exports = { createProveedorPortal, providerGate, PROVIDER_PATHS, SETTING };
