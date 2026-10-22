@@ -614,7 +614,7 @@ body.dark .dupe-banner { background: rgba(246,185,59,.1); }
 
 /* ===== Kanban: columnas con altura fija y scroll vertical ===== */
 .kb-list {
-  max-height: 800px;          /* ≈ 6 tarjetas visibles (entre 5 y 7 según su alto) */
+  max-height: 440px;          /* ≈ 3 tarjetas visibles; las demás con scroll */
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 4px;
