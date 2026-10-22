@@ -582,3 +582,45 @@ body.dark .dupe-banner { background: rgba(246,185,59,.1); }
 #itDays{display:grid;gap:10px}.it-day{display:grid;gap:6px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--bg)}
 .it-day-head{display:flex;gap:8px;align-items:baseline;font-size:12px}.it-day-head b{color:var(--teal)}.it-day-head span{color:var(--muted);text-transform:capitalize}
 .it-day input,.it-day textarea{width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px}.it-day textarea{resize:vertical}
+
+/* ===== Menú lateral colapsable (escritorio) ===== */
+@media (min-width: 801px) {
+  #menu.mobile { display: grid; }
+  .platform, aside { transition: grid-template-columns .2s ease, width .2s ease, padding .2s ease; }
+
+  body.nav-collapsed .platform { grid-template-columns: 76px 1fr; }
+  body.nav-collapsed aside { width: 76px; padding-left: 10px; padding-right: 10px; }
+
+  /* Ocultar textos: solo quedan los íconos */
+  body.nav-collapsed .brand.side > div:not(.logo),
+  body.nav-collapsed aside nav button span,
+  body.nav-collapsed .help > div,
+  body.nav-collapsed .help .btn,
+  body.nav-collapsed .profile > div,
+  body.nav-collapsed .profile #myAccount { display: none; }
+
+  body.nav-collapsed .brand.side { justify-content: center; }
+  body.nav-collapsed aside nav button { justify-content: center; padding-left: 0; padding-right: 0; position: relative; }
+
+  /* Contadores (Leads 3, Seguimientos 1) como globito sobre el ícono */
+  body.nav-collapsed aside nav button em {
+    position: absolute; top: 2px; right: 6px; margin: 0;
+    font-size: 9px; padding: 1px 5px; background: var(--teal); color: #fff;
+  }
+
+  body.nav-collapsed .help { justify-content: center; padding: 8px 0; cursor: pointer; }
+  body.nav-collapsed .profile { flex-direction: column; gap: 8px; align-items: center; }
+}
+
+/* ===== Kanban: columnas con altura fija y scroll vertical ===== */
+.kb-list {
+  max-height: 800px;          /* ≈ 6 tarjetas visibles (entre 5 y 7 según su alto) */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(7, 59, 102, .25) transparent;
+}
+.kb-list::-webkit-scrollbar { width: 6px; }
+.kb-list::-webkit-scrollbar-thumb { background: rgba(7, 59, 102, .25); border-radius: 6px; }
+body.dark .kb-list { scrollbar-color: rgba(255, 255, 255, .25) transparent; }

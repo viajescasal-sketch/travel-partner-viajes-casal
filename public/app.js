@@ -348,13 +348,26 @@ function boardCard(l, admin) {
       ${canMove ? `<button type="button" class="kb-move" data-kb-move="${l.id}" title="Mover a otra etapa" aria-label="Mover a otra etapa">⇄</button>` : ''}</span></div>
   </div>`;
 }
+// Orden del tablero: primero los viajes más próximos a salir; después los viajes
+// cuya fecha ya pasó (el más reciente primero); al final los leads sin fecha.
+function byTravelDate(a, b) {
+  const today = nowLocal().toISOString().slice(0, 10);
+  const rank = (l) => (!l.start_date ? 2 : String(l.start_date).slice(0, 10) >= today ? 0 : 1);
+  const ra = rank(a);
+  const rb = rank(b);
+  if (ra !== rb) return ra - rb;
+  const da = String(a.start_date || '').slice(0, 10);
+  const dz = String(b.start_date || '').slice(0, 10);
+  if (da !== dz) return ra === 1 ? (dz < da ? -1 : 1) : (da < dz ? -1 : 1);
+  return daysInStage(b) - daysInStage(a) || b.id - a.id;
+}
 function renderBoard() {
   const admin = isAdmin();
   const list = filteredLeads(true);
   const cols = BOARD_STAGES.map((stage) => {
     let items = list.filter((l) => l.stage === stage);
     if (stage === 'Vendido') items = items.filter((l) => thisMonth(l.closed_at || l.stage_changed_at || l.updated_at));
-    items.sort((a, b) => daysInStage(b) - daysInStage(a) || b.id - a.id);
+    items.sort(byTravelDate);
     const total = items.reduce((s, l) => s + boardValue(l), 0);
     return `<section class="kb-col${stage === 'Vendido' ? ' won' : ''}" data-stage="${escapeHtml(stage)}">
       <div class="kb-head"><div><b>${escapeHtml(stage)}</b>${stage === 'Vendido' ? '<small>este mes</small>' : ''}<em>${items.length}</em></div><span class="kb-total">${money(total)}</span></div>
@@ -3296,7 +3309,18 @@ function toast(text, ms = 3200) {
 }
 
 $('#nav').onclick = (e) => { const b = e.target.closest('[data-page]'); if (b) navigate(b.dataset.page); };
-$('#menu').onclick = () => $('#sidebar').classList.toggle('open');
+// Menú lateral: en celular abre/cierra; en computadora se colapsa a solo íconos (se recuerda la elección).
+$('#menu').onclick = () => {
+  if (matchMedia('(max-width: 800px)').matches) return $('#sidebar').classList.toggle('open');
+  const collapsed = document.body.classList.toggle('nav-collapsed');
+  try { localStorage.setItem('tp-nav-collapsed', collapsed ? '1' : '0'); } catch (e) {}
+};
+try { if (localStorage.getItem('tp-nav-collapsed') === '1') document.body.classList.add('nav-collapsed'); } catch (e) {}
+// Con el menú colapsado: nombre de cada sección al pasar el mouse, y el ícono de ayuda abre la guía
+document.querySelectorAll('#nav button').forEach((b) => { if (!b.title) b.title = b.querySelector('span')?.textContent.trim() || ''; });
+document.querySelector('.side-bottom .help')?.addEventListener('click', (e) => {
+  if (document.body.classList.contains('nav-collapsed') && !e.target.closest('#tourStart')) $('#tourStart')?.click();
+});
 $('#theme').onclick = () => {
   document.body.classList.toggle('dark');
   try { localStorage.setItem('tp-dark', document.body.classList.contains('dark') ? '1' : '0'); } catch { /* sin almacenamiento */ }
