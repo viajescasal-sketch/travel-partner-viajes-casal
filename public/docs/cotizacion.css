@@ -144,11 +144,12 @@ h1,h2,h3{font-family:Georgia,'Times New Roman',serif}
 .brandmark{display:flex;align-items:center;gap:10px}
 .brandmark .logoBadge{width:46px;height:46px;border-radius:50%;overflow:hidden;background:#fff;display:grid;place-items:center;box-shadow:0 2px 8px #0002;flex-shrink:0}
 .brandmark .logoBadge img{width:42px;height:42px;object-fit:contain;display:block;border-radius:50%}
+.notesText{font-size:12.5px;line-height:1.6;white-space:pre-line;color:var(--ink)}
 .payInfo{margin-top:14px;padding:12px 14px;border-radius:12px;background:#fbfdfc;border:1px dashed var(--turq);font-size:12px;line-height:1.5;white-space:pre-line;color:var(--ink)}
 .partnerText p.bio{white-space:pre-line}
 .sheet[hidden]{display:none!important}
 @media print{
-  .card,.price,.legal,.footer{break-inside:avoid;page-break-inside:avoid}
+  .notesCard,.card,.price,.legal,.footer{break-inside:avoid;page-break-inside:avoid}
   .sheet.print-skip{display:none!important}
 }
 @media print{

@@ -1432,6 +1432,9 @@ function quoteModal(id, preset = {}) {
         ${det.proposals.map((p, i) => proposalHtml(det, p, i)).join('')}
         ${det.proposals.length < 4 ? '<div class="cz-add"><button type="button" class="btn secondary small" data-add-prop>+ Agregar otra propuesta (hasta 4)</button></div>' : ''}
       </section>`}
+      <section class="cz-card"><h4>Notas</h4><p class="cz-hint">Opcional. Aparecen al final del PDF y de la cotización en línea, en un bloque “Notas”.</p>
+        <div class="cz-grid g2">${czArea(det, 'notas', 'Notas para el cliente', 'rows="4" maxlength="2000" placeholder="Ej. Tarifas sujetas a disponibilidad al momento de reservar. Precio para salida en temporada baja…"', 'full')}</div>
+      </section>
       ${quote?.status === 'Aceptada' ? `<div class="quick-actions"><button type="button" class="btn secondary small" data-pay-plan="${quote.id}">💳 Plan de pagos y liga</button><button type="button" class="btn secondary small" data-trip-from-quote="${quote.id}">Crear viaje con esta cotización</button></div>` : ''}
       ${quote ? historyButton('quotes', quote.id) : ''}
       ${deleteBlock('cotización', quote?.id)}
@@ -1480,7 +1483,7 @@ function quoteModal(id, preset = {}) {
         drafts[det.kind === 'circuito' ? 'circuito' : 'paquete'] = det;
         const next = drafts[kind] || (kind === 'circuito' ? TPDocs.newCircuitDetails(leadById(core.lead_id)) : TPDocs.normalizeDetails(null, leadById(core.lead_id)));
         if (kind !== 'circuito' && !drafts[kind]) { next.services = { vuelo: true, hotel: true, traslados: true, tours: false, seguro: false }; next.proposals = [{ hotel: { stars: '5' }, price: {}, pay: { esquema: 'anticipo' } }]; }
-        next.pax = next.pax || det.pax; next.startDate = next.startDate || det.startDate; next.heroMediaId = next.heroMediaId || det.heroMediaId;
+        next.pax = next.pax || det.pax; next.startDate = next.startDate || det.startDate; next.heroMediaId = next.heroMediaId || det.heroMediaId; next.notas = next.notas || det.notas || '';
         det = next;
         render();
         return;
@@ -1495,12 +1498,14 @@ function quoteModal(id, preset = {}) {
         render();
       } else if (saveBtn) save(saveBtn.dataset.save === '1', saveBtn);
     };
+    const daysPick = body.querySelector('[data-days-count]');
+    if (daysPick) daysPick.onchange = () => { if (!setCircuitDayCount(det.circuit, Number(daysPick.value))) daysPick.value = String(det.circuit.days.length); render(); };
     if (quote) bindDelete(`/api/quotes/${quote.id}`, 'Cotización eliminada');
   }
 
   // Deja solo lo que corresponde a los servicios marcados.
   function cleanDetails() {
-    const out = { version: 1, pax: str(det.pax), startDate: det.startDate || '', endDate: det.endDate || '', linkOnline: str(det.linkOnline), heroMediaId: det.heroMediaId || null, services: { ...det.services }, varying: det.varying, principal: det.principal || 0, fixed: {}, proposals: [] };
+    const out = { version: 1, pax: str(det.pax), startDate: det.startDate || '', endDate: det.endDate || '', linkOnline: str(det.linkOnline), heroMediaId: det.heroMediaId || null, services: { ...det.services }, varying: det.varying, principal: det.principal || 0, fixed: {}, proposals: [], notas: str(det.notas) };
     CZ_SERVICES.forEach(([k]) => { if (det.services[k] && k !== det.varying && det.fixed?.[k]) out.fixed[k] = det.fixed[k]; });
     out.proposals = det.proposals.map((p) => ({ [det.varying]: p[det.varying] || {}, price: p.price || {}, pay: p.pay || { esquema: 'anticipo' } }));
     if (out.fixed.tours?.items) out.fixed.tours.items = out.fixed.tours.items.filter(Boolean);
@@ -1542,7 +1547,7 @@ function quoteModal(id, preset = {}) {
     const desde = TPDocs.circuitDesde(c);
     if (!desde) { toast('Captura al menos una tarifa por persona'); return; }
     const details = {
-      version: 1, kind: 'circuito', pax: str(det.pax), startDate: det.startDate || '', linkOnline: str(det.linkOnline), heroMediaId: det.heroMediaId || null,
+      version: 1, kind: 'circuito', pax: str(det.pax), startDate: det.startDate || '', linkOnline: str(det.linkOnline), heroMediaId: det.heroMediaId || null, notas: str(det.notas),
       circuit: { ...c, ruta: c.ruta.map(str).filter(Boolean), incluye: c.incluye.map(str).filter(Boolean), excluye: c.excluye.map(str).filter(Boolean),
         categories: c.categories.map((cat) => ({ ...cat, hoteles: cat.hoteles.filter((h) => h && (h.ciudad || h.hotel)), precios: c.occupancies.map((_, i) => str(cat.precios[i])) })) }
     };
@@ -1566,7 +1571,7 @@ function quoteModal(id, preset = {}) {
 const str = (v) => String(v ?? '').trim();
 
 /* ---------- Circuito: secciones del cotizador ---------- */
-const CIRCUIT_LIMITS = { ruta: 8, days: 12, categories: 5, occupancies: 6, incluye: 8, excluye: 8, hoteles: 8 };
+const CIRCUIT_LIMITS = { ruta: 8, days: 20, categories: 5, occupancies: 6, incluye: 8, excluye: 8, hoteles: 8 };
 const circuitDays = (d) => { const dias = d.circuit.days.length || 1, n = Math.max(dias - 1, 0); return `${dias} día${dias > 1 ? 's' : ''} / ${n} noche${n !== 1 ? 's' : ''}`; };
 function circuitAdd(c, what) {
   if (what.startsWith('categories.')) {
@@ -1579,6 +1584,17 @@ function circuitAdd(c, what) {
   if (what === 'days') list.push({ titulo: '', descripcion: '', desayuno: true, comida: false, cena: false });
   else if (what === 'categories') list.push({ nombre: '', estrellas: '4', hoteles: [{ ciudad: '', hotel: '' }], precios: [] });
   else list.push('');
+}
+// Ajusta el itinerario al número de días elegido; si al quitar días se perdería texto ya capturado, pide confirmación.
+function setCircuitDayCount(c, n) {
+  const target = Math.min(Math.max(Number(n) || 1, 1), CIRCUIT_LIMITS.days);
+  if (target < c.days.length) {
+    const lost = c.days.slice(target).filter((d) => str(d.titulo) || str(d.descripcion)).length;
+    if (lost && !confirm(`Se quitarán los días ${target + 1} a ${c.days.length}. ${lost === 1 ? 'Uno de ellos ya tiene' : `${lost} de ellos ya tienen`} información capturada. ¿Continuar?`)) return false;
+    c.days.splice(target);
+  }
+  while (c.days.length < target) circuitAdd(c, 'days');
+  return true;
 }
 function circuitDel(c, path) {
   const parts = path.split('.');
@@ -1599,7 +1615,9 @@ function circuitSections(det) {
       ${listRows('ruta', 'Ej. Cancún')}${addBtn('ruta', '+ Agregar ciudad', c.ruta)}</section>
     <section class="cz-card"><h4>Servicios incluidos en el circuito</h4>
       <div class="cz-svc">${TPDocs.CIRCUIT_SERVICES.map((s) => `<label><input type="checkbox" data-k="circuit.services.${s.key}" ${c.services[s.key] ? 'checked' : ''}> ${s.label}</label>`).join('')}</div></section>
-    <section class="cz-card"><h4>Itinerario día por día</h4><p class="cz-hint">${escapeHtml(circuitDays(det))}. Hasta 12 días.</p>
+    <section class="cz-card"><h4>Itinerario día por día</h4>
+      <div class="cz-days-pick"><label>¿Cuántos días viaja?<select data-days-count>${Array.from({ length: CIRCUIT_LIMITS.days }, (_, i) => `<option value="${i + 1}" ${c.days.length === i + 1 ? 'selected' : ''}>${i + 1} día${i ? 's' : ''} / ${i} noche${i !== 1 ? 's' : ''}</option>`).join('')}</select></label>
+        <p class="cz-hint">Elige el número de días y se crean los bloques del itinerario (hasta ${CIRCUIT_LIMITS.days}).</p></div>
       ${c.days.map((d, i) => `<div class="cz-block"><div class="cz-prop-head"><b>Día ${i + 1}</b>${del(`days.${i}`, c.days.length > 1)}</div>
         <div class="cz-grid g2">${czInput(det, `circuit.days.${i}.titulo`, 'Título / ruta del día', 'placeholder="Cancún — Llegada" maxlength="120"', 'full')}
         ${czArea(det, `circuit.days.${i}.descripcion`, 'Descripción', 'placeholder="Recepción en el aeropuerto y traslado al hotel…" maxlength="1200"', 'full')}</div>

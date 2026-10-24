@@ -112,6 +112,9 @@ body.dark .doc-settings legend { color: #fff; }
 .cz-row input { flex: 1; }
 .cz-row .cz-city { max-width: 220px; }
 .cz-x { border: 1px solid var(--border); background: var(--surface); color: #e2794f; border-radius: 8px; width: 30px; height: 30px; cursor: pointer; flex-shrink: 0; }
+.cz-days-pick { margin-bottom: 12px; }
+.cz-days-pick label { display: flex; flex-direction: column; gap: 4px; max-width: 260px; font-size: 12px; font-weight: 700; }
+.cz-days-pick .cz-hint { margin: 6px 0 0; }
 .cz-meals { display: flex; gap: 14px; margin-top: 8px; font-size: 12px; }
 .cz-meals label { display: flex !important; align-items: center; gap: 6px; font-weight: 600 !important; }
 .cz-meals input { width: auto !important; }

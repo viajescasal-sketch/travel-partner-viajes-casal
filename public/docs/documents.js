@@ -9,6 +9,8 @@
   const esc = (v) => String(v ?? '').replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
   const str = (v) => String(v ?? '').trim();
   const lines = (v) => String(v || '').split(/\n+/).map((x) => x.trim()).filter(Boolean);
+  // Notas libres del vendedor al final de la cotización (paquete y circuito).
+  const notesCard = (v) => (str(v) ? `<section class="card notesCard"><div class="cardtitle">NOTAS</div><div class="notesText">${esc(str(v))}</div></section>` : '');
   // Solo enlaces http(s); cualquier otra cosa se descarta.
   const safeUrl = (u) => { const v = str(u); if (!v) return ''; const full = /^https?:\/\//i.test(v) ? v : (/^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(v) ? `https://${v}` : ''); return /^https?:\/\/[^\s<>"']+$/i.test(full) ? full : ''; };
   const media = (id) => (Number(id) > 0 ? `/api/media/${Number(id)}` : '');
@@ -249,6 +251,7 @@
         <div class="services" style="grid-template-columns:repeat(3,1fr)"><div><span class="ico">${ICONS.tarjeta}</span><b>Tarjeta</b></div><div><span class="ico">${ICONS.transferencia}</span><b>Transferencia</b></div><div><span class="ico">${ICONS.facilidades}</span><b>Facilidades</b></div></div>
         ${str(documents.paymentInstructions) ? `<div class="payInfo">${esc(documents.paymentInstructions)}</div>` : ''}
       </section>
+      ${notesCard(model.details?.notas)}
       <section class="legal">
         <div><b>ⓘ INFORMACIÓN IMPORTANTE</b><p>${esc(documents.quoteImportant)}</p></div>
         <div><b>⚙ POLÍTICAS</b><p>${esc(documents.quotePolicies)}</p></div>
@@ -324,6 +327,7 @@
       version: 1, kind: 'circuito',
       pax: d.pax ?? (lead?.travelers ? `${lead.travelers} ${lead.travelers === 1 ? 'pasajero' : 'pasajeros'}` : ''),
       startDate: d.startDate || lead?.start_date || '', linkOnline: d.linkOnline || '', heroMediaId: d.heroMediaId || null,
+      notas: str(d.notas),
       circuit: {
         nombre: c.nombre || '', tipoTraslado: c.tipoTraslado || '', idiomaGuia: c.idiomaGuia || '',
         ruta: arr(c.ruta).map((x) => str(x)),
@@ -383,7 +387,7 @@
   }
 
   // Bloques compartidos con la cotización de paquete (pago, legales, Travel Partner y pie).
-  function closingBlocks(g, documents, legal) {
+  function closingBlocks(g, documents, legal, notas = '') {
     const benefits = lines(documents.partnerBenefits);
     const bio = g.partnerBio || `Soy ${firstName(g.partner)}, tu Travel Partner en ${g.brandName}. Te acompaño desde el primer mensaje hasta que regresas a casa, cuidando cada detalle de tu viaje para que tú solo pienses en disfrutarlo.`;
     const blog = safeUrl(documents.blogUrl);
@@ -396,6 +400,7 @@
         <div class="services" style="grid-template-columns:repeat(3,1fr)"><div><span class="ico">${ICONS.tarjeta}</span><b>Tarjeta</b></div><div><span class="ico">${ICONS.transferencia}</span><b>Transferencia</b></div><div><span class="ico">${ICONS.facilidades}</span><b>Facilidades</b></div></div>
         ${str(documents.paymentInstructions) ? `<div class="payInfo">${esc(documents.paymentInstructions)}</div>` : ''}
       </section>
+      ${notesCard(notas)}
       <section class="legal">
         <div><b>ⓘ INFORMACIÓN IMPORTANTE</b><p>${esc(legal[0])}</p></div>
         <div><b>⚙ POLÍTICAS</b><p>${esc(legal[1])}</p></div>
@@ -484,7 +489,7 @@
           <div class="per">${desde ? 'Consulta la tabla completa de tarifas arriba según categoría y ocupación' : ''}</div></div>
         ${wa ? `<a class="cta" href="${esc(waLink(g.partnerTel, reserve))}" target="_blank" rel="noopener">RESERVAR MI CIRCUITO →</a>` : '<span class="cta">RESERVAR MI CIRCUITO →</span>'}
       </section>
-      ${closingBlocks(g, documents, [documents.circImportant || documents.quoteImportant, documents.circPolicies || documents.quotePolicies, documents.quoteNote])}
+      ${closingBlocks(g, documents, [documents.circImportant || documents.quoteImportant, documents.circPolicies || documents.quotePolicies, documents.quoteNote], details.notas)}
   </div>`;
   }
 

@@ -158,10 +158,11 @@ test('plantilla PDF, cotizador, confirmación y calificación', async (context) 
   assert.deepEqual(hist[0].changes.map((c) => [c.label, c.to]), [['Confirmación de servicios', 'Actualizado']]);
 
   // Cotización de circuito
-  const circuit = { version: 1, kind: 'circuito', pax: '2 adultos', startDate: '2027-01-10', circuit: { nombre: 'Ruta Maya', ruta: ['Cancún', 'Mérida'], days: [{ titulo: 'Llegada' }, { titulo: 'Chichén Itzá' }], categories: [{ nombre: 'Estándar', estrellas: '3', hoteles: [{ ciudad: 'Mérida', hotel: 'Hotel Centro' }], precios: ['18500', '14900'] }], occupancies: ['Sencilla', 'Doble'] } };
+  const circuit = { version: 1, kind: 'circuito', pax: '2 adultos', startDate: '2027-01-10', notas: 'Precio sujeto a disponibilidad', circuit: { nombre: 'Ruta Maya', ruta: ['Cancún', 'Mérida'], days: [{ titulo: 'Llegada' }, { titulo: 'Chichén Itzá' }], categories: [{ nombre: 'Estándar', estrellas: '3', hoteles: [{ ciudad: 'Mérida', hotel: 'Hotel Centro' }], precios: ['18500', '14900'] }], occupancies: ['Sencilla', 'Doble'] } };
   const cq = await paulina('POST', '/api/quotes', { client_id: lead.client.id, lead_id: lead.record.id, destination: 'Yucatán', hotel: 'Circuito Ruta Maya', price: 14900, mode: 'Por persona', details: circuit });
   assert.equal(cq.status, 201);
   assert.equal((await paulina('GET', `/api/documents/quote/${cq.body.record.id}`)).body.quote.details.circuit.ruta[1], 'Mérida');
+  assert.equal((await paulina('GET', `/api/documents/quote/${cq.body.record.id}`)).body.quote.details.notas, 'Precio sujeto a disponibilidad');
 
   // Duplicar conserva el cotizador
   const copy = (await paulina('POST', `/api/quotes/${quote.id}/duplicate`)).body.record;

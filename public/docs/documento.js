@@ -68,7 +68,7 @@
   }
   function renderQuote(payload) {
     const circuit = payload.quote.details?.kind === 'circuito';
-    $('#docStyles').href = circuit ? '/docs/circuito.css?v=tp006' : '/docs/cotizacion.css?v=tp006';
+    $('#docStyles').href = circuit ? '/docs/circuito.css?v=notas20' : '/docs/cotizacion.css?v=notas20';
     const model = circuit ? D.circuitModel(payload) : D.quoteModel(payload);
     if (circuit) model.dataList = [null];
     state = { payload, model, tab: 0 };
@@ -106,7 +106,7 @@
     if (full.length) note(`La hoja ${full.map((p) => (p.classList.contains('pdf-page-one') ? 1 : 2)).join(' y ')} tiene más texto del que cabe en A4 y se recortará. Acorta textos largos (tips, datos del hotel, actividades) en la confirmación del viaje.`);
   }
   function renderReservation(payload) {
-    $('#docStyles').href = '/docs/reserva.css?v=tp006';
+    $('#docStyles').href = '/docs/reserva.css?v=notas20';
     const c = D.mergeConfirmation(payload.trip.confirmation, D.confirmationDefaults(payload));
     state = { payload, c };
     document.title = `${c.reservation} · ${c.holder || 'Confirmación'}`;
@@ -127,7 +127,7 @@
     const back = document.querySelector('.doc-toolbar a.ghost');
     if (back) back.remove();
     const circuit = payload.quote.details?.kind === 'circuito';
-    $('#docStyles').href = circuit ? '/docs/circuito.css?v=tp006' : '/docs/cotizacion.css?v=tp006';
+    $('#docStyles').href = circuit ? '/docs/circuito.css?v=notas20' : '/docs/cotizacion.css?v=notas20';
     const model = circuit ? D.circuitModel(payload) : D.quoteModel(payload);
     if (circuit) model.dataList = [null];
     state = { payload, model, tab: 0 };
