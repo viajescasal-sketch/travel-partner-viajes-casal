@@ -143,6 +143,7 @@
     if (type === 'campaigns') { navigate('campaigns'); return; }
     if (type === 'quote' && quoteById(id)) { navigate('quotes'); quoteModal(id); return; }
     if (type === 'payplan' && quoteById(id)) { navigate('quotes'); payPlanModal(id); return; }
+    if (type === 'paychange' && typeof paymentChangesModal === 'function') { paymentChangesModal(id); return; }
     if (type === 'client' && clientById(id)) { navigate('clients'); clientFile(id); return; }
     if (type === 'followup' && followupById(id)) { navigate('followups'); followupModal(id); return; }
     if (type === 'trip' && tripById(id)) { navigate('trips'); tripModal(id); return; }

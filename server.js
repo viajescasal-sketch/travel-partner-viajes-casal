@@ -276,6 +276,7 @@ async function createApp(options = {}) {
   app.use(contracts.publicRouter);
   const payments = createPayments(dataStore, { assignment, mailer, env: process.env, mercadoPago: options.mercadoPago, publicDirectory, contracts, ...(options.paymentsNow ? { now: options.paymentsNow } : {}) });
   app.use(payments.publicRouter);
+  payments.reconcileDeletedPayments().then((n) => { if (n) console.log(`Planes de pago sincronizados con la ficha: ${n} pago(s) eliminados quitados`); }).catch((error) => console.error('Sincronizar planes de pago:', error.message));
   // TP-308/309: encuesta postviaje y programa de referidos (rutas públicas /encuesta y /r).
   const postventa = createPostventa(dataStore, { assignment, mailer, env: process.env, publicDirectory });
   app.use(postventa.publicRouter);

@@ -151,6 +151,7 @@ async function loadAll() {
     db.goals = data.goals || { base: 'venta', sellers: {} }; // TP-206
     db.customFields = data.settings?.customFields || { leads: [], clients: [], trips: [] }; // TP-306
     db.prefs = data.prefs || null; // avatar y recorrido guiado
+    db.paymentChanges = data.paymentChanges || []; // correcciones de pago por autorizar
     loaded = true;
     renderAll();
     if (typeof onDataLoaded === 'function') onDataLoaded(); // avatar y recorrido guiado
@@ -575,6 +576,7 @@ $('#bellPanel').addEventListener('click', async (e) => {
     const open = () => {
       if (linkType === 'quote' && quoteById(id)) { navigate('quotes'); quoteModal(id); return true; }
       if (linkType === 'payplan' && quoteById(id)) { navigate('quotes'); payPlanModal(id); return true; }
+      if (linkType === 'paychange') { paymentChangesModal(id); return true; }
       if (linkType === 'client' && clientById(id)) { navigate('clients'); clientFile(id); return true; }
       if (linkType === 'followup' && followupById(id)) { navigate('followups'); followupModal(id); return true; }
       if (linkType === 'trip' && tripById(id)) { navigate('trips'); tripModal(id); return true; } // TP-307
@@ -763,6 +765,8 @@ function renderQuotes() {
   const editable = canWrite('quotes');
   $('#multiSend').classList.toggle('hidden', !editable);
   renderPayDue();
+  if (typeof renderPayChangesBanner === 'function') renderPayChangesBanner();
+  if (typeof renderQuoteCollection === 'function') { renderQuoteCollection(); return; } // vista tarjetas/lista (cotizaciones-vista.js)
   $('#quoteGrid').innerHTML = list.length ? list.map((x) =>
     `<article class="card"><div class="card-top"><div>${editable && !x.details?.external ? `<label class="quote-select"><input type="checkbox" data-select-quote="${x.id}" ${selectedQuoteIds.has(x.id) ? 'checked' : ''}> Seleccionar PDF</label>` : ''}${x.details?.external ? `<span class="contact-chip ext-chip" title="Cotización hecha fuera del CRM">📎 ${x.details.external.kind === 'link' ? 'Link' : 'Adjunta'}</span>` : ''}<span class="status ${statusClass(x.status)}">${escapeHtml(x.status)}</span>${x.status === 'Enviada' && x.reminder_at ? '<span class="contact-chip late" title="Se programó un seguimiento automático">⏰ Sin respuesta</span>' : ''}${x.status === 'Aceptada' && x.acceptance?.by === 'cliente' ? `<span class="contact-chip seen" title="Aceptada por ${escapeHtml(x.acceptance.name)} el ${escapeHtml(fmtDue(x.acceptance.at))}">✅ En línea</span>` : ''}${x.viewed_at ? `<span class="contact-chip seen" title="El cliente abrió la liga ${x.view_count || 1} ${Number(x.view_count) === 1 ? 'vez' : 'veces'}">👀 Vista</span>` : ''}<h3>${escapeHtml(x.folio)}${(x.details?.proposals?.length || 0) > 1 ? `<span class="proposals-chip">${x.details.proposals.length} propuestas</span>` : ''}</h3><p>${escapeHtml(clientName(x.client_id))}</p></div>${editable ? `<div class="icon-row"><button class="icon" data-edit-quote="${x.id}" title="Editar cotización" aria-label="Editar cotización">✎</button>${x.details?.external ? '' : `<button class="icon" data-duplicate="${x.id}" title="Duplicar cotización" aria-label="Duplicar cotización">⧉</button>`}</div>` : ''}</div><div class="price">${money(x.price)}</div><small>${escapeHtml(x.mode)}</small><div class="meta"><div><span>Destino</span><b>${escapeHtml(x.destination)}</b></div><div><span>Vigencia</span><b>${escapeHtml(x.valid_until ? fmtDate(x.valid_until) : 'Por definir')}</b></div></div><p><b>${escapeHtml(x.hotel)}</b></p>${editable ? `<label class="inline-select">Estado<select data-quote-status="${x.id}">${options(QUOTE_STATUSES, x.status)}</select></label>` : ''}${payStrip(x)}<div class="card-actions"><button class="btn secondary small" data-pdf="${x.id}">${x.details?.external ? (x.details.external.kind === 'link' ? '🔗 Abrir link' : '📄 Abrir archivo') : 'Ver PDF'}</button>${editable ? `${x.details?.external ? '' : `<button class="btn secondary small" data-share-quote="${x.id}" title="Liga privada para el cliente">🔗 Liga</button>`}<button class="btn primary small" data-whatsapp="${x.id}">WhatsApp</button>` : ''}</div></article>`).join('')
     : `<p class="empty-note">${db.quotes.length ? 'Ninguna cotización coincide con la búsqueda.' : 'Aún no hay cotizaciones. Crea la primera con “+ Nueva cotización”.'}</p>`;
@@ -2021,7 +2025,7 @@ function buildTimeline(c, events) {
     const who = e.created_by_name ? ` · ${e.created_by_name}` : '';
     const trip = e.trip_id ? tripById(e.trip_id) : null;
     if (e.type === 'message') push(e.event_at, 'message', '💬', `WhatsApp: ${e.title}`, `${e.meta?.channel === 'copiado' ? 'Copiado' : 'Abierto en WhatsApp'}${who}`, '', { body: e.body, eventId: e.id });
-    else if (e.type === 'payment') push(e.event_at, 'payment', '💰', `Pago: ${e.title} · ${moneyAt(e.amount)}`, `${e.meta?.method || ''}${trip ? ` · ${trip.destination}` : ''}${who}`, '', { body: e.body, eventId: e.id });
+    else if (e.type === 'payment') push(e.event_at, 'payment', '💰', `Pago: ${e.title} · ${moneyAt(e.amount)}`, `${e.meta?.method || ''}${trip ? ` · ${trip.destination}` : ''}${who}${e.meta?.edits?.length ? ' · ✏️ corregido' : ''}`, '', { body: e.body, eventId: e.id, payEvent: e });
     else if (e.type === 'review') push(e.event_at, 'review', '⭐', `${'★'.repeat(e.rating)}${'☆'.repeat(5 - e.rating)} Reseña en ${e.meta?.platform || 'Otro'}`, [trip?.destination, e.created_by_name].filter(Boolean).join(' · '), '', { body: e.body, eventId: e.id });
     else push(e.event_at, 'note', icons[e.type] || '📝', 'Nota', who.slice(3), '', { body: e.body, eventId: e.id });
   });
@@ -2094,7 +2098,7 @@ async function clientFile(id, opts = {}) {
       const m = it.at.slice(0, 7);
       const head = m !== month ? `<p class="section-label">${MONTHS_LONG[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}</p>` : '';
       month = m;
-      return `${head}<div class="tl-item ${it.kind}"><span class="tl-icon">${it.icon}</span><div class="tl-main"${it.attrs ? ` ${it.attrs} role="button" tabindex="0"` : ''}><b>${escapeHtml(it.title)}</b>${it.stage ? ` <span class="status ${statusClass(it.stage)}">${escapeHtml(it.stage)}</span>` : ''}<small>${escapeHtml(fmtDate(it.at))} ${it.at.slice(11, 16) !== '00:00' && it.at.slice(11, 16) !== '23:59' ? escapeHtml(it.at.slice(11, 16)) : ''}${it.sub ? ` · ${escapeHtml(it.sub)}` : ''}</small>${it.body ? `<p class="tl-body">${escapeHtml(it.body)}</p>` : ''}</div>${it.eventId && isAdmin() ? `<button type="button" class="link danger-link" data-del-event="${it.eventId}" title="Eliminar registro">✕</button>` : ''}</div>`;
+      return `${head}<div class="tl-item ${it.kind}"><span class="tl-icon">${it.icon}</span><div class="tl-main"${it.attrs ? ` ${it.attrs} role="button" tabindex="0"` : ''}><b>${escapeHtml(it.title)}</b>${it.stage ? ` <span class="status ${statusClass(it.stage)}">${escapeHtml(it.stage)}</span>` : ''}<small>${escapeHtml(fmtDate(it.at))} ${it.at.slice(11, 16) !== '00:00' && it.at.slice(11, 16) !== '23:59' ? escapeHtml(it.at.slice(11, 16)) : ''}${it.sub ? ` · ${escapeHtml(it.sub)}` : ''}</small>${it.body ? `<p class="tl-body">${escapeHtml(it.body)}</p>` : ''}${it.payEvent?.meta?.change?.status === 'pending' ? `<span class="pc-pending" title="Motivo: ${escapeHtml(it.payEvent.meta.change.reason || '')}">⏳ Corrección pendiente de autorización${isAdmin() ? ` · <button type="button" class="link" data-pay-changes="${it.eventId}">Revisar</button>` : ''}</span>` : ''}</div>${it.payEvent && canWrite('followups') ? `<button type="button" class="link pc-fix" data-pay-fix="${it.eventId}" title="Corregir este pago">✏️</button>` : ''}${it.eventId && isAdmin() ? `<button type="button" class="link danger-link" data-del-event="${it.eventId}" title="Eliminar registro">✕</button>` : ''}</div>`;
     }).join('') : '<p class="empty-note">Sin registros en esta vista.</p>';
   };
   const showTab = (name) => { $$('[data-c360-tab]').forEach((b) => b.classList.toggle('active', b.dataset.c360Tab === name)); $$('.c360-pane').forEach((p) => { p.hidden = p.dataset.pane !== name; }); };
@@ -2106,11 +2110,13 @@ async function clientFile(id, opts = {}) {
     const t = e.target;
     if (t.closest('[data-c360-tab]')) { showTab(t.closest('[data-c360-tab]').dataset.c360Tab); return; }
     if (t.closest('[data-tl-filter]')) { filter = t.closest('[data-tl-filter]').dataset.tlFilter; paintTimeline(); return; }
+    const fix = t.closest('[data-pay-fix]');
+    if (fix) { e.stopPropagation(); const ev = events.find((x) => x.id === Number(fix.dataset.payFix)); if (ev) payFixModal(ev, { back: () => clientFile(c.id) }); return; }
     const del = t.closest('[data-del-event]');
     if (del) {
       e.stopPropagation();
-      if (!confirm('¿Eliminar este registro de la ficha? No se puede deshacer.')) return;
-      try { await send('DELETE', `/api/client-events/${del.dataset.delEvent}`); toast('Registro eliminado'); clientFile(c.id); } catch (error) { toast(error.message); }
+      if (!confirm('¿Eliminar este registro de la ficha? No se puede deshacer. Si es un pago, también se quita del plan de pagos y del portal del cliente.')) return;
+      try { await send('DELETE', `/api/client-events/${del.dataset.delEvent}`); toast('Registro eliminado'); await loadAll(); clientFile(c.id); } catch (error) { toast(error.message); }
       return;
     }
     const act = t.closest('[data-c360]');
@@ -2147,6 +2153,7 @@ function eventModal(c, type) {
       ${field('Forma de pago', `<select name="method">${options(PAY_METHODS, 'Transferencia')}</select>`)}
       ${field('Fecha del pago', `<input name="date" type="date" max="${todayStr()}" value="${todayStr()}">`)}
       ${tripSel}${quotes.length ? field('Cotización', `<select name="quote_id">${options(quotes.map((q) => [q.id, `${q.folio} · ${money(q.price)}`]), quotes[0].id, { blank: 'Sin cotización' })}</select>`) : ''}
+      ${quotes.length ? `<label class="full" id="instPick">Aplicar al pago del plan<select name="installment"></select><small class="muted">Se suma al plan de pagos de la cotización y se ve en el portal del cliente.</small></label>` : ''}
       ${field('Referencia o nota', '<input name="body" maxlength="1000" placeholder="Folio de transferencia, banco…">', true)}`],
     review: ['Registrar reseña', `<div class="full stars-pick" role="radiogroup" aria-label="Calificación">${[5, 4, 3, 2, 1].map((n) => `<label><input type="radio" name="rating" value="${n}"${n === 5 ? ' checked' : ''}><span>${'★'.repeat(n)}</span></label>`).join('')}</div>
       ${field('Dónde la dejó', `<select name="platform">${options(REVIEW_PLATFORMS, 'Google')}</select>`)}${tripSel}
@@ -2156,6 +2163,15 @@ function eventModal(c, type) {
   const [title, inner] = forms[type];
   openModal('FICHA 360', `${title} · ${c.name}`, `<form class="modal-form">${inner}<div class="modal-actions"><button type="button" class="btn secondary" data-back-c360>Volver a la ficha</button><button type="submit" class="btn primary">Guardar</button></div></form>`);
   $('#modalBody [data-back-c360]').onclick = () => clientFile(c.id);
+  const qSel = $('#modalBody [name=quote_id]'), iSel = $('#modalBody [name=installment]');
+  const paintInst = () => {
+    if (!iSel) return;
+    const insts = quoteById(qSel?.value)?.payment_plan?.installments || [];
+    const next = insts.find((i) => i.status !== 'pagado');
+    $('#instPick').hidden = !qSel?.value;
+    iSel.innerHTML = insts.length ? insts.map((i) => `<option value="${i.id}" ${i === next ? 'selected' : ''}>${escapeHtml(i.label)} · ${money(i.amount)}${i.status === 'pagado' ? ' (pagado)' : i.paid ? ` (abonado ${money(i.paid)})` : ''}</option>`).join('') : '<option value="">El siguiente pago pendiente (el plan se arma solo)</option>';
+  };
+  if (qSel) { qSel.onchange = paintInst; paintInst(); }
   bindForm(async (v) => {
     const body = { type, ...v };
     ['trip_id', 'quote_id'].forEach((k) => { body[k] = v[k] ? Number(v[k]) : null; });
@@ -2291,7 +2307,7 @@ async function payPlanModal(quoteId, opts = {}) {
       : '⚠ Aún no hay forma de pago en la liga: pega una liga (Clip u otra) al editar el plan, o configura los datos bancarios en <b>Configuración › Cobros</b>.';
   if (opts.edit && write) return payPlanEditor(q);
   const rows = plan.installments.map((i) => `<div class="pp-row${i.status === 'pagado' ? ' done' : ''}">
-      <div class="pp-main"><b>${escapeHtml(i.label)}</b> ${instChip(i)}<small>Fecha límite: ${escapeHtml(fmtDate(i.due))}${i.link_url ? ' · con liga manual' : ''}${(i.payments || []).length ? ` · ${i.payments.map((p) => `${money(p.amount)} ${escapeHtml(p.method)}${p.provider ? ' (en línea)' : ''} el ${escapeHtml(fmtDate(String(p.at).slice(0, 10)))}`).join(', ')}` : ''}</small></div>
+      <div class="pp-main"><b>${escapeHtml(i.label)}</b> ${instChip(i)}<small>Fecha límite: ${escapeHtml(fmtDate(i.due))}${i.link_url ? ' · con liga manual' : ''}</small>${(i.payments || []).length ? `<div class="pp-pays">${i.payments.map((p) => `<span class="pp-pay">${money(p.amount)} · ${escapeHtml(p.method)}${p.provider ? ' (en línea)' : ''} · ${escapeHtml(fmtDate(String(p.at).slice(0, 10)))}${p.edited_at ? ' · ✏️' : ''}${(db.paymentChanges || []).some((x) => x.event_id === p.event_id) ? ' · ⏳ por autorizar' : ''}${write && p.event_id ? `<button type="button" class="link" data-pp-fix="${p.event_id}" title="Corregir este pago">✏️ Corregir</button>` : ''}</span>`).join('')}</div>` : ''}</div>
       <div class="pp-amt">${money(i.amount)}</div>
       <div class="pp-acts">${write && i.status !== 'pagado' ? `<button type="button" class="btn primary small" data-pp-pay="${i.id}">Registrar pago</button>${client?.phone ? `<button type="button" class="btn secondary small" data-pp-remind="${i.id}">💬 Recordar</button>` : ''}` : ''}${isAdmin() && (i.payments || []).length ? `<button type="button" class="link danger-link" data-pp-undo="${i.id}" title="Deshacer el último pago">Deshacer</button>` : ''}</div>
     </div>`).join('');
@@ -2317,6 +2333,11 @@ async function payPlanModal(quoteId, opts = {}) {
     if (pay) { registerPayModal(q.id, pay.dataset.ppPay); return; }
     const rem = e.target.closest('[data-pp-remind]');
     if (rem) { remind(rem.dataset.ppRemind); return; }
+    const fixP = e.target.closest('[data-pp-fix]');
+    if (fixP) {
+      try { const ev = (await api(`/api/clients/${q.client_id}/events`)).events.find((x) => x.id === Number(fixP.dataset.ppFix)); if (ev) payFixModal(ev, { back: () => payPlanModal(q.id) }); else toast('Ese pago ya no está en la ficha'); } catch (error) { toast(error.message); }
+      return;
+    }
     const undo = e.target.closest('[data-pp-undo]');
     if (undo) {
       if (!confirm('¿Deshacer el último pago de esta parcialidad? También se quita de la ficha 360.')) return;
@@ -3582,7 +3603,13 @@ document.addEventListener('click', (e) => {
   if ((el = hit('[data-trip]'))) { tripModal(Number(el.dataset.trip)); return; }
   if ((el = hit('[data-followup]'))) { followupModal(Number(el.dataset.followup)); return; }
   if ((el = hit('[data-day]'))) { ui.calDay = el.dataset.day; renderCalendar(); return; }
-  if ((el = hit('[data-duplicate]'))) { const q = quoteById(el.dataset.duplicate); mutate(() => send('POST', `/api/quotes/${el.dataset.duplicate}/duplicate`), `Cotización ${q?.folio || ''} duplicada`); return; }
+  if ((el = hit('[data-duplicate]'))) {
+    const q = quoteById(el.dataset.duplicate);
+    if (el.disabled || !confirm(`¿Duplicar la cotización ${q?.folio || ''}? Se crea una copia en Borrador.`)) return;
+    el.disabled = true;
+    mutate(() => send('POST', `/api/quotes/${el.dataset.duplicate}/duplicate`), `Cotización ${q?.folio || ''} duplicada`).finally(() => { el.disabled = false; });
+    return;
+  }
   if ((el = hit('[data-pdf]'))) { openPrintableQuote(el.dataset.pdf); return; }
   if ((el = hit('[data-whatsapp]'))) { prepareWhatsapp([el.dataset.whatsapp]); }
 });

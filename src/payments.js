@@ -270,7 +270,7 @@ ${outro ? `<p style="font-size:14px">${escapeHtml(outro)}</p>` : ''}
       const method = PAY_METHODS.includes(opts.method) ? opts.method : 'Otro';
       const event = await dataStore.insertClientEvent({
         client_id: quote.client_id, lead_id: quote.lead_id || null, quote_id: quote.id, type: 'payment', amount,
-        title: `${inst.label} · ${quote.folio}`.slice(0, 120), body: plain(opts.note, 1000) || null,
+        title: (plain(opts.title, 80) ? `${plain(opts.title, 80)} · ${quote.folio}` : `${inst.label} · ${quote.folio}`).slice(0, 120), body: plain(opts.note, 1000) || null,
         meta: { method, installment: inst.id, ...(opts.provider ? { provider: opts.provider, providerId: String(opts.providerId) } : {}) },
         event_at: at, created_by: opts.userId ?? null
       });
@@ -323,6 +323,56 @@ ${outro ? `<p style="font-size:14px">${escapeHtml(outro)}</p>` : ''}
       await dataStore.logActivity(userId, 'crm_quotes_update', req, { entity: 'quotes', entityId: quote.id, summary: quote.folio, note: `Pago deshecho: ${inst.label} ${money(last.amount)}` });
       return { quote: updated, plan };
     });
+  }
+
+  /**
+   * Mantiene el plan de pagos igual que la ficha 360 cuando un pago se corrige o se elimina.
+   * Busca el pago por event_id en la cotización del registro; si no está en ningún plan no hace nada.
+   */
+  function syncEventToPlan(event, { remove = false, userId = null, req = null } = {}) {
+    if (!event?.quote_id) return Promise.resolve(null);
+    return serial(`q${event.quote_id}`, async () => {
+      const quote = await dataStore.getRecord('quotes', event.quote_id);
+      if (!quote?.payment_plan) return null;
+      const plan = recalc(JSON.parse(JSON.stringify(quote.payment_plan)));
+      let hit = null;
+      for (const inst of plan.installments) {
+        const idx = (inst.payments || []).findIndex((p) => p.event_id != null && Number(p.event_id) === Number(event.id));
+        if (idx < 0) continue;
+        hit = { inst, before: inst.payments[idx] };
+        if (remove) inst.payments.splice(idx, 1);
+        else inst.payments[idx] = { ...inst.payments[idx], amount: round2(event.amount), method: event.meta?.method || inst.payments[idx].method, at: event.event_at || inst.payments[idx].at, edited_at: now() };
+      }
+      if (!hit) return null;
+      recalc(plan);
+      const updated = await dataStore.updateRecord('quotes', quote.id, { payment_plan: plan });
+      await syncTrips(updated, plan);
+      await dataStore.logActivity(userId, 'crm_quotes_update', req, { entity: 'quotes', entityId: quote.id, summary: quote.folio, note: remove ? `Pago quitado del plan: ${hit.inst.label} ${money(hit.before.amount)} · saldo ${money(plan.balance)}` : `Pago corregido en el plan: ${hit.inst.label} ${money(hit.before.amount)} → ${money(event.amount)} · saldo ${money(plan.balance)}` });
+      return updated;
+    });
+  }
+
+  /** Limpieza: quita del plan los pagos cuyo registro ya se borró de la ficha 360 (antes no se sincronizaba). */
+  async function reconcileDeletedPayments() {
+    if (!dataStore.listAllClientEvents) return 0;
+    const ids = new Set((await dataStore.listAllClientEvents()).filter((e) => e.type === 'payment').map((e) => Number(e.id)));
+    let fixed = 0;
+    for (const q of (await dataStore.listRecords('quotes')).filter((x) => x.payment_plan)) {
+      await serial(`q${q.id}`, async () => {
+        const quote = await dataStore.getRecord('quotes', q.id);
+        if (!quote?.payment_plan) return;
+        const plan = recalc(JSON.parse(JSON.stringify(quote.payment_plan)));
+        const gone = [];
+        plan.installments.forEach((inst) => { inst.payments = (inst.payments || []).filter((p) => { const keep = p.event_id == null || ids.has(Number(p.event_id)); if (!keep) gone.push(`${inst.label} ${money(p.amount)}`); return keep; }); });
+        if (!gone.length) return;
+        recalc(plan);
+        const updated = await dataStore.updateRecord('quotes', quote.id, { payment_plan: plan });
+        await syncTrips(updated, plan);
+        await dataStore.logActivity(null, 'crm_quotes_update', null, { entity: 'quotes', entityId: quote.id, summary: quote.folio, note: `Plan sincronizado con la ficha: se quitaron pagos eliminados (${gone.join(', ')}) · saldo ${money(plan.balance)}` });
+        fixed += gone.length;
+      });
+    }
+    return fixed;
   }
 
   // ---- Mercado Pago: confirmar un pago (webhook o regreso del cliente) ----
@@ -609,7 +659,7 @@ ${outro ? `<p style="font-size:14px">${escapeHtml(outro)}</p>` : ''}
     return result;
   }
 
-  return { publicRouter, apiRouter, ensurePlan, recordPayment, processMpPayment, runReminders, settings, mercadoPago: mp };
+  return { publicRouter, apiRouter, ensurePlan, recordPayment, syncEventToPlan, reconcileDeletedPayments, processMpPayment, runReminders, settings, mercadoPago: mp };
 }
 
 module.exports = { createPayments, createMercadoPago, buildPlan, editPlan, recalc, cleanSettings, tripPaymentFields, num, PAY_METHODS, DEFAULTS };

@@ -593,6 +593,15 @@ class MySQLDataStore {
     const [result] = await this.pool.execute('DELETE FROM crm_client_events WHERE id = ?', [id]);
     return result.affectedRows > 0;
   }
+  // Corrección de un registro de la ficha (pagos): solo los campos que vienen.
+  async updateClientEvent(id, patch) {
+    const cols = ['title', 'body', 'amount', 'meta', 'event_at', 'trip_id'].filter((k) => patch[k] !== undefined);
+    if (cols.length) {
+      const values = cols.map((k) => (k === 'meta' ? (patch.meta ? JSON.stringify(patch.meta) : null) : patch[k]));
+      await this.pool.execute(`UPDATE crm_client_events SET ${cols.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`, [...values, id]);
+    }
+    return this.getClientEvent(id);
+  }
 
   async getSetting(key) {
     const [rows] = await this.pool.execute('SELECT setting_value FROM crm_settings WHERE setting_key = ? LIMIT 1', [key]);
@@ -887,6 +896,12 @@ class MemoryDataStore {
   async listAllClientEvents() { return (this.events || []).map(normalizeEvent); }
   async moveClientEvents(fromId, toId) { (this.events || []).forEach((e) => { if (e.client_id === Number(fromId)) e.client_id = Number(toId); }); }
   async deleteClientEvent(id) { const before = (this.events || []).length; this.events = (this.events || []).filter((e) => e.id !== Number(id)); return this.events.length < before; }
+  async updateClientEvent(id, patch) {
+    const row = (this.events || []).find((e) => e.id === Number(id));
+    if (!row) return null;
+    for (const k of ['title', 'body', 'amount', 'meta', 'event_at', 'trip_id']) if (patch[k] !== undefined) row[k] = k === 'meta' ? (patch.meta ? JSON.stringify(patch.meta) : null) : patch[k];
+    return normalizeEvent(row);
+  }
   // ---- TP-305: proveedores (memoria) ----
   async listSuppliers() { return (this.suppliers || []).map((x) => ({ ...x })).sort((a, b) => a.name.localeCompare(b.name)); }
   async insertSupplier(data, userId) { this.suppliers = this.suppliers || []; this.supplierSeq = (this.supplierSeq || 0) + 1; const now = nowCancun(); const row = { ...data, id: this.supplierSeq, created_by: userId ?? null, created_at: now, updated_at: now }; this.suppliers.push(row); return { ...row }; }

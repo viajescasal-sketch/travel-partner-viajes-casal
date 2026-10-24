@@ -241,6 +241,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
       suppliers: dataStore.listSuppliers ? await dataStore.listSuppliers() : [], // TP-305
       goals: await goalsFor(dataStore, ctx.user), // TP-206
       prefs: { avatar: prefs.avatar, tour: prefs.tour },
+      paymentChanges: await listPayChanges(ctx),
       serverTime: nowCancun()
     });
   }));
@@ -610,6 +611,23 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
       ev.title = 'Nota';
       note = 'Nota agregada a la ficha';
     }
+    // Pago ligado a una cotización aceptada: se registra en su plan de pagos (una sola fuente para ficha, cotización y portal).
+    if (type === 'payment' && ev.quote_id && payments) {
+      let quote = ctx.find('quotes', ev.quote_id);
+      if (quote?.status === 'Aceptada') {
+        quote = await payments.ensurePlan(quote);
+        const insts = quote?.payment_plan?.installments || [];
+        const inst = insts.find((i) => i.id === String(b.installment || '')) || insts.find((i) => i.status !== 'pagado') || insts[insts.length - 1];
+        if (inst) {
+          const r = await payments.recordPayment(quote.id, inst.id, { amount: ev.amount, method: ev.meta.method, date: b.date || null, note: ev.body, title: plain(b.title, 80), userId: ctx.user.id, req });
+          let event = r.event;
+          if (event && ev.trip_id) event = await dataStore.updateClientEvent(event.id, { trip_id: ev.trip_id });
+          await log(req, 'crm_clients_update', { entity: 'clients', entityId: client.id, summary: client.name, note: `${note} · aplicado a ${inst.label} de ${quote.folio}` });
+          res.status(201).json({ ok: true, event: { ...event, created_by_name: ctx.user.name }, installment: inst.id });
+          return;
+        }
+      }
+    }
     const event = await dataStore.insertClientEvent(ev);
     // TP-110: "pago recibido" al vendedor del cliente y a los administradores (menos a quien lo registró).
     if (type === 'payment' && assignment) {
@@ -632,7 +650,136 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     if (!event) throw notFound('registro');
     const client = ctx.mustSee('clients', event.client_id);
     await dataStore.deleteClientEvent(event.id);
+    if (event.type === 'payment' && payments) await payments.syncEventToPlan(event, { remove: true, userId: ctx.user.id, req });
     await log(req, 'crm_clients_update', { entity: 'clients', entityId: client.id, summary: client.name, note: `Registro eliminado de la ficha: ${event.title || event.type}` });
+    res.json({ ok: true });
+  }));
+
+  // ---- Corrección de pagos: el asesor solicita, el administrador autoriza ----
+  const money = (n) => `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: Number(n) % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
+  const payView = (e) => ({ amount: e.amount, method: e.meta?.method || 'Otro', date: String(e.event_at || '').slice(0, 10), title: e.title || '', note: e.body || '' });
+  function readPayChange(b, event) {
+    const action = b.action === 'delete' ? 'delete' : 'edit';
+    const reason = plain(b.reason, 500);
+    if (action === 'delete') return { action, reason };
+    const cur = payView(event);
+    const amount = b.amount === undefined || b.amount === '' ? cur.amount : Math.round(Number(b.amount) * 100) / 100;
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 50000000) throw new ValidationError('Escribe el monto del pago');
+    const method = b.method === undefined ? cur.method : (PAY_METHODS.includes(b.method) ? b.method : 'Otro');
+    const date = b.date === undefined || b.date === '' ? cur.date : String(b.date);
+    if (!ISO_DATE.test(date)) throw new ValidationError('Fecha inválida');
+    if (date > nowCancun().slice(0, 10)) throw new ValidationError('La fecha no puede ser futura');
+    const title = b.title === undefined ? cur.title : (plain(b.title, 120) || cur.title);
+    const note = b.note === undefined ? cur.note : plain(b.note, 1000);
+    const change = { action, reason, amount, method, date, title, note };
+    if (amount === cur.amount && method === cur.method && date === cur.date && title === cur.title && note === cur.note) throw new ValidationError('No hay cambios que guardar');
+    return change;
+  }
+  const changeText = (event, ch) => {
+    if (ch.action === 'delete') return `Eliminar ${event.title || 'pago'} de ${money(event.amount)}`;
+    const cur = payView(event);
+    const parts = [];
+    if (ch.amount !== cur.amount) parts.push(`monto ${money(cur.amount)} → ${money(ch.amount)}`);
+    if (ch.method !== cur.method) parts.push(`forma ${cur.method} → ${ch.method}`);
+    if (ch.date !== cur.date) parts.push(`fecha ${cur.date} → ${ch.date}`);
+    if (ch.title !== cur.title) parts.push(`concepto “${ch.title}”`);
+    if (ch.note !== cur.note) parts.push('referencia');
+    return `${event.title || 'Pago'}: ${parts.join(', ') || 'sin cambios'}`;
+  };
+  async function applyPayChange(event, ch, req, { approvedBy = null } = {}) {
+    const userId = req.session.user.id;
+    if (ch.action === 'delete') {
+      await dataStore.deleteClientEvent(event.id);
+      if (payments) await payments.syncEventToPlan(event, { remove: true, userId, req });
+      return null;
+    }
+    const meta = { ...(event.meta || {}), method: ch.method };
+    delete meta.change;
+    meta.edits = [...(Array.isArray(event.meta?.edits) ? event.meta.edits.slice(-9) : []), { at: nowCancun(), by: ch.by ?? userId, approved_by: approvedBy, reason: ch.reason || null, prev: payView(event) }];
+    const updated = await dataStore.updateClientEvent(event.id, { amount: ch.amount, title: ch.title, body: ch.note || null, event_at: `${ch.date} ${String(event.event_at).slice(11, 19) || '12:00:00'}`, meta });
+    if (payments) await payments.syncEventToPlan(updated, { userId, req });
+    return updated;
+  }
+  async function payEventFor(req) {
+    const ctx = await context(req);
+    const event = await dataStore.getClientEvent(parseId(req.params.id));
+    if (!event || event.type !== 'payment') throw notFound('pago');
+    const client = ctx.mustSee('clients', event.client_id);
+    return { ctx, event, client };
+  }
+  async function listPayChanges(ctx) {
+    const users = await dataStore.listUsers();
+    const isAdmin = ctx.user.role === 'admin';
+    return (await dataStore.listAllClientEvents())
+      .filter((e) => e.type === 'payment' && e.meta?.change?.status === 'pending' && isVisible(ctx.scope, 'clients', e.client_id) && (isAdmin || e.meta.change.by === ctx.user.id))
+      .map((e) => ({ event_id: e.id, client_id: e.client_id, client_name: ctx.find('clients', e.client_id)?.name || '', quote_id: e.quote_id, folio: e.quote_id ? ctx.find('quotes', e.quote_id)?.folio || null : null, current: payView(e), change: e.meta.change, by_name: users.find((u) => u.id === e.meta.change.by)?.name || e.meta.change.by_name || '', summary: changeText(e, e.meta.change) }))
+      .sort((a, b) => String(a.change.at).localeCompare(String(b.change.at)));
+  }
+
+  router.get('/payment-changes', wrap(async (req, res) => {
+    res.json({ ok: true, changes: await listPayChanges(await context(req)) });
+  }));
+
+  router.post('/client-events/:id/change', requireWrite('followups'), wrap(async (req, res) => {
+    const { ctx, event, client } = await payEventFor(req);
+    const ch = readPayChange(req.body || {}, event);
+    const summary = changeText(event, ch);
+    if (ctx.user.role === 'admin') {
+      const updated = await applyPayChange(event, { ...ch, by: ctx.user.id }, req, { approvedBy: ctx.user.id });
+      await log(req, 'crm_clients_update', { entity: 'clients', entityId: client.id, summary: client.name, note: `Pago corregido por el administrador · ${summary}${ch.reason ? ` · motivo: ${ch.reason}` : ''}` });
+      res.json({ ok: true, applied: true, event: updated });
+      return;
+    }
+    if (event.meta?.provider) throw new ValidationError('Los pagos en línea (Mercado Pago) solo los corrige el administrador');
+    if (!ch.reason) throw new ValidationError('Escribe el motivo para que el administrador lo autorice');
+    const change = { ...ch, status: 'pending', by: ctx.user.id, by_name: ctx.user.name, at: nowCancun() };
+    const updated = await dataStore.updateClientEvent(event.id, { meta: { ...(event.meta || {}), change } });
+    if (assignment) {
+      const users = await dataStore.listUsers();
+      for (const u of users.filter((x) => x.active && x.role === 'admin')) {
+        await assignment.notify(u, {
+          kind: 'payment_change', link: `paychange:${event.id}`,
+          title: `✏️ Corrección de pago por autorizar · ${client.name}`.slice(0, 200),
+          body: `${summary} · solicitó ${ctx.user.name} · motivo: ${ch.reason}`.slice(0, 500),
+          email: { subject: `Corrección de pago por autorizar · ${client.name}`.slice(0, 180), text: `Hola ${u.name},\n\n${ctx.user.name} solicita corregir un pago de ${client.name}:\n\n• ${summary}\n• Motivo: ${ch.reason}\n\nEntra a la plataforma y abre la campanita para autorizarlo o rechazarlo.\n\n— Travel Partner Viajes Casal` }
+        });
+      }
+    }
+    await log(req, 'crm_clients_update', { entity: 'clients', entityId: client.id, summary: client.name, note: `Corrección de pago solicitada · ${summary} · motivo: ${ch.reason}` });
+    res.status(202).json({ ok: true, pending: true, event: updated });
+  }));
+
+  async function decide(req, approve) {
+    const { ctx, event, client } = await payEventFor(req);
+    const ch = event.meta?.change;
+    if (!ch || ch.status !== 'pending') throw new ValidationError('Esta corrección ya no está pendiente');
+    const summary = changeText(event, ch);
+    const comment = plain(req.body?.comment, 500);
+    let updated = null;
+    if (approve) updated = await applyPayChange(event, ch, req, { approvedBy: ctx.user.id });
+    else {
+      const meta = { ...(event.meta || {}) };
+      delete meta.change;
+      meta.rejected = [...(Array.isArray(meta.rejected) ? meta.rejected.slice(-9) : []), { ...ch, status: 'rejected', comment, decided_by: ctx.user.id, decided_at: nowCancun() }];
+      updated = await dataStore.updateClientEvent(event.id, { meta });
+    }
+    if (assignment && ch.by && ch.by !== ctx.user.id) {
+      const u = await dataStore.findUserById(ch.by);
+      if (u?.active) await assignment.notify(u, { kind: 'payment_change', link: `client:${client.id}`, title: `${approve ? '✅ Corrección de pago autorizada' : '❌ Corrección de pago no autorizada'} · ${client.name}`.slice(0, 200), body: `${summary}${comment ? ` · ${ctx.user.name}: ${comment}` : ''}`.slice(0, 500) });
+    }
+    await log(req, 'crm_clients_update', { entity: 'clients', entityId: client.id, summary: client.name, note: `Corrección de pago ${approve ? 'autorizada' : 'rechazada'} · ${summary}${comment ? ` · ${comment}` : ''}` });
+    return { ok: true, event: updated };
+  }
+  router.post('/payment-changes/:id/approve', adminOnly, wrap(async (req, res) => { res.json(await decide(req, true)); }));
+  router.post('/payment-changes/:id/reject', adminOnly, wrap(async (req, res) => { res.json(await decide(req, false)); }));
+  router.delete('/payment-changes/:id', wrap(async (req, res) => {
+    const { ctx, event } = await payEventFor(req);
+    const ch = event.meta?.change;
+    if (!ch || ch.status !== 'pending') throw new ValidationError('Esta corrección ya no está pendiente');
+    if (ctx.user.role !== 'admin' && ch.by !== ctx.user.id) throw forbidden();
+    const meta = { ...(event.meta || {}) };
+    delete meta.change;
+    await dataStore.updateClientEvent(event.id, { meta });
     res.json({ ok: true });
   }));
 
@@ -743,12 +890,20 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
 
   // ---- Eliminar: solo administradores ----
   for (const entityName of ENTITY_ORDER) {
-    router.delete(`/${entityName}/:id`, adminOnly, wrap(async (req, res) => {
+    router.delete(`/${entityName}/:id`, entityName === 'quotes' ? requireWrite('quotes') : adminOnly, wrap(async (req, res) => {
       const id = parseId(req.params.id);
       const data = await loadAll();
       const find = (entity, rid) => data[entity].find((row) => row.id === Number(rid)) || null;
       const before = find(entityName, id);
       if (!before) throw notFound(ENTITIES[entityName].label);
+      // El asesor elimina sus propias cotizaciones mientras no estén aceptadas ni tengan pagos (p. ej. duplicadas por error).
+      if (entityName === 'quotes' && req.session.user.role !== 'admin') {
+        const ctx = await context(req);
+        ctx.mustSee('quotes', id);
+        if (before.owner_id !== ctx.user.id) throw Object.assign(new Error('Solo puedes eliminar las cotizaciones que tú creaste'), { status: 403, expose: true });
+        const hasPayments = (before.payment_plan?.paid > 0) || (await dataStore.listClientEvents(before.client_id)).some((e) => e.type === 'payment' && e.quote_id === id);
+        if (before.status === 'Aceptada' || hasPayments) throw new ValidationError('Esta cotización ya está aceptada o tiene pagos; pide al administrador que la elimine');
+      }
       // Lo que se elimina en cascada con un cliente.
       let note = null;
       if (entityName === 'clients') {
