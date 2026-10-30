@@ -2926,6 +2926,20 @@ async function renderBotCard() {
     $('#botToken').onclick = () => botTokenModal(st.hasToken);
   } catch (error) { card.innerHTML = `<div class="int-main"><b>Bot de WhatsApp → CRM</b><small>${escapeHtml(error.message)}</small></div>`; }
 }
+async function renderSupplierModuleCard() {
+  const card = $('#supplierModuleCard');
+  if (!card) return;
+  try {
+    const st = await api('/api/supplier-module');
+    card.innerHTML = `<div class="int-main"><b>Módulo de proveedor ${st.enabled ? '<span class="tag-ok">Activo</span>' : '<span class="tag-soon">Apagado</span>'}</b>
+      <small>${st.enabled ? 'El proveedor entra a su portal, cotiza y confirma los traslados en línea. “Solicitar traslado” puede enviarle la solicitud.' : 'Todo se maneja de nuestro lado: al crear el traslado capturas el costo y los datos a mano (el precio lo validas con el proveedor por WhatsApp) y el sistema crea la alerta de pago y la nota en el calendario. El proveedor no puede entrar a su portal; los servicios que ya estaban en el portal se siguen viendo aquí.'}</small></div>
+      <div class="int-side">${isAdmin() ? `<button class="btn ${st.enabled ? 'secondary' : 'primary'} small" id="supplierModuleToggle">${st.enabled ? 'Apagar módulo' : 'Activar módulo'}</button>` : '<small class="muted">Solo un administrador puede cambiarlo.</small>'}</div>`;
+    if ($('#supplierModuleToggle')) $('#supplierModuleToggle').onclick = async () => {
+      if (st.enabled && !confirm('¿Apagar el módulo de proveedor? El proveedor ya no podrá entrar a su portal y los traslados se capturan a mano.')) return;
+      try { await send('PUT', '/api/supplier-module', { enabled: !st.enabled }); if (typeof loadPortalLinks === 'function') loadPortalLinks(true); toast(st.enabled ? 'Módulo de proveedor apagado' : 'Módulo de proveedor activado'); renderSupplierModuleCard(); } catch (error) { toast(error.message); }
+    };
+  } catch (error) { card.innerHTML = `<div class="int-main"><b>Módulo de proveedor</b><small>${escapeHtml(error.message)}</small></div>`; }
+}
 function botTokenModal(replacing) {
   openModal('BOT DE WHATSAPP', replacing ? 'Generar clave nueva' : 'Conectar el bot de Botpress', `<div class="modal-form">
     <p class="full">${replacing ? 'La clave anterior <b>dejará de funcionar</b>: tendrás que pegar el código nuevo en Botpress.' : 'Se crea una clave secreta para que solo tu bot pueda crear leads en el CRM.'}</p>
@@ -3006,6 +3020,7 @@ function renderIntegrations() {
     card('Documentos para clientes <span class="tag-ok">Activo</span>', 'Cotización (hasta 4 propuestas) y Confirmación de servicios con el diseño de Viajes Casal, listas para guardar en PDF y enviar por WhatsApp.', '', '', '<p><button class="link" data-settings-tab="pdfPanel">Editar textos y redes de la plantilla</button></p>')
     + card(`WhatsApp de la agencia ${wa ? '<span class="tag-ok">Listo</span>' : '<span class="tag-soon">Sin número</span>'}`, wa ? `Enlace directo y código QR para ${escapeHtml(waNumber)}. Úsalo en tu sitio, redes o material impreso.` : 'Agrega el WhatsApp en Perfil de agencia o en Plantilla PDF.', wa, wa)
     + card(`Reseñas de Google ${reviews ? '<span class="tag-ok">Listo</span>' : '<span class="tag-soon">Sin enlace</span>'}`, reviews ? 'Aparece al pie de la cotización y la confirmación. Comparte el QR al terminar cada viaje.' : 'Agrega el enlace en Plantilla PDF.', reviews, reviews)
+    + '<div id="supplierModuleCard" class="integration"><div class="int-main"><b>Módulo de proveedor</b><small>Cargando…</small></div></div>'
     + '<div id="botCard" class="integration"><div class="int-main"><b>Bot de WhatsApp → CRM</b><small>Cargando…</small></div></div>'
     + '<div id="webformCard" class="integration"><div class="int-main"><b>Formulario web → CRM</b><small>Cargando…</small></div></div>'
     + '<div id="gcalCard" class="integration"><div class="int-main"><b>Google Calendar (dos vías)</b><small>Cargando…</small></div></div>'
@@ -3213,7 +3228,7 @@ function showSettingsTab(tab) {
   $$('#settingsNav [data-settings-tab]').forEach((b) => b.classList.toggle('active', b.dataset.settingsTab === tab));
   $$('.settings-panel').forEach((p) => { p.hidden = p.id !== tab; });
   if (tab === 'usersPanel') loadUsers();
-  if (tab === 'integrationsPanel') { loadMailStatus(); renderIntegrations(); renderBotCard(); renderWebformCard(); if (typeof renderGcalCard === 'function') renderGcalCard(); }
+  if (tab === 'integrationsPanel') { loadMailStatus(); renderIntegrations(); renderBotCard(); renderSupplierModuleCard(); renderWebformCard(); if (typeof renderGcalCard === 'function') renderGcalCard(); }
   if (tab === 'pdfPanel') renderDocSettings();
   if (tab === 'questionsPanel') { renderQuestionsEditor(true); renderScoringSettings(); }
   if (tab === 'backupsPanel') loadBackups();

@@ -12,9 +12,12 @@ const { buildScope, isVisible, canWrite } = require('./access');
 const TPTrip = require('../public/viaje-core');
 const P = require('../public/proveedor-core');
 const T = require('../public/traslado-core');
+const { isEnabled: supplierModuleOn } = require('./supplier-module');
 
 const fail = (status, message) => Object.assign(new Error(message), { status, expose: true });
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MANUAL_STATUS = ['Por reservar', 'Solicitada', 'Confirmada'];
+const uniq = (a) => [...new Set(a.filter((x) => Number.isInteger(x)))];
 
 function createTransfers(dataStore, { portal } = {}) {
   const router = express.Router();
@@ -71,6 +74,8 @@ function createTransfers(dataStore, { portal } = {}) {
     const clientId = Number(req.params.id);
     if (!Number.isInteger(clientId) || clientId < 1) throw new ValidationError('Identificador inválido');
     const body = req.body || {};
+    // Módulo de proveedor apagado: el precio se valida con el proveedor por WhatsApp y se captura a mano aquí.
+    const manual = !(await supplierModuleOn(dataStore));
 
     const result = await serial(`client:${clientId}`, async () => {
       const data = await loadAll();
@@ -83,7 +88,7 @@ function createTransfers(dataStore, { portal } = {}) {
       // Proveedor del catálogo
       const supplier = (await dataStore.listSuppliers()).find((s) => s.id === Number(body.supplier_id) && s.active !== false);
       if (!supplier) throw new ValidationError('Elige el proveedor de traslados');
-      const send = body.send === true;
+      const send = !manual && body.send === true;
       if (send && !(await portal.portalUsersOf(supplier.id)).length) throw new ValidationError(`${supplier.name} aún no tiene acceso al portal. Quita “Enviar al portal” o créale un usuario con rol Proveedor.`);
 
       // Datos del servicio (los mismos que ve el proveedor)
@@ -92,7 +97,20 @@ function createTransfers(dataStore, { portal } = {}) {
       if (err) throw new ValidationError(err);
       const price = body.price === '' || body.price == null ? '' : Number(String(body.price).replace(/[^0-9.]/g, ''));
       if (price !== '' && (!Number.isFinite(price) || price < 0 || price > 10000000)) throw new ValidationError('Precio de venta inválido');
-      const wanted = T.TASKS.filter((k) => body.tasks?.[k] !== false);
+      const wanted = T.TASKS.filter((k) => body.tasks?.[k] !== false && !(manual && k === 'confirm'));
+      // Captura manual: costo del proveedor, fecha de pago (editable), estado y clave de confirmación.
+      let cost = '';
+      let manualStatus = 'Por reservar';
+      let manualDue = '';
+      let confirmation = '';
+      if (manual) {
+        cost = body.cost === '' || body.cost == null ? NaN : Number(String(body.cost).replace(/[^0-9.]/g, ''));
+        if (!Number.isFinite(cost) || cost <= 0 || cost > 10000000) throw new ValidationError('Captura el costo del proveedor (lo que le vas a pagar)');
+        if (body.supplier_due && !DATE_RE.test(String(body.supplier_due))) throw new ValidationError('Fecha de pago al proveedor inválida');
+        manualDue = body.supplier_due || '';
+        manualStatus = MANUAL_STATUS.includes(body.status) ? body.status : 'Confirmada';
+        confirmation = String(body.confirmation || '').trim().slice(0, 60);
+      }
 
       // Viaje: uno existente del cliente o uno nuevo
       let trip;
@@ -115,15 +133,25 @@ function createTransfers(dataStore, { portal } = {}) {
       // Reserva de Traslado
       const today = nowCancun().slice(0, 10);
       const booking = TPTrip.cleanBooking({
-        id: `r${Date.now().toString(36)}t`, type: 'Traslado', status: 'Por reservar', supplier_id: supplier.id, supplier_name: supplier.name,
+        id: `r${Date.now().toString(36)}t`, type: 'Traslado', status: manual ? manualStatus : 'Por reservar', supplier_id: supplier.id, supplier_name: supplier.name,
         description: `${details.kind} · ${P.route(details)}`.slice(0, 300), start_date: details.service_date, end_date: details.return_date || details.service_date,
-        time: details.pickup_time, price, cost: '', model: 'neta', supplier_due: P.defaultPayDue(trip.start_date, details.service_date, today),
-        notes: details.notes
+        time: details.pickup_time, price, cost: manual ? cost : '', model: 'neta', supplier_due: manualDue || P.defaultPayDue(trip.start_date, details.service_date, today),
+        confirmation: manual ? confirmation : '', notes: details.notes
       });
       const list = [...(trip.bookings?.list || []), booking];
       trip = await dataStore.updateRecord('trips', trip.id, { bookings: { ...(trip.bookings || {}), list, updated_at: new Date().toISOString().slice(0, 19) } });
-      await dataStore.logActivity(user.id, 'crm_trips_update', req, { entity: 'trips', entityId: trip.id, summary: [client.name, trip.destination, trip.start_date].join(' · '), note: `Reservas: + Traslado ${supplier.name} (solicitado desde la ficha del cliente)` });
-      return { client, trip, booking, created, supplier, details, send, wanted };
+      await dataStore.logActivity(user.id, 'crm_trips_update', req, { entity: 'trips', entityId: trip.id, summary: [client.name, trip.destination, trip.start_date].join(' · '), note: `Reservas: + Traslado ${supplier.name} (${manual ? 'capturado a mano' : 'solicitado'} desde la ficha del cliente)` });
+      // Alerta de pago: al vendedor del cliente y a los administradores activos (solo en captura manual).
+      let payOwners = [user.id];
+      let taskOwner = user.id;
+      if (manual) {
+        const users = (await dataStore.listUsers()).filter((u) => u.active !== false);
+        const sellerId = users.some((u) => u.id === client.owner_id && u.role !== 'proveedor') ? client.owner_id : null;
+        payOwners = uniq([sellerId, ...users.filter((u) => u.role === 'admin').map((u) => u.id)]);
+        if (!payOwners.length) payOwners = [user.id];
+        taskOwner = sellerId || user.id;
+      }
+      return { client, trip, booking, created, supplier, details, send, wanted, payOwners, taskOwner };
     });
 
     // Solicitud al portal del proveedor (fuera del candado del cliente: el portal tiene el suyo por viaje)
@@ -135,21 +163,24 @@ function createTransfers(dataStore, { portal } = {}) {
     const trip = (await dataStore.listRecords('trips')).find((t) => t.id === result.trip.id) || result.trip;
     booking = (trip.bookings?.list || []).find((b) => b.id === booking.id) || booking;
 
-    // Tareas
+    // Tareas (en captura manual, la alerta de pago llega al vendedor del cliente y a los administradores)
     const now = nowCancun();
     const tasks = [];
     for (const task of result.wanted) {
       const want = T.desiredTask(task, booking, trip, result.client, now);
       const due = T.initialDue(task, booking, trip, now);
-      const f = await dataStore.insertRecord('followups', sanitize('followups', {
-        client_id: result.client.id, type: task === 'pay' ? 'Pago' : task === 'client' ? 'WhatsApp' : 'Llamada',
-        title: (want.title || T.TASK_LABELS[task]).slice(0, 160), details: T.taskDetails(task, booking, trip, result.client), due_at: due
-      }), req.session.user.id);
-      const rec = await dataStore.updateRecord('followups', f.id, { auto: { kind: T.KIND, task, trip_id: trip.id, booking_id: booking.id, sync: { title: want.title || '', due: want.due || '' } } });
-      tasks.push(rec);
-      await dataStore.logActivity(req.session.user.id, 'crm_followups_create', req, { entity: 'followups', entityId: f.id, summary: rec.title, note: 'Tarea del traslado' });
+      const owners = manual ? (task === 'pay' ? result.payOwners : [result.taskOwner]) : [req.session.user.id];
+      for (const ownerId of owners) {
+        const f = await dataStore.insertRecord('followups', sanitize('followups', {
+          client_id: result.client.id, type: task === 'pay' ? 'Pago' : task === 'client' ? 'WhatsApp' : 'Llamada',
+          title: (want.title || T.TASK_LABELS[task]).slice(0, 160), details: T.taskDetails(task, booking, trip, result.client), due_at: due
+        }), ownerId);
+        const rec = await dataStore.updateRecord('followups', f.id, { auto: { kind: T.KIND, task, trip_id: trip.id, booking_id: booking.id, sync: { title: want.title || '', due: want.due || '' } } });
+        tasks.push(rec);
+        await dataStore.logActivity(req.session.user.id, 'crm_followups_create', req, { entity: 'followups', entityId: f.id, summary: rec.title, note: 'Tarea del traslado' });
+      }
     }
-    res.status(201).json({ ok: true, trip, booking, created: result.created, sent: result.send && !sendError, sendError, tasks });
+    res.status(201).json({ ok: true, trip, booking, created: result.created, sent: result.send && !sendError, sendError, tasks, manual });
   }));
 
   return { router, attach, reconcile };

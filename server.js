@@ -35,6 +35,7 @@ const { createCommissions } = require('./src/commissions');
 const { createAutomations } = require('./src/automations');
 const { createPreferencias } = require('./src/preferencias');
 const { createProveedorPortal, providerGate } = require('./src/proveedor-portal');
+const { createSupplierModule, createGate: createSupplierModuleGate } = require('./src/supplier-module');
 const { createQuoteAttachments } = require('./src/quote-attachments');
 const { createClientPortal } = require('./src/client-portal');
 const { createPush } = require('./src/push');
@@ -316,6 +317,8 @@ async function createApp(options = {}) {
     }
     return next();
   });
+  // Con el módulo de proveedor apagado, el usuario proveedor no usa su portal.
+  app.use('/api', createSupplierModuleGate(dataStore));
   // TP-009: el usuario proveedor solo usa su portal (y su cuenta).
   app.use('/api', providerGate);
   const proveedorPortal = createProveedorPortal(dataStore, { assignment, mailer, env: process.env });
@@ -341,6 +344,7 @@ async function createApp(options = {}) {
   app.use('/api', createPreferencias(dataStore).router); // avatares y recorrido guiado
   app.use('/api', createCommissions(dataStore).router); // TP-205/206
   app.use('/api', proveedorPortal.router); // TP-009
+  app.use('/api', createSupplierModule(dataStore, { requireRole }).router); // interruptor del módulo de proveedor
   // Solicitar traslado desde la ficha del cliente (reserva + portal del proveedor + tareas que se mantienen solas).
   const transfers = createTransfers(dataStore, { portal: proveedorPortal });
   transfers.attach();

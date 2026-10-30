@@ -11,6 +11,7 @@ const { ENTITY_ORDER, ValidationError, nowCancun } = require('./crm-schema');
 const { buildScope, isVisible, canWrite } = require('./access');
 const TPTrip = require('../public/viaje-core');
 const P = require('../public/proveedor-core');
+const { isEnabled: supplierModuleOn } = require('./supplier-module');
 
 const SETTING = 'supplier_portal';
 // Lo que un usuario proveedor puede pedir a /api (lo demás responde 403).
@@ -111,6 +112,9 @@ function createProveedorPortal(dataStore, { assignment, mailer, env = {} } = {})
   // Qué proveedores tienen acceso al portal (para la pantalla de Reservas y Usuarios).
   router.get('/supplier-portal/links', wrap(async (req, res) => {
     if (req.session.user.role === 'proveedor') throw fail(403, 'Acceso no autorizado');
+    const enabled = await supplierModuleOn(dataStore);
+    // Con el módulo apagado nadie tiene portal: el CRM oculta “Pedir precio al proveedor”.
+    if (!enabled) return res.json({ ok: true, enabled, suppliers: {}, users: req.session.user.role === 'admin' ? {} : undefined });
     const links = await readLinks(dataStore);
     const users = await dataStore.listUsers();
     const bySupplier = {};
@@ -119,7 +123,7 @@ function createProveedorPortal(dataStore, { assignment, mailer, env = {} } = {})
       if (!u) continue;
       (bySupplier[sid] = bySupplier[sid] || []).push({ id: u.id, name: u.name, email: req.session.user.role === 'admin' ? u.email : undefined, active: Boolean(u.active) });
     }
-    res.json({ ok: true, suppliers: bySupplier, users: req.session.user.role === 'admin' ? links.users : undefined });
+    res.json({ ok: true, enabled, suppliers: bySupplier, users: req.session.user.role === 'admin' ? links.users : undefined });
   }));
 
   // Solo el administrador liga un usuario proveedor con su ficha del catálogo.
@@ -138,6 +142,7 @@ function createProveedorPortal(dataStore, { assignment, mailer, env = {} } = {})
   // Enviar (o reenviar) la solicitud de precio al proveedor.
   // También la usa “Solicitar traslado” desde la ficha del cliente (src/traslados.js).
   async function sendRequest(req, tripId, bid, rawDetails) {
+    if (!(await supplierModuleOn(dataStore))) throw fail(409, 'El módulo de proveedor está desactivado: captura el precio y los datos a mano. Un administrador puede activarlo en Configuración › Integraciones.');
     const out = await serial(`trip:${tripId}`, async () => {
       const { trip, client } = await teamTrip(req, tripId);
       const b = findBooking(trip, bid);

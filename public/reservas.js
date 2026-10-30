@@ -32,10 +32,11 @@
   /* ---------------- TP-009 · Portal del proveedor (desde la reserva) ---------------- */
   const PV = window.TPProv;
   const PT_CLASS = { Solicitada: 'bk-req', Cotizada: 'pt-quoted', Aceptada: 'bk-req', Confirmada: 'bk-ok', Rechazada: 'bk-off', 'No disponible': 'bk-off', Cancelada: 'bk-off' };
+  let moduleOn = true; // Módulo de proveedor activo (Configuración › Integraciones)
   let portalLinks = null; // { [supplierId]: [{ id, name, active }] }
   async function loadPortalLinks(force) {
     if (portalLinks && !force) return portalLinks;
-    try { portalLinks = (await api('/api/supplier-portal/links')).suppliers || {}; } catch { portalLinks = portalLinks || {}; }
+    try { const r = await api('/api/supplier-portal/links'); portalLinks = r.suppliers || {}; moduleOn = r.enabled !== false; } catch { portalLinks = portalLinks || {}; }
     return portalLinks;
   }
   window.loadPortalLinks = loadPortalLinks;
@@ -44,7 +45,7 @@
     const p = b.portal;
     const sup = b.supplier_id ? supById(b.supplier_id) : null;
     if (!p) {
-      if (!sup || b.status === 'Cancelada') return '';
+      if (!sup || b.status === 'Cancelada' || !moduleOn) return '';
       if (!hasPortal(sup.id)) return sup.type === 'Traslados' ? `<div class="pt-box muted">🚐 ${H(sup.name)} aún no tiene acceso al portal del proveedor${isAdmin() ? ' · créalo en Configuración › Usuarios (rol Proveedor)' : ''}.</div>` : '';
       return `<div class="pt-box"><span>🚐 <b>Portal del proveedor</b> · ${H(sup.name)} puede cotizar y confirmar en línea.</span>${editable ? (saved ? '<button type="button" class="btn primary small" data-pt-request>📨 Pedir precio al proveedor</button>' : '<small class="muted">Guarda las reservas para poder enviarle la solicitud.</small>') : ''}</div>`;
     }
