@@ -90,6 +90,8 @@ function filterData(scope, data, user) {
     out[entity] = scope[entity] === null ? data[entity] : data[entity].filter((row) => scope[entity].has(row.id));
   }
   if (user && !canSeeCosts(user)) out.trips = out.trips.map(redactTrip);
+  // La comisión de la agencia por venta solo la ven el Administrador y la Dirección.
+  if (user && !isManager(user)) out.quotes = out.quotes.map(({ agency_margin, ...q }) => q);
   return out;
 }
 

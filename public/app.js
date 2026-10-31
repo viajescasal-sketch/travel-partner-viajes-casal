@@ -844,7 +844,8 @@ function renderClients() {
 /* ---------- viajes ---------- */
 function renderTrips() {
   const today = todayStr();
-  const card = (t, label) => `<article class="trip-card clickable" data-trip="${t.id}"><small>${escapeHtml(label)}</small><h4>${escapeHtml(t.destination)}</h4><p>${escapeHtml(clientName(t.client_id))}</p><p>${escapeHtml(t.status)}${t.confirmation ? ' · ✓ Confirmación' : ''}</p>${tripBadges(t)}${tripBookingBadge(t)}${typeof customChipsHtml === 'function' ? customChipsHtml('trips', t) : ''}</article>`;
+  if (typeof renderToBuild === 'function') renderToBuild(); // ventas aceptadas o vendidas sin viaje armado
+  const card = (t, label) => `<article class="trip-card clickable" data-trip="${t.id}"><small>${escapeHtml(label)}</small><h4>${escapeHtml(t.destination)}</h4><p>${escapeHtml(clientName(t.client_id))}</p><p>${escapeHtml(t.status)}${t.confirmation ? ' · ✓ Confirmación' : ''}</p>${tripBadges(t)}${tripBookingBadge(t)}${typeof customChipsHtml === 'function' ? customChipsHtml('trips', t) : ''}${t.quote_id && typeof quoteMoneyHtml === 'function' ? quoteMoneyHtml(quoteById(t.quote_id)) : ''}</article>`;
   const open = db.trips.filter((t) => t.status !== 'Cerrado');
   const upcoming = open.filter((t) => t.start_date > today).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const active = open.filter((t) => t.start_date <= today && t.end_date >= today);

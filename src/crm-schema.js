@@ -102,7 +102,9 @@ const ENTITIES = {
       // TP-204: contrato con firma electrónica { required, requested_at, signed: { name, at, ip, ua, hash, signature_id, total, doc }, waived }
       contract: { type: 'json', max: 80000, internal: true },
       // TP-206: comisión del vendedor ya pagada { status: 'Pagada', amount, pct, profit, paid_at, by }
-      seller_commission: { type: 'json', max: 2000, internal: true }
+      seller_commission: { type: 'json', max: 2000, internal: true },
+      // Comisión de la agencia por esta venta: { mode: 'pct' | 'monto', value } (solo Administrador y Dirección). Neto = venta − comisión.
+      agency_margin: { type: 'json', max: 500, internal: true }
     }
   },
   trips: {
