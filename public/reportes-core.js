@@ -12,6 +12,12 @@
   // null si ninguna reserva tiene todavía costo o comisión.
   function saleProfit(q, trips) {
     if (!q) return null;
+    // Comisión registrada a mano para la venta (% del total o monto): manda sobre las reservas.
+    const m = q.agency_margin;
+    if (m && (m.mode === 'pct' || m.mode === 'monto') && m.value !== '' && m.value != null && Number.isFinite(Number(m.value))) {
+      const total = Number(q.payment_plan && q.payment_plan.total) || Number(q.price) || 0;
+      return Math.round((m.mode === 'pct' ? (total * Number(m.value)) / 100 : Number(m.value)) * 100) / 100;
+    }
     const profits = (trips || []).filter((t) => t.quote_id === q.id).flatMap((t) => (t.bookings?.list || []).filter((b) => b.status !== 'Cancelada')).map(TT.bookingProfit).filter((p) => p != null);
     return profits.length ? Math.round(profits.reduce((s, p) => s + p, 0) * 100) / 100 : null;
   }

@@ -47,7 +47,7 @@ function createPublicQuote(dataStore, assignment, { publicDirectory, payments = 
     const client = await dataStore.getRecord('clients', quote.client_id);
     const lead = quote.lead_id ? await dataStore.getRecord('leads', quote.lead_id) : null;
     const seller = await dataStore.findUserById(quote.owner_id || lead?.owner_id);
-    const { share_token, view_count, viewed_at, reminder_at, sent_at, owner_id, payment_plan, pay_token, acceptance, contract, seller_commission, ...safeQuote } = quote;
+    const { share_token, view_count, viewed_at, reminder_at, sent_at, owner_id, payment_plan, pay_token, acceptance, contract, seller_commission, agency_margin, ...safeQuote } = quote;
     const st = acceptState(quote);
     const payload = {
       ok: true,

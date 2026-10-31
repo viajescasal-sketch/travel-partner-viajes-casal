@@ -637,3 +637,17 @@ body.role-vendedor label:has([data-bf="model"]),
 body.role-vendedor label:has([data-bf="commission_amount"]),
 body.role-vendedor label:has([data-cf="cost"]),
 body.role-vendedor .pt-box [data-pt-price] { display: none !important; }
+
+/* Venta · Neto · Ganancia y "Por armar" (Viajes) */
+.tb-money { display: flex; gap: 14px; flex-wrap: wrap; margin: 8px 0 2px; }
+.tb-money span { display: flex; flex-direction: column; min-width: 78px; }
+.tb-money small { font-size: 11px; opacity: .7; }
+.tb-money b { font-size: 14px; }
+.tb-money b.pos { color: #0f8a5f; }
+.tb-money b.neg { color: #c0392b; }
+.tb-panel { margin-bottom: 18px; }
+.tb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.tb-card .tb-pay { margin: 6px 0; }
+.tb-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.tb-preview { min-height: 24px; }
+.qv-margin { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid rgba(128,128,128,.2); }

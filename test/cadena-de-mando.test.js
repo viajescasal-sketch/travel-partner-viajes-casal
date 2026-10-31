@@ -147,3 +147,37 @@ test('Reparto: Dirección reasigna leads; Travel Partner y Vendedor no', async (
   assert.equal((await dir('PATCH', `/api/leads/${id}`, { owner_id: users.ven.id })).status, 200);
   assert.equal((await admin('GET', '/api/assignment')).body.participants.includes(users.tp.id), true, 'el reparto por turnos incluye a Travel Partner y Vendedor');
 });
+
+test('Comisión por venta: % o monto manual, neto = venta − comisión; solo Administrador y Dirección', async (context) => {
+  const { admin, dir, tp, ven } = await setup(context);
+  const R = require('../public/reportes-core');
+  const lead = (await tp('POST', '/api/leads', { client: { name: 'Gina', phone: '998 500 0001' }, destination: 'Cancún' })).body;
+  const clientId = lead.record?.client_id ?? lead.lead?.client_id ?? lead.client?.id;
+  const quote = (await tp('POST', '/api/quotes', { client_id: clientId, destination: 'Cancún', hotel: 'Hotel Sol', price: 1000, status: 'Aceptada' })).body.record;
+  assert.ok(quote?.id, 'cotización creada');
+  const url = `/api/quotes/${quote.id}/agency-margin`;
+
+  assert.equal((await tp('PUT', url, { mode: 'pct', value: 20 })).status, 403);
+  assert.equal((await ven('PUT', url, { mode: 'pct', value: 20 })).status, 403);
+  assert.equal((await dir('PUT', url, { mode: 'pct', value: 150 })).status, 400, 'más de 100 %');
+  assert.equal((await dir('PUT', url, { mode: 'monto', value: 5000 })).status, 400, 'mayor al total');
+  assert.equal((await dir('PUT', url, { mode: 'otro', value: 1 })).status, 400);
+
+  // 1000 de venta con 20 % → ganancia 200, neto 800
+  const saved = await dir('PUT', url, { mode: 'pct', value: 20 });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  const q = (await admin('GET', '/api/crm')).body.quotes.find((x) => x.id === quote.id);
+  assert.deepEqual(q.agency_margin, { mode: 'pct', value: 20 });
+  assert.equal(R.saleProfit(q, []), 200);
+  assert.equal(1000 - R.saleProfit(q, []), 800);
+  // Monto manual
+  await admin('PUT', url, { mode: 'monto', value: 150 });
+  assert.equal(R.saleProfit((await admin('GET', '/api/crm')).body.quotes.find((x) => x.id === quote.id), []), 150);
+
+  // El Travel Partner dueño de la venta no la ve; el Vendedor tampoco.
+  const mine = (await tp('GET', '/api/crm')).body.quotes.find((x) => x.id === quote.id);
+  assert.equal(mine.agency_margin, undefined);
+  // Quitarla regresa a la utilidad de las reservas
+  assert.equal((await dir('PUT', url, { clear: true })).status, 200);
+  assert.equal((await admin('GET', '/api/crm')).body.quotes.find((x) => x.id === quote.id).agency_margin, null);
+});

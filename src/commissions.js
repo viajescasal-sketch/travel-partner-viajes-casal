@@ -39,6 +39,31 @@ function createCommissions(dataStore) {
     res.json({ ok: true, ...goals });
   }));
 
+  // Comisión de la agencia por venta: % del total o monto manual. Neto (pago a proveedores) = venta − comisión.
+  router.put('/quotes/:id/agency-margin', wrap(async (req, res) => {
+    adminOnly(req);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) throw new ValidationError('Identificador inválido');
+    const quote = (await dataStore.listRecords('quotes')).find((q) => q.id === id);
+    if (!quote) throw Object.assign(new Error('No se encontró la cotización'), { status: 404, expose: true });
+    const total = Number(quote.payment_plan?.total) || Number(quote.price) || 0;
+    const body = req.body || {};
+    let margin = null;
+    let note = 'Comisión de la venta quitada (se usan las reservas)';
+    if (!body.clear) {
+      const value = Number(String(body.value ?? '').replace(/[^0-9.]/g, ''));
+      if (!['pct', 'monto'].includes(body.mode) || body.value === '' || body.value == null || !Number.isFinite(value)) throw new ValidationError('Elige % o monto y escribe el valor');
+      if (body.mode === 'pct' && (value < 0 || value > 100)) throw new ValidationError('El porcentaje debe estar entre 0 y 100');
+      if (body.mode === 'monto' && (value < 0 || value > total)) throw new ValidationError('La comisión no puede ser mayor al total de la venta');
+      margin = { mode: body.mode, value: Math.round(value * 100) / 100 };
+      const amount = body.mode === 'pct' ? Math.round(total * value) / 100 : value;
+      note = `Comisión de la venta ${margin.mode === 'pct' ? `${margin.value}%` : 'manual'}: ${money(amount)} de ${money(total)} (neto ${money(total - amount)})`;
+    }
+    const updated = await dataStore.updateRecord('quotes', quote.id, { agency_margin: margin });
+    await dataStore.logActivity(req.session.user.id, 'crm_quotes_update', req, { entity: 'quotes', entityId: quote.id, summary: quote.folio, note: note.slice(0, 480) });
+    res.json({ ok: true, record: updated });
+  }));
+
   // Marcar la comisión de una venta como pagada al vendedor (o deshacerlo).
   router.post('/quotes/:id/seller-commission', wrap(async (req, res) => {
     adminOnly(req);
