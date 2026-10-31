@@ -123,6 +123,7 @@ function qvCardHtml(q, dups) {
 function qvListHtml(list, dups) {
   const editable = canWrite('quotes');
   const admin = isAdmin();
+  const mgr = isManager() && typeof quoteProfitCell === 'function';
   const row = (q) => `<tr class="qv-row${dups.has(q.id) ? ' is-dup' : ''}" data-qv-open="${q.id}" tabindex="0">
     <td class="c-sel">${editable && !qvExternal(q) ? `<input type="checkbox" data-select-quote="${q.id}" ${selectedQuoteIds.has(q.id) ? 'checked' : ''} aria-label="Seleccionar ${escapeHtml(q.folio)}">` : ''}</td>
     <td class="c-client"><b>${escapeHtml(clientName(q.client_id))}</b><small>${escapeHtml(q.folio)}${admin ? ` · ${escapeHtml(userName(q.owner_id))}` : ''}</small></td>
@@ -130,16 +131,16 @@ function qvListHtml(list, dups) {
     <td class="c-dates">${escapeHtml(qvDates(q))}</td>
     <td class="c-price"><b>${money(q.price)}</b><small>${escapeHtml(q.mode || '')}</small></td>
     <td class="c-status"><span class="status ${statusClass(q.status)}">${escapeHtml(q.status)}</span>${dups.has(q.id) ? '<span class="qv-chip dup" title="Posible duplicado">⚠</span>' : ''}${q.viewed_at ? '<span class="qv-chip seen" title="El cliente la vio">👀</span>' : ''}</td>
-    <td class="c-pay">${qvPay(q)}</td>
+    <td class="c-pay">${qvPay(q)}</td>${mgr ? `<td class="c-profit">${quoteProfitCell(q)}</td>` : ''}
     <td class="c-acts"><button type="button" class="qv-ic" data-pdf="${q.id}" title="Ver PDF">📄</button>${editable ? `<button type="button" class="qv-ic" data-whatsapp="${q.id}" title="WhatsApp">💬</button><button type="button" class="qv-ic" data-edit-quote="${q.id}" title="Editar">✎</button>` : ''}${canDeleteQuote(q) ? `<button type="button" class="qv-ic del" data-qv-del="${q.id}" title="Eliminar">🗑</button>` : ''}</td>
   </tr>`;
   let body = '';
   if (qv.sort === 'client') {
     const groups = new Map();
     list.forEach((q) => { if (!groups.has(q.client_id)) groups.set(q.client_id, []); groups.get(q.client_id).push(q); });
-    groups.forEach((qs, cid) => { body += `<tr class="qv-group"><td colspan="8"><button type="button" class="link" data-client="${cid}">👤 ${escapeHtml(clientName(cid))}</button> <small>${qs.length} ${qs.length === 1 ? 'cotización' : 'cotizaciones'}</small></td></tr>${qs.map(row).join('')}`; });
+    groups.forEach((qs, cid) => { body += `<tr class="qv-group"><td colspan="${mgr ? 9 : 8}"><button type="button" class="link" data-client="${cid}">👤 ${escapeHtml(clientName(cid))}</button> <small>${qs.length} ${qs.length === 1 ? 'cotización' : 'cotizaciones'}</small></td></tr>${qs.map(row).join('')}`; });
   } else body = list.map(row).join('');
-  return `<div class="qv-table"><table><thead><tr><th></th><th>Cliente</th><th>Destino</th><th>Fechas</th><th>Precio</th><th>Estado</th><th>Cobro</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
+  return `<div class="qv-table"><table><thead><tr><th></th><th>Cliente</th><th>Destino</th><th>Fechas</th><th>Precio</th><th>Estado</th><th>Cobro</th>${mgr ? '<th>Ganancia</th>' : ''}<th></th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 /* ---------- Ficha rápida (panel lateral) ---------- */
@@ -173,6 +174,7 @@ function qvDrawer(id) {
         ${row('Pasajeros', escapeHtml(q.details?.pax || (lead?.travelers ? `${lead.travelers}` : '')))}
         ${row('Vigencia', q.valid_until ? escapeHtml(fmtDate(q.valid_until)) : 'Por definir')}
         ${row('Asesor', escapeHtml(userName(q.owner_id)))}
+        ${typeof quoteProfitRow === 'function' ? quoteProfitRow(q) : ''}
         ${row('Creada', escapeHtml(fmtDue(q.created_at)))}
         ${row('Vista por el cliente', q.viewed_at ? `${escapeHtml(fmtDue(q.viewed_at))} (${q.view_count || 1})` : '')}
       </div>
