@@ -276,8 +276,54 @@
   }
   window.bookingsModal = bookingsModal;
 
+  // Ventas: una fila por cada viaje vendido (con o sin viaje armado), con su precio y, para Administrador y Dirección, la comisión.
+  function salesHtml(today) {
+    const mgr = typeof isManager === 'function' && isManager() && typeof quoteProfitInfo === 'function';
+    const trips = db.trips.filter((t) => t.status !== 'Cerrado');
+    const taken = new Set();
+    const rows = trips.map((t) => {
+      let q = t.quote_id ? quoteById(t.quote_id) : null;
+      if (!q) { const mine = db.quotes.filter((x) => x.client_id === t.client_id && x.status === 'Aceptada' && !trips.some((o) => o.quote_id === x.id)); if (mine.length === 1) q = mine[0]; }
+      if (q) taken.add(q.id);
+      return { t, q, client_id: t.client_id, key: `1${t.start_date || '9'}` };
+    });
+    (typeof tpToBuild === 'function' ? tpToBuild() : []).filter((p) => !p.q || !taken.has(p.q.id))
+      .forEach((p) => rows.push({ q: p.q, lead: p.lead, client_id: p.client_id, key: `0${String(p.q ? p.q.id : p.client_id).padStart(8, '0')}` }));
+    rows.sort((a, c) => (a.key < c.key ? -1 : a.key > c.key ? 1 : 0)); // por armar primero, luego por fecha de salida
+    const info = (q) => (mgr && q ? quoteProfitInfo(q) : null);
+    const total = (r) => (r.q ? Number(r.q.payment_plan?.total) || Number(r.q.price) || 0 : 0);
+    const sold = rows.reduce((x, r) => x + total(r), 0);
+    const known = rows.map((r) => info(r.q)).filter((i) => i && i.profit != null);
+    const profit = known.reduce((x, i) => x + i.profit, 0);
+    const missing = rows.filter((r) => r.q && (!info(r.q) || info(r.q).profit == null)).length;
+    const kpis = mgr ? `<div class="mini bk-kpis"><div>Ventas<b>${rows.length}</b><small>${trips.length} con viaje armado</small></div><div>Vendido<b>${money(sold)}</b></div><div>Ganancia (comisión)<b>${money(profit)}</b><small>${sold > 0 ? `${Math.round((profit / sold) * 1000) / 10}% de lo vendido` : ''}</small></div><div>Por capturar<b>${missing}</b><small>${missing ? 'ventas sin comisión' : 'todo capturado'}</small></div></div>`
+      : `<div class="mini bk-kpis"><div>Ventas<b>${rows.length}</b><small>${trips.length} con viaje armado</small></div><div>Vendido<b>${money(sold)}</b></div></div>`;
+    const write = canWrite('trips');
+    const line = (r) => {
+      const { t, q, lead } = r;
+      const l = lead || (q && q.lead_id ? leadById(q.lead_id) : null);
+      const dest = t ? t.destination : q ? q.destination : lead?.destination;
+      const dates = t ? fmtRange(t.start_date, t.end_date) : q && typeof qvDates === 'function' ? qvDates(q) : l ? fmtRange(l.start_date, l.end_date) : '';
+      const bk = t ? (t.bookings?.list || []) : [];
+      const sum = t && bk.length ? T.bookingsSummary(bk, t, today) : null;
+      const i = info(q);
+      const comm = !mgr ? '' : !q ? '<td><span class="muted">Sin cotización</span></td>'
+        : `<td>${i && i.profit != null ? `<b class="${i.profit < 0 ? 'neg' : 'pos'}">${money(i.profit)}</b><br><small>${i.margin == null ? '' : `${i.margin}%`}${i.net != null ? ` · neto ${money(i.net)}` : ''}</small>` : '<span class="muted">Sin comisión</span>'}<br><button type="button" class="link" data-margin="${q.id}">${q.agency_margin ? 'Editar' : 'Capturar'}</button></td>`;
+      const open = t ? `<button type="button" class="link" data-bk-trip="${t.id}">🧾 Reservas</button>` : write ? (q ? `<button type="button" class="btn primary small" data-trip-from-quote="${q.id}">Armar viaje</button>` : `<button type="button" class="btn primary small" data-new-trip-client="${r.client_id}">Armar viaje</button>`) : '';
+      return `<tr><td><b>${H(clientName(r.client_id))}</b><br><small>${H(dest || 'Destino por definir')}${dates ? ` · ${H(dates)}` : ''}</small></td>
+        <td>${t ? `<span class="status qualified">${H(t.status)}</span>` : '<span class="status quoted">Por armar</span>'}${q ? `<br><small>${H(q.folio)}${r.lead && q.status !== 'Aceptada' ? ' · sin marcar aceptada' : ''}</small>` : ''}</td>
+        <td>${sum ? `${sum.confirmed}/${sum.total} confirmadas${sum.danger ? ` · ⛔ ${sum.danger}` : ''}` : '<span class="muted">Sin reservas</span>'}</td>
+        <td>${q && typeof qvPay === 'function' ? qvPay(q) : '—'}</td>
+        <td>${q ? `<b>${money(total(r))}</b>` : '—'}</td>${comm}<td>${open}</td></tr>`;
+    };
+    return `<div class="panel-head"><div><h3>🧾 Reservas vendidas</h3><p>Todos los viajes que ya vendimos: con viaje armado y los que aún están por armar.${mgr ? ' La comisión es la ganancia de cada venta.' : ''}</p></div></div>${kpis}
+      <div class="table bk-sales"><table><thead><tr><th>Cliente y viaje</th><th>Estado</th><th>Servicios</th><th>Pago del cliente</th><th>Precio</th>${mgr ? '<th>Comisión</th>' : ''}<th></th></tr></thead><tbody>
+      ${rows.map(line).join('') || `<tr><td colspan="${mgr ? 7 : 6}" class="empty-note">Aún no hay ventas. Aparecen solas cuando el cliente acepta la cotización o el lead pasa a Vendido.</td></tr>`}
+      </tbody></table></div>`;
+  }
+
   // Panel central de reservas en Viajes.
-  const rv = { status: '', supplier: '', pending: true };
+  const rv = { status: '', supplier: '', pending: false };
   window.renderReservas = () => {
     paintDatalist();
     renderSuppliers();
@@ -293,7 +339,7 @@
       .sort((a, c) => (a.b.start_date || a.t.start_date || '').localeCompare(c.b.start_date || c.t.start_date || ''));
     const toReview = rows.filter(({ b }) => b.portal?.state === 'Cotizada');
     const tripsWithout = db.trips.filter((t) => t.status !== 'Cerrado' && t.end_date >= today && !(t.bookings?.list || []).length).length;
-    box.innerHTML = `<div class="panel-head"><div><h3>🧾 Reservas</h3><p>Todas las reservas de los viajes abiertos, con su proveedor, clave y pago al proveedor.</p></div></div>
+    box.innerHTML = `${salesHtml(today)}<div class="panel-head bk-sub"><div><h3>🛎 Servicios con proveedores</h3><p>Cada servicio reservado de los viajes abiertos, con su proveedor, clave y pago al proveedor.</p></div></div>
       <div class="mini bk-kpis"><div>Por reservar<b>${count('Por reservar')}</b></div><div>Solicitadas<b>${count('Solicitada')}</b></div><div>Confirmadas<b>${count('Confirmada')}</b></div><div>Por pagar a proveedores<b>${money(owed)}</b><small>${dueSoon.length ? `${dueSoon.length} vence${dueSoon.length > 1 ? 'n' : ''} en 7 días` : ''}</small></div></div>
       ${toReview.length ? `<p class="note-warn">🚐 ${toReview.length} precio${toReview.length > 1 ? 's' : ''} del portal de proveedores por aceptar o rechazar: ${toReview.slice(0, 4).map(({ b, t }) => `<button type="button" class="link" data-bk-trip="${t.id}">${H(b.portal.folio)} · ${H(clientName(t.client_id))}</button>`).join(' · ')}</p>` : ''}
       ${tripsWithout ? `<p class="note-warn">${tripsWithout} viaje${tripsWithout > 1 ? 's' : ''} próximo${tripsWithout > 1 ? 's' : ''} sin reservas registradas.</p>` : ''}

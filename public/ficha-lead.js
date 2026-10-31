@@ -37,7 +37,7 @@
   const quoteRow = (q) => {
     const ext = q.details?.external;
     return `<div class="lf-quote"><button type="button" class="lf-quote-main" data-edit-quote="${q.id}"><span><b>${H(q.folio)}</b>${ext ? ` <span class="contact-chip ext-chip">📎 ${ext.kind === 'link' ? 'Link' : 'Adjunta'}</span>` : ''}<small>${H(q.hotel)} · ${H(q.destination)}</small></span><span class="lf-quote-price">${money(q.price)}<span class="status ${statusClass(q.status)}">${H(q.status)}</span></span></button>
-      <span class="lf-quote-acts"><button type="button" class="btn secondary small" data-pdf="${q.id}">${ext ? (ext.kind === 'link' ? '🔗 Abrir' : '📄 Abrir') : 'Ver PDF'}</button>${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-whatsapp="${q.id}">💬</button>` : ''}${q.status === 'Aceptada' && canWrite('quotes') ? `<button type="button" class="btn secondary small" data-pay-plan="${q.id}">💳</button>` : ''}</span></div>`;
+      <span class="lf-quote-acts">${typeof quoteMarginBtn === 'function' ? quoteMarginBtn(q) : ''}<button type="button" class="btn secondary small" data-pdf="${q.id}">${ext ? (ext.kind === 'link' ? '🔗 Abrir' : '📄 Abrir') : 'Ver PDF'}</button>${canWrite('quotes') ? `<button type="button" class="btn secondary small" data-whatsapp="${q.id}">💬</button>` : ''}${q.status === 'Aceptada' && canWrite('quotes') ? `<button type="button" class="btn secondary small" data-pay-plan="${q.id}">💳</button>` : ''}</span></div>`;
   };
   const fupRow = (f) => `<button type="button" class="lead-fup${f.done ? ' done' : ''}${isLateFollowup(f) ? ' late' : ''}" data-followup="${f.id}"><span>${FOLLOWUP_ICONS[f.type] || '📌'} ${H(f.title)}</span><small>${f.done ? 'Hecho' : H(fmtDue(f.due_at))}</small></button>`;
 
