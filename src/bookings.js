@@ -5,11 +5,12 @@
 
 const express = require('express');
 const { ENTITY_ORDER, ValidationError, nowCancun } = require('./crm-schema');
-const { buildScope, isVisible, canWrite } = require('./access');
+const { buildScope, isVisible, canWrite, canSeeCosts, redactBooking } = require('./access');
 const TPTrip = require('../public/viaje-core');
 const TPProv = require('../public/proveedor-core');
 
-const FINANCE_ROLES = ['admin', 'operaciones'];
+// Solo el Administrador y la Dirección registran comisiones (monto manual, % y cobro).
+const FINANCE_ROLES = ['admin', 'direccion'];
 
 function createBookings(dataStore) {
   const router = express.Router();
@@ -29,7 +30,8 @@ function createBookings(dataStore) {
 
   router.get('/trips/:id/bookings', wrap(async (req, res) => {
     const { trip } = await visibleTrip(req, false);
-    res.json({ ok: true, bookings: trip.bookings?.list || [] });
+    const list = trip.bookings?.list || [];
+    res.json({ ok: true, bookings: canSeeCosts(req.session.user) ? list : list.map(redactBooking) });
   }));
 
   router.put('/trips/:id/bookings', wrap(async (req, res) => {
@@ -55,6 +57,17 @@ function createBookings(dataStore) {
       }
       // Fecha en que se pagó al proveedor (la ve el proveedor en su calendario de pagos).
       out.supplier_paid_at = out.supplier_paid ? (TPTrip.isDate(b.supplier_paid_at) ? b.supplier_paid_at : prevB?.supplier_paid_at || today) : '';
+      // Quien no registra comisiones no cambia el modelo, el % ni el monto: se conservan los ya registrados
+      // (en una reserva nueva se toman del catálogo del proveedor).
+      if (!finance) {
+        const prev = before.find((x) => x.id === out.id);
+        if (prev) {
+          Object.assign(out, { model: prev.model, commission_pct: prev.commission_pct ?? '', commission_amount: prev.commission_amount ?? '', commission_due: prev.commission_due || '' });
+        } else {
+          const pct = sup && sup.model === 'comision' && sup.commission !== '' && sup.commission != null ? Number(sup.commission) : '';
+          Object.assign(out, { model: pct === '' ? 'neta' : 'comision', commission_pct: pct, commission_amount: pct !== '' && out.price !== '' && out.price != null ? Math.round(Number(out.price) * pct) / 100 : '', commission_due: '' });
+        }
+      }
       if (out.model === 'comision') {
         // TP-205: fecha de cobro por omisión = fin del servicio + días del proveedor.
         if (!out.commission_due) out.commission_due = TPTrip.commissionDueDefault(out, trip, sup);
@@ -87,7 +100,7 @@ function createBookings(dataStore) {
 
   // TP-205: cobro de la comisión de una reserva (Pendiente → Facturada → Cobrada) desde el panel de Proveedores.
   router.patch('/trips/:id/bookings/:bid/commission', wrap(async (req, res) => {
-    if (!FINANCE_ROLES.includes(req.session.user.role)) throw Object.assign(new Error('Solo el administrador y Operaciones registran el cobro de comisiones'), { status: 403, expose: true });
+    if (!FINANCE_ROLES.includes(req.session.user.role)) throw Object.assign(new Error('Solo el administrador y la Dirección registran el cobro de comisiones'), { status: 403, expose: true });
     const { trip, client } = await visibleTrip(req, false);
     const list = trip.bookings?.list || [];
     const prev = list.find((b) => b.id === String(req.params.bid));

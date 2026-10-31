@@ -11,7 +11,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css?v=tp106" />
-    <link rel="stylesheet" href="/tp006.css?v=notas20" />
+    <link rel="stylesheet" href="/tp006.css?v=roles1" />
     <link rel="stylesheet" href="/cotizaciones.css?v=qv1" />
     <link rel="stylesheet" href="/viaje.css?v=tp009" />
     <link rel="stylesheet" href="/ui.css?v=ui2" />
@@ -135,9 +135,9 @@
           ><button data-page="suppliers"><i data-ic="building"></i><span>Proveedores</span></button
           ><button data-page="campaigns" data-hide-ops><i data-ic="megaphone"></i><span>Campañas</span><em id="campaignBadge" class="hidden">0</em></button
           ><button data-page="followups"><i data-ic="calendar"></i><span>Seguimientos</span><em id="followBadge" class="hidden">0</em></button
-          ><button data-page="reports" data-admin-only><i data-ic="chart"></i><span>Reportes</span></button
+          ><button data-page="reports" data-manager-only><i data-ic="chart"></i><span>Reportes</span></button
           ><button data-page="activity" data-admin-only><i data-ic="history"></i><span>Bitácora</span></button
-          ><button data-page="settings" data-admin-only><i data-ic="settings"></i><span>Configuración</span></button>
+          ><button data-page="settings" data-manager-only><i data-ic="settings"></i><span>Configuración</span></button>
         </nav>
         <div class="side-bottom">
           <div class="help">
@@ -298,7 +298,7 @@
                 <option>Vendido</option>
                 <option>Perdido</option></select
               ><select id="ownerFilter" class="hidden" aria-label="Filtrar por vendedor"></select
-              ><button id="reassignLeads" class="btn secondary hidden" data-admin-only>Reasignar varios</button
+              ><button id="reassignLeads" class="btn secondary hidden" data-manager-only>Reasignar varios</button
               ><button id="exportLeads" class="btn secondary">Exportar</button>
             </div>
             <div id="leadBoard" class="kanban hidden" aria-label="Tablero de oportunidades"></div>
@@ -571,22 +571,22 @@
             </div>
             <div class="settings">
               <nav id="settingsNav">
-                <button class="active" data-settings-tab="agencyPanel">Perfil de agencia</button
-                ><button data-settings-tab="usersPanel">Usuarios</button
-                ><button data-settings-tab="pdfPanel">Plantilla PDF</button
-                ><button data-settings-tab="questionsPanel">Calificación de leads</button
+                <button data-admin-only class="active" data-settings-tab="agencyPanel">Perfil de agencia</button
+                ><button data-admin-only data-settings-tab="usersPanel">Usuarios</button
+                ><button data-admin-only data-settings-tab="pdfPanel">Plantilla PDF</button
+                ><button data-admin-only data-settings-tab="questionsPanel">Calificación de leads</button
                 ><button data-settings-tab="assignmentPanel">Asignación de leads</button
-                ><button data-settings-tab="remindersPanel">Recordatorios</button
-                ><button data-settings-tab="templatesPanel">Plantillas WhatsApp</button
-                ><button data-settings-tab="postventaPanel">Postviaje y referidos</button
-                ><button data-settings-tab="campaignPanel">Campañas de recompra</button
-                ><button data-settings-tab="paymentsPanel">Cobros</button
-                ><button data-settings-tab="contractPanel">Contrato</button
+                ><button data-admin-only data-settings-tab="remindersPanel">Recordatorios</button
+                ><button data-admin-only data-settings-tab="templatesPanel">Plantillas WhatsApp</button
+                ><button data-admin-only data-settings-tab="postventaPanel">Postviaje y referidos</button
+                ><button data-admin-only data-settings-tab="campaignPanel">Campañas de recompra</button
+                ><button data-admin-only data-settings-tab="paymentsPanel">Cobros</button
+                ><button data-admin-only data-settings-tab="contractPanel">Contrato</button
                 ><button data-settings-tab="goalsPanel">Metas y comisiones</button
-                ><button data-settings-tab="fieldsPanel">Campos personalizables</button
-                ><button data-settings-tab="automationsPanel">Automatizaciones</button
-                ><button data-settings-tab="integrationsPanel">Integraciones</button
-                ><button data-settings-tab="backupsPanel">Respaldos</button>
+                ><button data-admin-only data-settings-tab="fieldsPanel">Campos personalizables</button
+                ><button data-admin-only data-settings-tab="automationsPanel">Automatizaciones</button
+                ><button data-admin-only data-settings-tab="integrationsPanel">Integraciones</button
+                ><button data-admin-only data-settings-tab="backupsPanel">Respaldos</button>
               </nav>
               <article class="panel settings-panel" id="usersPanel" hidden>
                 <div class="panel-head">
@@ -943,11 +943,11 @@
     <script src="/contrato-core.js?v=tp206"></script>
     <script src="/campos-core.js?v=tp307"></script>
     <script src="/automatizaciones-core.js?v=tp307"></script>
-    <script src="/app.js?v=mp1"></script>
+    <script src="/app.js?v=roles1"></script>
     <script src="/pagos-correccion.js?v=qv1"></script>
     <script src="/cotizaciones-vista.js?v=qv1"></script>
     <script src="/viaje.js?v=tp305"></script>
-    <script src="/reservas.js?v=mp1"></script>
+    <script src="/reservas.js?v=roles1"></script>
     <script src="/ficha-lead.js?v=tp313"></script>
     <script src="/cotizacion-externa.js?v=tp113"></script>
     <script src="/portal-equipo.js?v=tp313"></script>
@@ -957,10 +957,10 @@
     <script src="/fidelidad.js?v=tp311"></script>
     <script src="/campanas.js?v=tp206"></script>
     <script src="/contratos.js?v=tp206"></script>
-    <script src="/metas.js?v=tp206"></script>
+    <script src="/metas.js?v=roles1"></script>
     <script src="/campos.js?v=tp307"></script>
     <script src="/automatizaciones.js?v=tp307"></script>
     <script src="/recorrido.js?v=ayuda2"></script>
-    <script src="/ayuda.js?v=tr1"></script>
+    <script src="/ayuda.js?v=roles1"></script>
   </body>
 </html>

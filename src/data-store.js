@@ -115,7 +115,7 @@ class MySQLDataStore {
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       email VARCHAR(254) NOT NULL UNIQUE,
       name VARCHAR(120) NOT NULL,
-      role ENUM('admin','travel_partner','operaciones','consulta','proveedor') NOT NULL,
+      role ENUM('admin','direccion','travel_partner','vendedor','operaciones','consulta','proveedor') NOT NULL,
       password_hash VARCHAR(100) NOT NULL,
       active BOOLEAN NOT NULL DEFAULT TRUE,
       must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
@@ -237,8 +237,9 @@ class MySQLDataStore {
     );
     const role = columns.find((c) => c.COLUMN_NAME === 'role');
     // TP-009: rol proveedor (portal del proveedor de traslados).
-    if (role && !String(role.COLUMN_TYPE).includes('proveedor')) {
-      await this.pool.query("ALTER TABLE users MODIFY role ENUM('admin','travel_partner','operaciones','consulta','proveedor') NOT NULL");
+    // Dirección y Vendedor (cadena de mando: Administrador › Dirección › Travel Partner › Vendedor).
+    if (role && !(String(role.COLUMN_TYPE).includes('proveedor') && String(role.COLUMN_TYPE).includes('direccion') && String(role.COLUMN_TYPE).includes('vendedor'))) {
+      await this.pool.query("ALTER TABLE users MODIFY role ENUM('admin','direccion','travel_partner','vendedor','operaciones','consulta','proveedor') NOT NULL");
     }
     if (!columns.some((c) => c.COLUMN_NAME === 'last_login_at')) {
       await this.pool.query('ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER must_change_password');

@@ -7,6 +7,7 @@
 const express = require('express');
 const { ENTITY_ORDER, ValidationError, nowCancun } = require('./crm-schema');
 const TPComm = require('../public/comisiones-core');
+const { isManager } = require('./access');
 
 const SETTING = 'goals';
 const money = (n) => `$${Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 2 })}`;
@@ -14,15 +15,16 @@ const money = (n) => `$${Number(n || 0).toLocaleString('es-MX', { maximumFractio
 /** Lo que cada usuario puede ver de las metas: el administrador todo; los demás solo lo suyo. */
 async function goalsFor(dataStore, user) {
   const goals = TPComm.cleanGoals(await dataStore.getSetting(SETTING));
-  if (user.role === 'admin') return goals;
+  if (isManager(user)) return goals;
+  // El equipo ve su propia meta, pero no el % de comisión ni lo que se paga (por ahora no se habilita para ellos).
   const mine = goals.sellers[String(user.id)];
-  return { base: goals.base, sellers: mine ? { [String(user.id)]: mine } : {} };
+  return { base: goals.base, sellers: mine ? { [String(user.id)]: { ...mine, pct: '' } } : {} };
 }
 
 function createCommissions(dataStore) {
   const router = express.Router();
   const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
-  const adminOnly = (req) => { if (req.session.user.role !== 'admin') throw Object.assign(new Error('Solo el administrador'), { status: 403, expose: true }); };
+  const adminOnly = (req) => { if (!isManager(req.session.user)) throw Object.assign(new Error('Solo el administrador y la Dirección'), { status: 403, expose: true }); };
 
   router.get('/goals', wrap(async (req, res) => { res.json({ ok: true, ...(await goalsFor(dataStore, req.session.user)) }); }));
 

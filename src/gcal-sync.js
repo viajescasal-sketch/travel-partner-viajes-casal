@@ -13,7 +13,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const { ENTITY_ORDER, ValidationError, nowCancun, sanitize } = require('./crm-schema');
-const { buildScope } = require('./access');
+const { buildScope, canSeeCosts } = require('./access');
 const { encryptSecret, decryptSecret } = require('./twofa');
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -83,7 +83,7 @@ function desiredEvents(user, data, { appUrl = '', today = nowCancun().slice(0, 1
       start: { date: t.start_date }, end: { date: addDays(end, 1) }, colorId: '7', transparency: 'transparent',
       reminders: { useDefault: false, overrides: [] }
     };
-    for (const b of t.bookings?.list || []) {
+    for (const b of canSeeCosts(user) ? t.bookings?.list || [] : []) { // el Vendedor no ve pagos a proveedores
       if (b.status === 'Cancelada' || b.supplier_paid || !isDate(b.supplier_due) || b.cost === '' || b.cost == null) continue;
       // Si el traslado ya tiene su tarea “Pagar al proveedor”, esa tarea es la que aparece en el calendario.
       if ((data.followups || []).some((f) => !f.done && f.auto?.kind === 'traslado' && f.auto.task === 'pay' && f.auto.trip_id === t.id && f.auto.booking_id === b.id)) continue;

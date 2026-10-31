@@ -627,3 +627,13 @@ body.dark .dupe-banner { background: rgba(246,185,59,.1); }
 .kb-list::-webkit-scrollbar { width: 6px; }
 .kb-list::-webkit-scrollbar-thumb { background: rgba(7, 59, 102, .25); border-radius: 6px; }
 body.dark .kb-list { scrollbar-color: rgba(255, 255, 255, .25) transparent; }
+
+/* Cadena de mando: el Vendedor solo vende. No ve costos, utilidad, comisiones ni el catálogo de proveedores. */
+body.role-vendedor #nav [data-page="suppliers"],
+body.role-vendedor #cvTotals,
+body.role-vendedor label:has([data-bf="cost"]),
+body.role-vendedor label:has([data-bf="supplier_due"]),
+body.role-vendedor label:has([data-bf="model"]),
+body.role-vendedor label:has([data-bf="commission_amount"]),
+body.role-vendedor label:has([data-cf="cost"]),
+body.role-vendedor .pt-box [data-pt-price] { display: none !important; }

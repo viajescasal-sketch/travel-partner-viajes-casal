@@ -5,7 +5,7 @@
 
 const express = require('express');
 const { ValidationError } = require('./crm-schema');
-const { SELLER_ROLES } = require('./access');
+const { SELLER_ROLES, DEFAULT_ASSIGNEE_ROLES, isManager } = require('./access');
 
 const MODES = ['turnos', 'fijo'];
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -15,7 +15,7 @@ function createAssignment(dataStore, mailer, env = {}) {
   async function config(users) {
     const saved = await dataStore.getSetting('assignment');
     const list = users || await dataStore.listUsers();
-    const base = { mode: 'turnos', participants: list.filter((u) => u.active && u.role === 'travel_partner').map((u) => u.id), fixedId: null, away: [], lastUserId: null };
+    const base = { mode: 'turnos', participants: (() => { const pool = (roles) => list.filter((u) => u.active && roles.includes(u.role)).map((u) => u.id); return pool(DEFAULT_ASSIGNEE_ROLES).length ? pool(DEFAULT_ASSIGNEE_ROLES) : pool(['direccion']); })(), fixedId: null, away: [], lastUserId: null };
     const cfg = { ...base, ...(saved || {}) };
     cfg.participants = (Array.isArray(cfg.participants) ? cfg.participants : []).map(Number);
     cfg.away = (Array.isArray(cfg.away) ? cfg.away : []).map(Number);
@@ -106,7 +106,7 @@ function createAssignment(dataStore, mailer, env = {}) {
 // Rutas: campanita (todos), disponibilidad (vendedor o admin) y configuración (admin).
 function createAssignmentRouter(dataStore, assignment, { requireRole }) {
   const router = express.Router();
-  const adminOnly = requireRole('admin');
+  const adminOnly = requireRole('admin', 'direccion'); // Administrador y Dirección reparten los leads
   const wrap = (handler) => (req, res, next) => Promise.resolve(handler(req, res)).catch(next);
   const me = (req) => req.session.user;
 
@@ -129,7 +129,7 @@ function createAssignmentRouter(dataStore, assignment, { requireRole }) {
   router.put('/assignment/availability', wrap(async (req, res) => {
     const body = req.body || {};
     const targetId = body.userId !== undefined && body.userId !== null ? Number(body.userId) : me(req).id;
-    if (targetId !== me(req).id && me(req).role !== 'admin') { res.status(403).json({ ok: false, error: 'Solo el administrador puede cambiar la disponibilidad de otros' }); return; }
+    if (targetId !== me(req).id && !isManager(me(req))) { res.status(403).json({ ok: false, error: 'Solo el administrador y la Dirección pueden cambiar la disponibilidad de otros' }); return; }
     const users = await dataStore.listUsers();
     const target = users.find((u) => u.id === targetId);
     if (!assignment.isSeller(target)) throw new ValidationError('Ese usuario no recibe leads');

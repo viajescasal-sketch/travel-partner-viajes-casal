@@ -190,8 +190,8 @@
       go: () => document.getElementById('exportBtn')?.click(), tour: () => [{ el: '#exportBtn', title: 'Exportar', text: 'Leads, clientes, cotizaciones, ventas, viajes y seguimientos.' }] },
 
     /* ===== Configuración ===== */
-    { id: 'usuarios', cat: 'Configuración', icon: '👥', who: isAdmin, title: 'Usuarios y roles', summary: 'Vendedor, Operaciones, Proveedor y Administrador.',
-      steps: ['<b>Configuración › Usuarios › Nuevo usuario</b>: nombre, correo y rol.', 'Comparte el mensaje con la contraseña temporal (se cambia al primer acceso).', '“Nueva contraseña” y “Quitar app” para recuperar accesos.'],
+    { id: 'usuarios', cat: 'Configuración', icon: '👥', who: isAdmin, title: 'Usuarios y roles', summary: 'Administrador, Dirección, Travel Partner, Vendedor, Operaciones y Proveedor.',
+      steps: ['<b>Configuración › Usuarios › Nuevo usuario</b>: nombre, correo y rol.', '<b>Administrador</b>: control total. <b>Dirección</b>: ve a todo el equipo, reasigna leads y registra comisiones. <b>Travel Partner</b>: gestiona los viajes de sus clientes. <b>Vendedor</b>: solo vende y ve el estado de sus clientes, sin costos ni comisiones.', 'Comparte el mensaje con la contraseña temporal (se cambia al primer acceso).', '“Nueva contraseña” y “Quitar app” para recuperar accesos.'],
       go: () => settings('usersPanel')(), tour: () => [{ before: settings('usersPanel'), el: '#userRows', title: 'Usuarios', text: 'Edita rol, estado y contraseñas.' }] },
     { id: 'automatizaciones', cat: 'Configuración', icon: '🤖', who: isAdmin, title: 'Automatizaciones', summary: 'Reglas “Cuando… Si… Entonces…”.',
       steps: ['<b>Configuración › Automatizaciones</b>.', 'Elige el disparador (lead nuevo, cambio de etapa, pago, días antes del viaje…), condiciones y acciones (seguimiento, WhatsApp con plantilla, correo, aviso…).', '<b>Probar sin hacer cambios</b> antes de activarla.'],
