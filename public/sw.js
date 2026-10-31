@@ -5,7 +5,7 @@
    - Modo consulta sin conexión: si no hay red, entrega lo último que cargó /api/crm (y la sesión), marcado como "sin conexión".
    - Notificaciones push: muestra el aviso y al tocarlo abre la app en el lugar correcto.
    - No toca las páginas públicas (cotización, pago, itinerario, portal del cliente) ni ningún envío de datos. */
-const VERSION = 'tp312-3';
+const VERSION = 'tp312-4';
 const STATIC = `static-${VERSION}`;
 const DATA = 'data-v1';
 const SHELL = ['/', '/manifest.webmanifest', '/app/icon-192.png', '/app/icon-512.png', '/brand/logo-mark.png'];

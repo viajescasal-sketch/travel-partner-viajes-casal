@@ -217,6 +217,7 @@ function renderDashboard() {
   $('#todayLabel').textContent = `${WEEKDAYS[d.getUTCDay()]}, ${d.getUTCDate()} DE ${MONTHS_LONG[d.getUTCMonth()].toUpperCase()}`;
 
   if (typeof renderGoalPanel === 'function') renderGoalPanel(); // TP-206
+  if (typeof renderProfitPanel === 'function') renderProfitPanel(); // ganancia de la agencia por venta (Administrador y Dirección)
   if (isOps()) { renderOpsDashboard(today); return; }
   setKpiLabels(['Leads activos', 'Cotizaciones enviadas', 'Ventas del mes', 'Conversión']);
   const active = db.leads.filter((l) => !CLOSED.includes(l.stage));
