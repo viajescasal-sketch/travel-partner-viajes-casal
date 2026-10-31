@@ -16,7 +16,9 @@ const SECTIONS = {
 // Secciones que puede descargar cada rol (el servidor filtra además los registros).
 const ROLE_SECTIONS = {
   admin: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups', 'users'],
+  direccion: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups'],
   travel_partner: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups'],
+  vendedor: ['clients', 'leads', 'quotes', 'sales', 'followups'],
   operaciones: ['trips', 'followups'],
   consulta: []
 };
@@ -114,7 +116,7 @@ function buildSheets(sectionList, data, { users = [], questions = [], range = nu
       sheets.push({
         name: SECTIONS.users,
         columns: [col('ID', 'number', 7), col('Nombre', 'text', 24), col('Correo', 'text', 30), col('Rol', 'text', 15), col('Activo', 'text', 8), col('Último acceso', 'datetime', 17)],
-        rows: users.map((u) => [u.id, u.name, u.email, { admin: 'Administrador', travel_partner: 'Vendedor', operaciones: 'Operaciones', consulta: 'Consulta' }[u.role] || u.role, yesNo(u.active), u.last_login_at])
+        rows: users.map((u) => [u.id, u.name, u.email, { admin: 'Administrador', direccion: 'Dirección', travel_partner: 'Travel Partner', vendedor: 'Vendedor', operaciones: 'Operaciones', consulta: 'Consulta' }[u.role] || u.role, yesNo(u.active), u.last_login_at])
       });
     }
   }

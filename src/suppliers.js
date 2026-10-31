@@ -6,7 +6,10 @@
 const express = require('express');
 const TPTrip = require('../public/viaje-core');
 
-const EDIT_ROLES = ['admin', 'operaciones'];
+const EDIT_ROLES = ['admin', 'direccion', 'operaciones'];
+// La comisión del proveedor (modelo, %, días de cobro) solo la registran el Administrador y la Dirección.
+const COMMISSION_ROLES = ['admin', 'direccion'];
+const COMMISSION_FIELDS = ['model', 'commission', 'commission_days'];
 const SEED = [
   { name: 'HotelDO', type: 'Mayorista', destinations: 'México y Caribe', notes: 'Mayorista de hotelería. Completa contacto, comisión y condiciones de pago.' },
   { name: 'Azabache', type: 'Mayorista', destinations: 'Riviera Maya', notes: 'Completa contacto, comisión y condiciones de pago.' },
@@ -37,8 +40,9 @@ function createSuppliers(dataStore) {
 
   router.get('/suppliers', wrap(async (req, res) => { await ready; res.json({ ok: true, suppliers: await dataStore.listSuppliers(), canEdit: canEdit(req) }); }));
   router.post('/suppliers', wrap(async (req, res) => {
-    if (!canEdit(req)) throw fail(403, 'Solo el administrador y Operaciones editan el catálogo');
+    if (!canEdit(req)) throw fail(403, 'Solo el administrador, la Dirección y Operaciones editan el catálogo');
     const data = TPTrip.cleanSupplier(req.body);
+    if (!COMMISSION_ROLES.includes(req.session.user.role)) { const blank = TPTrip.cleanSupplier({ name: data.name }); COMMISSION_FIELDS.forEach((k) => { data[k] = blank[k]; }); }
     if ((await dataStore.listSuppliers()).some((s) => s.name.toLowerCase() === data.name.toLowerCase())) throw fail(409, `Ya existe un proveedor llamado ${data.name}`);
     const supplier = await dataStore.insertSupplier(data, req.session.user.id);
     await log(req, supplier, 'Proveedor agregado al catálogo');
@@ -49,6 +53,7 @@ function createSuppliers(dataStore) {
     const current = await find(req.params.id);
     const { id, created_at, updated_at, created_by, ...rest } = current;
     const data = TPTrip.cleanSupplier({ ...rest, ...req.body });
+    if (!COMMISSION_ROLES.includes(req.session.user.role)) COMMISSION_FIELDS.forEach((k) => { data[k] = current[k]; });
     if ((await dataStore.listSuppliers()).some((s) => s.id !== current.id && s.name.toLowerCase() === data.name.toLowerCase())) throw fail(409, `Ya existe un proveedor llamado ${data.name}`);
     const supplier = await dataStore.updateSupplier(current.id, data);
     const changed = Object.keys(data).filter((k) => JSON.stringify(data[k]) !== JSON.stringify(current[k]));

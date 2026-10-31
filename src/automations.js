@@ -10,6 +10,7 @@
 const express = require('express');
 const { ValidationError, nowCancun, sanitize } = require('./crm-schema');
 const hooks = require('./hooks');
+const { SELLER_ROLES } = require('./access');
 const TPAuto = require('../public/automatizaciones-core');
 const TPFields = require('../public/campos-core');
 const { readTemplates } = require('./templates');
@@ -152,7 +153,7 @@ function createAutomations(dataStore, { assignment = null, mailer = null, env = 
         if (!lead) return { skipped: 'sin lead' };
         let user = null;
         if (a.to === 'auto') user = assignment ? (await assignment.pickOwner({ client: ctx.client })).user : null;
-        else user = ctx.users.find((u) => u.id === a.to && u.active && ['admin', 'travel_partner'].includes(u.role)) || null;
+        else user = ctx.users.find((u) => u.id === a.to && u.active && SELLER_ROLES.includes(u.role)) || null;
         if (!user) return { skipped: 'no hay vendedor disponible' };
         if (user.id === lead.owner_id) return { skipped: `ya era de ${user.name}` };
         if (dryRun) return { ok: `👤 Asignar a ${user.name}` };

@@ -317,6 +317,17 @@ Revisión cada 5 minutos en el servidor (`src/reminders.js`, también al primer 
 - “Ver PDF” abre el archivo o el link; no se duplica ni se manda por la liga privada; el WhatsApp usa el mensaje simple (incluye el link si es link).
 - Archivo: `POST /api/quote-files` (cuerpo binario, valida que sea PDF/imagen real) → se guarda en `crm_media`; la cotización lleva `details.external` (`{ kind: 'file', media_id, name, mime }` o `{ kind: 'link', url }`, más `ref`, `date`, `notes`), validado en el servidor (`src/quote-attachments.js`). Interfaz: `public/cotizacion-externa.js`.
 
+## Roles: cadena de mando
+
+| Rol | Para qué | Ve | Comisiones |
+| --- | --- | --- | --- |
+| Administrador (CEO) | Control del sistema, estructura y lógica; dashboard global | Todo | Registra |
+| Dirección (Travel Partner, gerencia) | Supervisa al equipo, reasigna leads, autoriza; entra a Reportes, Asignación de leads y Metas y comisiones | Todo el equipo | Registra |
+| Travel Partner | Gestiona y da seguimiento a los viajes de sus clientes | Lo suyo, con costos de sus viajes | No |
+| Vendedor | Solo vende; ve el seguimiento y el estado del viaje de sus clientes | Lo suyo, sin costos, utilidad ni comisiones; no edita viajes | No |
+
+Operaciones, Consulta y Proveedor no cambian (Operaciones ya no registra comisiones). Reglas en `src/access.js` (`MANAGER_ROLES`, `COST_ROLES`, `redactTrip`). Comisiones (monto manual, % de reserva, cobro, % del proveedor en el catálogo, metas y % del vendedor): solo Administrador y Dirección; un Travel Partner que edita reservas conserva lo ya registrado y en reservas nuevas toma el % del catálogo del proveedor. Las correcciones de pagos siguen autorizándose solo por el Administrador. Pruebas: `test/cadena-de-mando.test.js`.
+
 ## Portal del proveedor de traslados (TP-009)
 
 > **Interruptor “Módulo de proveedor”** (Configuración › Integraciones, solo administrador; `GET/PUT /api/supplier-module`, `src/supplier-module.js`). Apagado: el proveedor no puede entrar a su portal (403), la solicitud de precio al portal se bloquea y el flujo es solo de nuestro lado: al crear el traslado se captura a mano el **costo** (validado por WhatsApp), el precio de venta, la **fecha de pago** (por defecto 5 días antes del viaje, editable), el estado y la clave. Se crea la tarea **Pagar al proveedor** (alerta + calendario .ics/Google) para la vendedora del cliente y los administradores. Los servicios que ya estaban en el portal se siguen viendo en Reservas.

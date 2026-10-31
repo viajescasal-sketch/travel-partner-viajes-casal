@@ -9,7 +9,7 @@ const {
   checkDateRange,
   nowCancun
 } = require('./crm-schema');
-const { ROLE_LABELS, SELLER_ROLES, canWrite, buildScope, isVisible, filterData } = require('./access');
+const { ROLE_LABELS, SELLER_ROLES, canWrite, isManager, canSeeCosts, redactTrip, buildScope, isVisible, filterData } = require('./access');
 const { prepareExternalQuote } = require('./quote-attachments'); // TP-113
 const { summaryFor, diffChanges } = require('./audit');
 const QRCode = require('qrcode');
@@ -225,10 +225,10 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
   router.get('/crm', wrap(async (req, res) => {
     const ctx = await context(req);
     await refreshScores(ctx.data);
-    const visible = filterData(ctx.scope, ctx.data);
+    const visible = filterData(ctx.scope, ctx.data, ctx.user);
     const prefs = await prefsFor(dataStore, ctx.user.id); // avatares y recorrido guiado
     const photo = (u) => (u?.photo_media_id ? `/api/media/${u.photo_media_id}` : null);
-    const users = ctx.user.role === 'admin'
+    const users = isManager(ctx.user)
       ? (await dataStore.listUsers()).filter((u) => u.role !== 'proveedor').map((u) => ({ id: u.id, name: u.name, role: u.role, active: u.active, photoUrl: photo(u), avatar: prefs.avatars[String(u.id)] || null }))
       : [{ id: ctx.user.id, name: ctx.user.name, role: ctx.user.role, active: true, photoUrl: photo(await dataStore.findUserById(ctx.user.id)), avatar: prefs.avatar }];
     res.json({
@@ -261,12 +261,12 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
 
     let ownerId = ctx.user.id;
     let autoReason = null;
-    if (body.owner_id === 'auto' && ctx.user.role === 'admin' && assignment) {
+    if (body.owner_id === 'auto' && isManager(ctx.user) && assignment) {
       // Automático: el mismo reparto que el bot y el formulario (turnos o fijo).
       const pick = await assignment.pickOwner({ client: body.client_id ? ctx.find('clients', body.client_id) : null });
       if (pick.user) { ownerId = pick.user.id; autoReason = pick.reason; }
-    } else if (body.owner_id && ctx.user.role === 'admin') ownerId = (await assignableOwner(parseId(body.owner_id))).id;
-    else if (body.owner_id && Number(body.owner_id) !== ctx.user.id) throw forbidden('Solo el administrador puede asignar leads a otro vendedor');
+    } else if (body.owner_id && isManager(ctx.user)) ownerId = (await assignableOwner(parseId(body.owner_id))).id;
+    else if (body.owner_id && Number(body.owner_id) !== ctx.user.id) throw forbidden('Solo el administrador y la Dirección pueden asignar leads a otro vendedor');
 
     let client;
     let warning = null;
@@ -328,7 +328,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
   }));
 
   // Reasignar varios leads a la vez (administrador), con un solo aviso al vendedor.
-  router.post('/leads/reassign', requireRole('admin'), wrap(async (req, res) => {
+  router.post('/leads/reassign', requireRole('admin', 'direccion'), wrap(async (req, res) => {
     const ctx = await context(req);
     const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 200);
     if (!ids.length) throw new ValidationError('Elige al menos un lead');
@@ -389,7 +389,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
     if (record.stage !== current.stage) await hooks.emit(dataStore, 'leadStage', { before: current, lead: record }); // TP-307
 
     if (body.owner_id !== undefined && Number(body.owner_id) !== current.owner_id) {
-      if (ctx.user.role !== 'admin') throw forbidden('Solo el administrador puede reasignar leads');
+      if (!isManager(ctx.user)) throw forbidden('Solo el administrador y la Dirección pueden reasignar leads');
       const owner = await assignableOwner(parseId(body.owner_id));
       await dataStore.transferLeadOwnership(id, owner.id);
       await restartContactClock(current);
@@ -1034,7 +1034,7 @@ function createCrmRouter(dataStore, { requireRole, assignment = null, payments =
       if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new ValidationError('Fecha inválida');
       if (value) range[key] = value;
     }
-    const visible = filterData(ctx.scope, ctx.data);
+    const visible = filterData(ctx.scope, ctx.data, ctx.user);
     const users = (await dataStore.listUsers()).map(({ id, name, email, role, active, last_login_at }) => ({ id, name, email, role, active, last_login_at }));
     const sheets = buildSheets(sections, visible, { users: ctx.user.role === 'admin' ? users : users.map(({ id, name }) => ({ id, name })), questions: (await allSettings()).leadQuestions, range, customFields: await customDefs() });
     const day = nowCancun().slice(0, 10);

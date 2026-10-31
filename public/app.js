@@ -31,19 +31,25 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const money = (n) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(Number(n) || 0);
 const initials = (n) => String(n || '?').split(' ').filter(Boolean).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
-const ROLE_LABELS = { admin: 'Administrador', travel_partner: 'Vendedor', operaciones: 'Operaciones', consulta: 'Consulta', proveedor: 'Proveedor' };
+const ROLE_LABELS = { admin: 'Administrador', direccion: 'Dirección', travel_partner: 'Travel Partner', vendedor: 'Vendedor', operaciones: 'Operaciones', consulta: 'Consulta', proveedor: 'Proveedor' };
 const WRITE_RULES = {
   admin: ['clients', 'leads', 'quotes', 'trips', 'followups'],
+  direccion: ['clients', 'leads', 'quotes', 'trips', 'followups'],
   travel_partner: ['clients', 'leads', 'quotes', 'trips', 'followups'],
+  vendedor: ['clients', 'leads', 'quotes', 'followups'],
   operaciones: ['trips', 'followups'],
   consulta: [],
   proveedor: []
 };
 const isAdmin = () => currentUser?.role === 'admin';
+// Administrador y Dirección: ven a todo el equipo, reasignan leads y registran comisiones.
+const isManager = () => ['admin', 'direccion'].includes(currentUser?.role);
+// El Vendedor no ve costos, utilidad ni comisiones.
+const canSeeCosts = () => ['admin', 'direccion', 'travel_partner', 'operaciones', 'consulta'].includes(currentUser?.role);
 const isOps = () => currentUser?.role === 'operaciones';
 const canWrite = (entity) => (WRITE_RULES[currentUser?.role] || []).includes(entity);
 const userName = (id) => db.users.find((u) => u.id === Number(id))?.name || (Number(id) === currentUser?.id ? currentUser.name : 'Sin asignar');
-const sellers = () => db.users.filter((u) => u.active && ['admin', 'travel_partner'].includes(u.role));
+const sellers = () => db.users.filter((u) => u.active && ['admin', 'direccion', 'travel_partner', 'vendedor'].includes(u.role));
 // Clientes con leads de más de un vendedor (solo el administrador los ve todos).
 const sharedClientIds = () => {
   const owners = new Map();
@@ -289,7 +295,7 @@ function filteredLeads(ignoreStage = false) {
   });
 }
 function renderLeads() {
-  const admin = isAdmin();
+  const admin = isManager();
   const filter = $('#ownerFilter');
   filter.classList.toggle('hidden', !admin);
   if (admin) filter.innerHTML = options(sellers().map((u) => [u.id, u.name]), ui.leadOwner, { blank: 'Todos los vendedores' });
@@ -363,7 +369,7 @@ function byTravelDate(a, b) {
   return daysInStage(b) - daysInStage(a) || b.id - a.id;
 }
 function renderBoard() {
-  const admin = isAdmin();
+  const admin = isManager();
   const list = filteredLeads(true);
   const cols = BOARD_STAGES.map((stage) => {
     let items = list.filter((l) => l.stage === stage);
@@ -710,12 +716,12 @@ function reassignModal() {
 
 // Exportar a Excel o CSV: cada rol descarga solo lo que puede ver.
 const EXPORT_SECTIONS = [['clients', 'Clientes'], ['leads', 'Leads'], ['quotes', 'Cotizaciones'], ['sales', 'Ventas'], ['trips', 'Viajes'], ['followups', 'Seguimientos'], ['users', 'Usuarios']];
-const EXPORT_BY_ROLE = { admin: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups', 'users'], travel_partner: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups'], operaciones: ['trips', 'followups'], consulta: [] };
+const EXPORT_BY_ROLE = { admin: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups', 'users'], direccion: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups'], vendedor: ['clients', 'leads', 'quotes', 'sales', 'followups'], travel_partner: ['clients', 'leads', 'quotes', 'sales', 'trips', 'followups'], operaciones: ['trips', 'followups'], consulta: [] };
 function exportModal(preset) {
   const allowed = EXPORT_BY_ROLE[currentUser?.role] || [];
   if (!allowed.length) { toast('Tu rol no permite exportar información'); return; }
   const chosen = preset ? [preset] : allowed.filter((k) => k !== 'users');
-  const scopeNote = isAdmin() ? 'Incluye la información de todos los vendedores.' : isOps() ? 'Incluye los viajes y seguimientos que gestionas.' : 'Incluye solo tus clientes, leads y ventas.';
+  const scopeNote = isManager() ? 'Incluye la información de todos los vendedores.' : isOps() ? 'Incluye los viajes y seguimientos que gestionas.' : 'Incluye solo tus clientes, leads y ventas.';
   openModal('EXPORTAR', 'Descargar información', `<form class="modal-form">
     <p class="full muted">${scopeNote}</p>
     <div class="full"><b class="exp-label">Secciones</b><div class="cz-svc">${EXPORT_SECTIONS.filter(([k]) => allowed.includes(k)).map(([k, label]) => `<label><input type="checkbox" name="sec" value="${k}" ${chosen.includes(k) ? 'checked' : ''}> ${label}</label>`).join('')}</div></div>
@@ -868,7 +874,7 @@ function calChip(f, { long = false } = {}) {
   const drag = canWrite('followups') && !f.done;
   const cls = ['cal-ev', FOLLOWUP_CLASS[f.type] || 'other', f.done ? 'done' : '', isLateFollowup(f) ? 'late' : ''].join(' ');
   const who = c?.name && !f.title.includes(c.name) ? ` · ${c.name}` : '';
-  const tip = `${f.due_at.slice(11, 16)} · ${f.type} · ${f.title}${who}${isAdmin() ? ` · ${userName(f.owner_id)}` : ''}`;
+  const tip = `${f.due_at.slice(11, 16)} · ${f.type} · ${f.title}${who}${isManager() ? ` · ${userName(f.owner_id)}` : ''}`;
   return `<div class="${cls}" data-followup="${f.id}"${drag ? ' draggable="true"' : ''} title="${escapeHtml(tip)}" role="button" tabindex="0">
     <span class="t">${f.due_at.slice(11, 16)}</span> ${FOLLOWUP_ICONS[f.type] || '📌'} <b>${escapeHtml(long ? f.title : (c?.name || f.title))}</b>${long ? `<small>${escapeHtml([c?.name && !f.title.includes(c.name) ? c.name : '', f.details].filter(Boolean).join(' · '))}</small>` : ''}</div>`;
 }
@@ -881,8 +887,8 @@ function renderCalendar() {
 
   // Filtro por vendedor (solo administrador)
   const ownerSel = $('#calOwner');
-  ownerSel.classList.toggle('hidden', !isAdmin());
-  if (isAdmin()) ownerSel.innerHTML = options(sellers().map((u) => [u.id, u.name]), ui.calOwner, { blank: 'Todo el equipo' });
+  ownerSel.classList.toggle('hidden', !isManager());
+  if (isManager()) ownerSel.innerHTML = options(sellers().map((u) => [u.id, u.name]), ui.calOwner, { blank: 'Todo el equipo' });
   $('#calLegend').innerHTML = FOLLOWUP_TYPES.map((t) => `<span class="cal-ev-dot ${FOLLOWUP_CLASS[t]}">${FOLLOWUP_ICONS[t]} ${t}</span>`).join('') +
     `<span class="cal-ev-dot late">Vencido</span>${canWrite('followups') ? '<span class="muted-note">Arrastra un seguimiento para reprogramarlo</span>' : ''}`;
 
@@ -960,7 +966,7 @@ function renderAgenda(list) {
   const pending = items.filter((f) => !f.done).length;
   $('#agendaNote').textContent = items.length ? `${pending} pendientes de ${items.length} actividades` : 'Sin actividades programadas';
   const overdue = isToday ? list.filter((f) => !f.done && f.due_at.slice(0, 10) < ui.calDay).sort((a, b) => a.due_at.localeCompare(b.due_at)) : [];
-  const row = (f, label) => `<div class="item${f.done ? ' done' : ''}"><span class="time">${escapeHtml(label)}</span><i class="dot ${FOLLOWUP_CLASS[f.type] || ''}"></i><div class="event-card"><label class="check"><input type="checkbox" data-done="${f.id}" ${f.done ? 'checked' : ''}${canWrite('followups') ? '' : ' disabled'}><span><b>${FOLLOWUP_ICONS[f.type] || ''} ${escapeHtml(f.type)} · ${escapeHtml(f.title)}</b><small>${escapeHtml([clientName(f.client_id), f.details, isAdmin() ? userName(f.owner_id) : ''].filter(Boolean).join(' · '))}</small></span></label><button class="link" data-followup="${f.id}">Abrir</button></div></div>`;
+  const row = (f, label) => `<div class="item${f.done ? ' done' : ''}"><span class="time">${escapeHtml(label)}</span><i class="dot ${FOLLOWUP_CLASS[f.type] || ''}"></i><div class="event-card"><label class="check"><input type="checkbox" data-done="${f.id}" ${f.done ? 'checked' : ''}${canWrite('followups') ? '' : ' disabled'}><span><b>${FOLLOWUP_ICONS[f.type] || ''} ${escapeHtml(f.type)} · ${escapeHtml(f.title)}</b><small>${escapeHtml([clientName(f.client_id), f.details, isManager() ? userName(f.owner_id) : ''].filter(Boolean).join(' · '))}</small></span></label><button class="link" data-followup="${f.id}">Abrir</button></div></div>`;
   $('#timeline').innerHTML =
     (overdue.length ? `<p class="section-label">Vencidos</p>${overdue.map((f) => row(f, fmtDate(f.due_at))).join('')}<p class="section-label">Hoy</p>` : '') +
     (items.map((f) => row(f, f.due_at.slice(11, 16))).join('') || '<p class="empty-note">Nada programado para este día.</p>');
@@ -1123,7 +1129,7 @@ function renderLostReport() {
   const table = (title, rows) => `<div class="lost-table"><b>${title}</b>${rows.map((g) => { const t = top(g); return `<div><span>${escapeHtml(g.k)}</span><span>${g.n} · ${money(g.v)}</span><small>Más común: ${escapeHtml(t[0])} (${t[1]})</small></div>`; }).join('')}</div>`;
   box.innerHTML = `<div class="lost-kpis"><div><b>${lost.length}</b><span>Leads perdidos</span></div><div><b>${money(totalV)}</b><span>Valor perdido</span></div><div><b>${won + lost.length ? Math.round((lost.length / (won + lost.length)) * 100) : 0}%</b><span>De los leads cerrados</span></div></div>
     <div class="lost-bars">${byReason.map((g) => `<div class="lost-bar"><span>${escapeHtml(g.k)}</span><i><em style="width:${Math.max(4, Math.round((g.n / max) * 100))}%"></em></i><b>${g.n} · ${Math.round((g.n / lost.length) * 100)}%</b><small>${money(g.v)}</small></div>`).join('')}</div>
-    <div class="lost-tables">${isAdmin() ? table('Por vendedor', group((l) => userName(l.owner_id) || 'Sin asignar')) : ''}${table('Por origen', group((l) => l.source || 'Otro'))}</div>
+    <div class="lost-tables">${isManager() ? table('Por vendedor', group((l) => userName(l.owner_id) || 'Sin asignar')) : ''}${table('Por origen', group((l) => l.source || 'Otro'))}</div>
     <details class="lost-list"><summary>Ver los ${lost.length} leads</summary>${lost.sort((a, b) => String(b.closed_at).localeCompare(String(a.closed_at))).map((l) => `<button type="button" class="lead-fup" data-lead="${l.id}"><span>${escapeHtml(clientName(l.client_id))} · ${escapeHtml(l.destination)}</span><small>${escapeHtml(l.lost_reason || 'Sin motivo')} · ${escapeHtml(fmtDate(String(l.closed_at || '').slice(0, 10)))}</small></button>`).join('')}</details>`;
 }
 
@@ -1206,7 +1212,7 @@ function leadModal(id, presetClientId) {
     ${field('Presupuesto (MXN)', `<input name="budget" type="number" min="0" step="1" value="${escapeHtml(lead?.budget)}">`)}
     ${lead ? field('Etapa', `<select name="stage">${options(STAGES, lead.stage)}</select>`) : field('Primer seguimiento', '<input name="first_followup_at" type="datetime-local">')}
     ${lead ? lostFieldsHtml(lead, { hidden: lead.stage !== 'Perdido' }) : ''}
-    ${isAdmin() ? field('Vendedor asignado', `<select name="owner_id">${options([...(lead ? [] : [['auto', 'Automático (según la asignación)']]), ...sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`])], lead?.owner_id ?? currentUser.id)}</select>`) : ''}
+    ${isManager() ? field('Vendedor asignado', `<select name="owner_id">${options([...(lead ? [] : [['auto', 'Automático (según la asignación)']]), ...sellers().map((u) => [u.id, `${u.name} · ${ROLE_LABELS[u.role]}`])], lead?.owner_id ?? currentUser.id)}</select>`) : ''}
     ${field('Notas', `<textarea name="notes" rows="3" maxlength="4000">${escapeHtml(lead?.notes)}</textarea>`, true)}
     ${typeof customFieldsHtml === 'function' ? customFieldsHtml('leads', lead?.custom) : ''}
     ${lead ? autoScoreHtml(lead) : ''}
@@ -1758,7 +1764,7 @@ function followupModal(id, preset = {}) {
     ${f ? `<label class="full check"><input type="checkbox" name="done" ${f.done ? 'checked' : ''}> Marcar como hecho</label>` : ''}
     ${f?.auto ? `<p class="full muted-note">🤖 Creado por la automatización “${escapeHtml(f.auto.rule)}”.${f.auto.template ? ' Abre la plantilla, revísala y envíala por WhatsApp.' : ''}</p>` : ''}
     ${f?.auto?.template && client?.phone ? `<div class="full"><button type="button" class="btn primary small" data-fup-template="${f.id}">💬 Abrir plantilla de WhatsApp</button></div>` : ''}
-    ${f ? `<div class="full quick-actions"><a class="btn secondary small" href="${escapeHtml(googleCalendarLink(f))}" target="_blank" rel="noopener">📅 Agregar a Google Calendar</a>${waPhone ? `<a class="btn secondary small" href="https://wa.me/${waPhone}" target="_blank" rel="noopener">💬 Abrir WhatsApp</a><a class="btn secondary small" href="tel:+${waPhone}">📞 Llamar</a>` : ''}${f.lead_id ? `<button type="button" class="btn secondary small" data-lead="${f.lead_id}">Ver lead</button>` : ''}${isAdmin() ? `<small>Vendedor: ${escapeHtml(userName(f.owner_id))}</small>` : ''}</div>` : ''}
+    ${f ? `<div class="full quick-actions"><a class="btn secondary small" href="${escapeHtml(googleCalendarLink(f))}" target="_blank" rel="noopener">📅 Agregar a Google Calendar</a>${waPhone ? `<a class="btn secondary small" href="https://wa.me/${waPhone}" target="_blank" rel="noopener">💬 Abrir WhatsApp</a><a class="btn secondary small" href="tel:+${waPhone}">📞 Llamar</a>` : ''}${f.lead_id ? `<button type="button" class="btn secondary small" data-lead="${f.lead_id}">Ver lead</button>` : ''}${isManager() ? `<small>Vendedor: ${escapeHtml(userName(f.owner_id))}</small>` : ''}</div>` : ''}
     ${deleteBlock('seguimiento', f?.id)}
     <div class="modal-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="submit" class="btn primary">${f ? 'Guardar cambios' : 'Programar'}</button></div></form>`;
   openModal('PRODUCTIVIDAD', f ? 'Editar seguimiento' : preset.type === 'Llamada' ? 'Programar llamada' : preset.type === 'WhatsApp' ? 'Programar mensaje de WhatsApp' : 'Nuevo seguimiento', html);
@@ -3309,6 +3315,9 @@ function applyUser(user) {
   document.body.classList.add(`role-${user.role}`);
   $('#dashboard .heading h2').textContent = `Hola, ${user.name} 👋`;
   $$('[data-admin-only]').forEach((el) => el.classList.toggle('hidden', user.role !== 'admin'));
+  $$('[data-manager-only]').forEach((el) => el.classList.toggle('hidden', !['admin', 'direccion'].includes(user.role)));
+  // La Dirección solo entra a dos paneles de Configuración: asignación de leads y metas y comisiones.
+  if (user.role === 'direccion' && !['assignmentPanel', 'goalsPanel'].includes(ui.settingsTab)) ui.settingsTab = 'assignmentPanel';
   $('#login').classList.add('hidden');
   $('#platform').classList.remove('hidden');
   if (user.mustChangePassword) showPasswordChange();
@@ -3351,6 +3360,7 @@ function navigate(page) {
   $$('aside nav button').forEach((b) => b.classList.toggle('active', b.dataset.page === page));
   $$('.page').forEach((p) => p.classList.toggle('active', p.id === page));
   if (page === 'clients') renderDuplicatesBanner();
+  if (page === 'settings' && currentUser?.role === 'direccion') showSettingsTab(ui.settingsTab); // la Dirección solo ve asignación y metas
   $('#sidebar').classList.remove('open');
   scrollTo({ top: 0, behavior: 'smooth' });
 }

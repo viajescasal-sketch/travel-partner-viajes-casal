@@ -27,7 +27,7 @@ function createLeadIntake(dataStore, assignment) {
   async function pickOwner(client) {
     if (assignment) return assignment.pickOwner({ client });
     const users = await dataStore.listUsers();
-    const user = users.find((u) => u.active && u.role === 'travel_partner') || users.find((u) => u.active && u.role === 'admin');
+    const user = ['travel_partner', 'vendedor', 'direccion', 'admin'].map((r) => users.find((u) => u.active && u.role === r)).find(Boolean);
     return { user, reason: 'Primer vendedor activo' };
   }
 

@@ -64,7 +64,7 @@ test('roles: administrador, vendedor y operaciones', async (context) => {
   const paulina = clientFor(baseUrl);
   await admin.login(process.env.ADMIN_EMAIL, process.env.ADMIN_INITIAL_PASSWORD, 'AdminNueva2026x');
   const paulinaUser = await paulina.login(process.env.PARTNER_EMAIL, process.env.PARTNER_INITIAL_PASSWORD, 'PaulinaNueva2026');
-  assert.equal(paulinaUser.roleLabel, 'Vendedor');
+  assert.equal(paulinaUser.roleLabel, 'Travel Partner');
 
   // --- Gestión de usuarios ---
   assert.equal((await paulina('POST', '/api/users', { name: 'X', email: 'x@x.test', role: 'admin' })).status, 403);

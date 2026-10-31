@@ -10,12 +10,12 @@
   const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   const monthName = (m) => `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
   const STATUS_CLASS = { 'Por liberar': 'bk-req', 'Por pagar': 'bk-due', Pagada: 'bk-ok' };
-  const sellerUsers = () => (db.users || []).filter((u) => u.active !== false && u.role !== 'operaciones');
+  const sellerUsers = () => (db.users || []).filter((u) => u.active !== false && ['admin', 'direccion', 'travel_partner', 'vendedor'].includes(u.role));
   const lastMonths = (n) => { const out = [K.monthOf(todayStr())]; while (out.length < n) out.push(K.prevMonth(out[out.length - 1])); return out; };
   const daysLeft = () => { const t = todayStr(); const d = new Date(`${t.slice(0, 7)}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + 1); d.setUTCDate(0); return Number(d.toISOString().slice(8, 10)) - Number(t.slice(8, 10)); };
 
   /* ---------------- Dashboard ---------------- */
-  function goalRow(s, name, big) {
+  function goalRow(s, name, big, showComm) {
     const pct = s.progress == null ? null : Math.min(s.progress, 100);
     const label = s.base === 'utilidad' ? 'utilidad' : 'vendido';
     const head = s.goal ? `<b>${money(s.value)}</b> ${label} de <b>${money(s.goal)}</b> <span class="goal-pct${s.progress >= 100 ? ' ok' : ''}">${s.progress}%</span>` : `<b>${money(s.value)}</b> ${label} · <span class="muted">sin meta definida</span>`;
@@ -25,7 +25,7 @@
     return `<div class="goal-row${big ? ' big' : ''}" data-goal-seller="${H(s.sellerId)}">
       <div class="goal-top">${name ? `<span class="goal-name">${H(name)}</span>` : ''}<span>${head}</span><small>${s.sales} venta${s.sales === 1 ? '' : 's'}</small></div>
       <div class="pay-bar big goal-bar${s.progress >= 100 ? ' done' : ''}"><i style="width:${pct ?? 0}%"></i></div>
-      <div class="goal-foot"><small>${left}</small><small>${comm}</small></div></div>`;
+      <div class="goal-foot"><small>${left}</small>${showComm ? `<small>${comm}</small>` : ''}</div></div>`;
   }
   window.renderGoalPanel = () => {
     const box = $('#goalPanel');
@@ -34,15 +34,17 @@
     const month = K.monthOf(todayStr());
     const goals = db.goals || { base: 'venta', sellers: {} };
     let rows;
-    if (isAdmin()) {
+    // El Vendedor y el Travel Partner no ven comisiones; con meta en utilidad (necesita costos) el Vendedor no ve avance.
+    if (!isManager() && (!canSeeCosts() && (db.goals || {}).base === 'utilidad')) { box.classList.add('hidden'); return; }
+    if (isManager()) {
       rows = sellerUsers().map((u) => ({ u, s: K.monthSummary(db, goals, month, u.id) })).filter(({ u, s }) => s.sales || goals.sellers[String(u.id)]);
     } else rows = [{ u: null, s: K.monthSummary(db, goals, month, currentUser?.id) }];
     if (!rows.length) { box.classList.add('hidden'); return; }
     box.classList.remove('hidden');
     rows.sort((a, b) => (b.s.progress ?? -1) - (a.s.progress ?? -1) || b.s.value - a.s.value);
-    const mine = !isAdmin();
+    const mine = !isManager();
     box.innerHTML = `<div class="panel-head"><div><h3>🎯 ${mine ? 'Mi meta' : 'Metas del equipo'} · ${H(monthName(month))}</h3><p>${goals.base === 'utilidad' ? 'Avance en utilidad' : 'Avance en ventas'} aceptadas este mes. La comisión se libera cuando el cliente liquida su viaje.</p></div><button type="button" class="btn secondary small" data-goal-detail="${mine ? H(currentUser?.id) : ''}">Ver comisiones</button></div>
-      <div class="goal-list">${rows.map(({ u, s }) => goalRow(s, u ? u.name : '', mine)).join('')}</div>`;
+      <div class="goal-list">${rows.map(({ u, s }) => goalRow(s, u ? u.name : '', mine, isManager())).join('')}</div>`;
   };
 
   // Detalle de ventas y comisiones del mes (vendedor: las suyas; administrador: todas o de un vendedor).
@@ -60,8 +62,8 @@
   }
   function commissionTable(list, actions) {
     if (!list.length) return '<p class="empty-note">Sin ventas en este periodo.</p>';
-    return `<div class="table"><table><thead><tr><th>Venta</th>${isAdmin() ? '<th>Vendedor</th>' : ''}<th>Total</th><th>Utilidad</th><th>Comisión</th><th>Estado</th>${actions ? '<th></th>' : ''}</tr></thead><tbody>
-      ${list.map((x) => `<tr><td><b>${H(clientName(x.quote.client_id))}</b><br><small>${H(x.quote.folio)} · ${H(x.quote.destination)} · ${H(fmtDate(x.day))}</small></td>${isAdmin() ? `<td>${H(x.seller ? userName(x.seller) : 'Sin asignar')}</td>` : ''}<td>${money(x.total)}${x.balance > 0.5 ? `<br><small>saldo ${money(x.balance)}</small>` : ''}</td><td>${x.profit == null ? '<span class="muted" title="Faltan costos o comisiones en las reservas">—</span>' : money(x.profit)}</td><td>${x.commission == null ? '—' : `${money(x.commission)}<br><small>${x.pct}%</small>`}</td><td><span class="bk-pill ${STATUS_CLASS[x.status]}">${H(x.status)}</span>${x.paid ? `<br><small>${H(fmtDate(String(x.paid.paid_at).slice(0, 10)))}</small>` : ''}</td>${actions ? `<td>${x.status === 'Por pagar' && x.commission != null ? `<button type="button" class="btn primary small" data-sc-pay="${x.quote.id}">Marcar pagada</button>` : ''}${x.status === 'Pagada' ? `<button type="button" class="link" data-sc-undo="${x.quote.id}">Deshacer</button>` : ''}</td>` : ''}</tr>`).join('')}
+    return `<div class="table"><table><thead><tr><th>Venta</th>${isManager() ? '<th>Vendedor</th>' : ''}<th>Total</th><th>Utilidad</th><th>Comisión</th><th>Estado</th>${actions ? '<th></th>' : ''}</tr></thead><tbody>
+      ${list.map((x) => `<tr><td><b>${H(clientName(x.quote.client_id))}</b><br><small>${H(x.quote.folio)} · ${H(x.quote.destination)} · ${H(fmtDate(x.day))}</small></td>${isManager() ? `<td>${H(x.seller ? userName(x.seller) : 'Sin asignar')}</td>` : ''}<td>${money(x.total)}${x.balance > 0.5 ? `<br><small>saldo ${money(x.balance)}</small>` : ''}</td><td>${x.profit == null ? '<span class="muted" title="Faltan costos o comisiones en las reservas">—</span>' : money(x.profit)}</td><td>${x.commission == null ? '—' : `${money(x.commission)}<br><small>${x.pct}%</small>`}</td><td><span class="bk-pill ${STATUS_CLASS[x.status]}">${H(x.status)}</span>${x.paid ? `<br><small>${H(fmtDate(String(x.paid.paid_at).slice(0, 10)))}</small>` : ''}</td>${actions ? `<td>${x.status === 'Por pagar' && x.commission != null ? `<button type="button" class="btn primary small" data-sc-pay="${x.quote.id}">Marcar pagada</button>` : ''}${x.status === 'Pagada' ? `<button type="button" class="link" data-sc-undo="${x.quote.id}">Deshacer</button>` : ''}</td>` : ''}</tr>`).join('')}
       </tbody></table></div>`;
   }
 
@@ -70,7 +72,7 @@
   window.renderSellerCommissions = () => {
     const box = $('#sellerCommissions');
     if (!box || !K) return;
-    if (!isAdmin()) { box.innerHTML = ''; return; }
+    if (!isManager()) { box.innerHTML = ''; return; }
     sc.month = sc.month || K.monthOf(todayStr());
     const goals = db.goals || { base: 'venta', sellers: {} };
     const all = K.sales(db, { month: sc.month, goals });
@@ -90,7 +92,7 @@
     const det = e.target.closest('[data-goal-detail]');
     if (det) { detailModal(det.dataset.goalDetail); return; }
     const row = e.target.closest('[data-goal-seller]');
-    if (row && isAdmin() && !e.target.closest('button')) { detailModal(row.dataset.goalSeller); return; }
+    if (row && isManager() && !e.target.closest('button')) { detailModal(row.dataset.goalSeller); return; }
     const pay = e.target.closest('[data-sc-pay]');
     const undo = e.target.closest('[data-sc-undo]');
     if (pay || undo) {
