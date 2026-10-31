@@ -21,17 +21,23 @@
   const cell = (i) => (!i ? '<span class="muted">—</span>' : i.profit == null ? '<span class="muted" title="Captura la comisión de la venta">Sin comisión</span>' : `<b class="${i.profit < 0 ? 'neg' : 'pos'}">${money(i.profit)}</b>${i.margin != null ? `<small>${i.margin}%</small>` : ''}`);
 
   window.quoteProfitInfo = (q) => (canSee() ? info(q) : null);
-  window.quoteProfitCell = (q) => (canSee() && q.status === 'Aceptada' ? cell(info(q)) : canSee() ? '<span class="muted">—</span>' : '');
+  window.quoteProfitCell = (q) => (canSee() && (q.status === 'Aceptada' || q.agency_margin) ? cell(info(q)) : canSee() ? '<span class="muted">—</span>' : '');
   // Cuadro Venta · Neto · Ganancia (tarjetas de Viajes)
   window.quoteMoneyHtml = (q) => {
     if (!canSee() || !q) return '';
     const i = info(q);
-    return `<div class="tb-money"><span><small>Venta</small><b>${money(i.total)}</b></span><span><small>Neto</small><b>${i.net == null ? '—' : money(i.net)}</b></span><span><small>Ganancia</small><b class="${i.profit != null && i.profit < 0 ? 'neg' : 'pos'}">${i.profit == null ? '—' : money(i.profit)}${i.margin != null ? ` · ${i.margin}%` : ''}</b></span></div>`;
+    return `<div class="tb-money"><span><small>Precio del paquete</small><b>${money(i.total)}</b></span><span><small>Comisión</small><b>${i.margin == null ? '—' : `${i.margin}%`}</b></span><span><small>Ganancia</small><b class="${i.profit != null && i.profit < 0 ? 'neg' : 'pos'}">${i.profit == null ? '—' : money(i.profit)}</b></span><span><small>Neto (proveedores)</small><b>${i.net == null ? '—' : money(i.net)}</b></span></div>`;
+  };
+  // Botón compacto para listas de cotizaciones (ficha del lead): muestra la ganancia o invita a capturarla.
+  window.quoteMarginBtn = (q) => {
+    if (!canSee() || !q || ['Rechazada', 'Vencida'].includes(q.status)) return '';
+    const i = info(q);
+    return `<button type="button" class="btn secondary small" data-margin="${q.id}" title="Comisión de esta cotización">💰 ${i && i.profit != null ? `${money(i.profit)} · ${i.margin ?? 0}%` : 'Comisión'}</button>`;
   };
   window.quoteProfitRow = (q) => {
-    if (!canSee() || q.status !== 'Aceptada') return '';
+    if (!canSee() || ['Rechazada', 'Vencida'].includes(q.status)) return '';
     const i = info(q);
-    return `<div class="full qv-margin"><span>Venta · Neto · Ganancia</span>${quoteMoneyHtml(q)}<button type="button" class="btn secondary small" data-margin="${q.id}">${i.manual ? 'Editar comisión' : 'Capturar comisión'}</button></div>`;
+    return `<div class="full qv-margin"><span>Precio del paquete · Comisión · Ganancia</span>${quoteMoneyHtml(q)}<button type="button" class="btn secondary small" data-margin="${q.id}">${i.manual ? 'Editar comisión' : 'Capturar comisión'}</button></div>`;
   };
 
   function marginModal(id) {
@@ -72,9 +78,15 @@
     const out = [];
     const seen = new Set();
     db.quotes.filter((q) => q.status === 'Aceptada' && !covered(q.client_id, q.id)).forEach((q) => { out.push({ q, client_id: q.client_id }); seen.add(q.client_id); });
-    db.leads.filter((l) => l.stage === 'Vendido' && !seen.has(l.client_id) && !trips.some((t) => t.client_id === l.client_id)).forEach((l) => { out.push({ lead: l, client_id: l.client_id }); seen.add(l.client_id); });
+    // Lead vendido sin cotización marcada como aceptada: se usa su cotización más reciente para mostrar precio y comisión.
+    db.leads.filter((l) => l.stage === 'Vendido' && !seen.has(l.client_id) && !trips.some((t) => t.client_id === l.client_id)).forEach((l) => {
+      const mine = db.quotes.filter((x) => (x.lead_id === l.id || (!x.lead_id && x.client_id === l.client_id && x.destination === l.destination)) && !['Rechazada', 'Vencida'].includes(x.status)).sort((a, b) => b.id - a.id);
+      out.push({ lead: l, q: mine.find((x) => x.status === 'Aceptada') || mine[0] || null, client_id: l.client_id, loose: true });
+      seen.add(l.client_id);
+    });
     return out;
   }
+  window.tpToBuild = toBuild;
   window.renderToBuild = () => {
     const box = document.getElementById('toBuildPanel');
     if (!box) return;
@@ -84,11 +96,12 @@
     const write = canWrite('trips');
     const card = ({ q, lead, client_id }) => {
       const l = lead || (q && q.lead_id ? leadById(q.lead_id) : null);
+      const armar = q ? `data-trip-from-quote="${q.id}"` : `data-new-trip-client="${client_id}"`;
       const dest = q ? q.destination : lead.destination;
       const dates = q && typeof qvDates === 'function' ? qvDates(q) : [l?.start_date, l?.end_date].filter(Boolean).map((d) => fmtDate(d)).join(' al ');
       const pay = q && typeof qvPay === 'function' ? qvPay(q) : '<span class="status qualified">Vendido</span>';
-      return `<article class="trip-card tb-card"><small>${H(q ? `ACEPTADA · ${q.folio}` : 'VENDIDO')}</small><h4>${H(dest || 'Destino por definir')}</h4><p>${H(clientName(client_id))}${dates ? ` · ${H(dates)}` : ''}</p><div class="tb-pay">${pay}</div>${q ? quoteMoneyHtml(q) : ''}
-        <div class="tb-acts">${write ? (q ? `<button type="button" class="btn primary small" data-trip-from-quote="${q.id}">Armar viaje</button>` : `<button type="button" class="btn primary small" data-new-trip-client="${client_id}">Armar viaje</button>`) : ''}${q && canSee() ? `<button type="button" class="btn secondary small" data-margin="${q.id}">${q.agency_margin ? 'Editar comisión' : 'Capturar comisión'}</button>` : ''}</div></article>`;
+      return `<article class="trip-card tb-card"><small>${H(q && !lead ? `ACEPTADA · ${q.folio}` : q ? `VENDIDO · ${q.folio}` : 'VENDIDO')}</small><h4>${H(dest || 'Destino por definir')}</h4><p>${H(clientName(client_id))}${dates ? ` · ${H(dates)}` : ''}</p><div class="tb-pay">${pay}</div>${q ? `<p class="tb-price">Precio del paquete <b>${money(totalOf(q))}</b></p>` : ''}
+        <div class="tb-acts">${write ? `<button type="button" class="btn primary small" ${armar}>Armar viaje</button>` : ''}${q && canSee() ? `<button type="button" class="btn secondary small" data-margin="${q.id}">${q.agency_margin ? 'Editar comisión' : 'Capturar comisión'}</button>` : ''}</div></article>`;
     };
     box.innerHTML = `<div class="panel-head"><div><h3>🧳 Por armar</h3><p>Ventas aceptadas (con pago en curso) y clientes vendidos que todavía no tienen su viaje en el sistema.</p></div><span class="tag-soon">${list.length}</span></div><div class="tb-grid">${list.slice(0, 24).map(card).join('')}</div>${list.length > 24 ? `<p class="muted-note">Mostrando 24 de ${list.length}.</p>` : ''}`;
   };

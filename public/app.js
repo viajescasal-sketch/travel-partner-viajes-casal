@@ -845,7 +845,8 @@ function renderClients() {
 function renderTrips() {
   const today = todayStr();
   if (typeof renderToBuild === 'function') renderToBuild(); // ventas aceptadas o vendidas sin viaje armado
-  const card = (t, label) => `<article class="trip-card clickable" data-trip="${t.id}"><small>${escapeHtml(label)}</small><h4>${escapeHtml(t.destination)}</h4><p>${escapeHtml(clientName(t.client_id))}</p><p>${escapeHtml(t.status)}${t.confirmation ? ' · ✓ Confirmación' : ''}</p>${tripBadges(t)}${tripBookingBadge(t)}${typeof customChipsHtml === 'function' ? customChipsHtml('trips', t) : ''}${t.quote_id && typeof quoteMoneyHtml === 'function' ? quoteMoneyHtml(quoteById(t.quote_id)) : ''}</article>`;
+  // Tarjeta compacta: nombre del cliente y un resumen corto; el detalle se abre en una ventana emergente.
+  const card = (t, label) => `<article class="trip-card trip-mini clickable" data-trip-peek="${t.id}" tabindex="0"><div class="tm-top"><b>${escapeHtml(clientName(t.client_id))}</b><small>${escapeHtml(label)}</small></div><p>${escapeHtml(t.destination)} · ${escapeHtml(fmtRange(t.start_date, t.end_date))}</p></article>`;
   const open = db.trips.filter((t) => t.status !== 'Cerrado');
   const upcoming = open.filter((t) => t.start_date > today).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const active = open.filter((t) => t.start_date <= today && t.end_date >= today);
@@ -1700,6 +1701,33 @@ function clientModal(id) {
   });
   bindDuplicateCheck($('#modalBody form'));
   if (c) bindDelete(`/api/clients/${c.id}`, 'Cliente eliminado');
+}
+
+// Ventana emergente con la información del viaje (se abre desde el tablero de Viajes).
+function tripPeekModal(id) {
+  const t = tripById(id);
+  if (!t) return;
+  const q = t.quote_id ? quoteById(t.quote_id) : null;
+  const pax = t.passengers?.list || [];
+  const days = Math.round((new Date(`${t.end_date}T00:00:00Z`) - new Date(`${t.start_date}T00:00:00Z`)) / 86400000) + 1;
+  const fact = (label, value) => (value ? `<div><span>${escapeHtml(label)}</span><b>${value}</b></div>` : '');
+  const money$ = typeof quoteMoneyHtml === 'function' && q ? quoteMoneyHtml(q) : '';
+  const html = `<div class="tp-peek">
+    <div class="tp-peek-grid">
+      ${fact('Cliente', escapeHtml(clientName(t.client_id)))}
+      ${fact('Destino', escapeHtml(t.destination))}
+      ${fact('Fechas', `${escapeHtml(fmtRange(t.start_date, t.end_date))}${days > 0 ? ` · ${days} ${days === 1 ? 'día' : 'días'}` : ''}`)}
+      ${fact('Estado', `${escapeHtml(t.status)}${t.confirmation ? ' · ✓ Confirmación' : ''}`)}
+      ${fact('Pasajeros', pax.length ? `${pax.length}${pax.find((x) => x.holder) ? ` · titular ${escapeHtml(pax.find((x) => x.holder).name)}` : ''}` : '')}
+      ${fact('Cotización', q ? `${escapeHtml(q.folio)} · ${escapeHtml(q.hotel || '')}` : '')}
+    </div>
+    ${q && typeof qvPay === 'function' ? `<div class="tp-peek-row"><span>Pago del cliente</span>${qvPay(q)}</div>` : ''}
+    ${money$ ? `<div class="tp-peek-row">${money$}</div>` : ''}
+    <div class="tp-peek-row">${tripBadges(t)}${typeof tripBookingBadge === 'function' ? tripBookingBadge(t) : ''}</div>
+    ${t.notes ? `<div class="tp-peek-notes"><span>Notas</span><p>${escapeHtml(t.notes)}</p></div>` : ''}
+    <div class="modal-actions"><button type="button" class="btn secondary close">Cerrar</button>${typeof tripBookingLabel === 'function' ? `<button type="button" class="btn secondary" data-bk-trip="${t.id}">${escapeHtml(tripBookingLabel(t))}</button>` : ''}<button type="button" class="btn primary" data-trip="${t.id}">${canWrite('trips') ? 'Abrir y editar viaje' : 'Ver viaje completo'}</button></div>
+  </div>`;
+  openModal('VIAJE', `${clientName(t.client_id)} · ${t.destination}`, html);
 }
 
 function tripModal(id, preset = {}) {
@@ -3627,6 +3655,7 @@ document.addEventListener('click', (e) => {
   if ((el = hit('#reassignLeads'))) { reassignModal(); return; }
   if ((el = hit('[data-lead]'))) { leadModal(Number(el.dataset.lead)); return; }
   if ((el = hit('[data-client]'))) { clientModal(Number(el.dataset.client)); return; }
+  if ((el = hit('[data-trip-peek]'))) { tripPeekModal(Number(el.dataset.tripPeek)); return; }
   if ((el = hit('[data-trip]'))) { tripModal(Number(el.dataset.trip)); return; }
   if ((el = hit('[data-followup]'))) { followupModal(Number(el.dataset.followup)); return; }
   if ((el = hit('[data-day]'))) { ui.calDay = el.dataset.day; renderCalendar(); return; }
