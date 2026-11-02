@@ -113,6 +113,12 @@
       if (shop) add('maleta', '🧳 Prepara tu maleta', shop);
     }
 
+    // TP-316b: tours de su destino (catálogo editable en Configuración → Documentos)
+    if (next && window.TPExtras && next.phase !== 'pasado') {
+      const tr = TPExtras.tours({ documents: p.documents, destination: next.destination, waLink: (text) => wa(s?.phone || p.agency.whatsapp, text) });
+      if (tr) add('tours', '🎟️ Tours en tu destino', tr);
+    }
+
     const sellerWa = wa(s?.phone || p.agency.whatsapp, `Hola${s ? ` ${s.name.split(' ')[0]}` : ''}, te escribo desde mi portal de Viajes Casal.`);
     add('contacto', 'Mi asesor', `<div class="card">${s ? `<div class="contact">${s.photoUrl ? `<img src="${esc(s.photoUrl)}" alt="${esc(s.name)}">` : `<span class="av">${esc(s.name.slice(0, 1))}</span>`}<div><b>${esc(s.name)}</b><div class="muted">Tu Travel Partner · antes, durante y después de tu viaje</div></div></div>` : ''}
       ${sellerWa ? `<a class="btn wa" href="${esc(sellerWa)}" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>` : ''}

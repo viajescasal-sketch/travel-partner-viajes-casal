@@ -437,6 +437,12 @@ Operaciones, Consulta y Proveedor no cambian (Operaciones ya no registra comisio
 - **Portal e itinerario:** mensaje motivador, botón *Conocer mi viaje* / *Ver mi cotización*, iconos de redes sociales y apartado *¿Qué necesito para mi viaje?* (documentos y consejos editables en Configuración › Documentos, y dudas rápidas por WhatsApp).
 - **PDF de confirmación:** muestra la clave de reserva de hotel, traslado, tours y seguro cuando ya están confirmadas en Reservas.
 
+## Tours por destino (TP-316b)
+- Catálogo inicial con los 12 tours publicados en viajescasal.com (Cancún, Riviera Maya, Puerto Vallarta y Los Cabos), editable en Configuración → Documentos → "Tours por destino". Una línea por tour: `Destino | Nombre | Tipo | Duración | Desde | Descripción | Foto https | Sí/No`.
+- El portal del cliente muestra "🎟️ Tours en tu destino" según el destino de su próximo viaje (Cancún, Riviera Maya, Tulum, Playa, Cozumel e Isla Mujeres se agrupan como Quintana Roo). Botón "Quiero este tour" abre WhatsApp con el tour ya escrito.
+- Solo se muestra el precio "desde" de venta; los costos netos y comisiones llegarán con el catálogo completo (Excel).
+- CSP: se permiten imágenes de images.unsplash.com y viajescasal.com.
+
 ## Itinerario rediseñado (TP-316)
 - `/viaje/<token>` ahora es una "historia por día" con menú fijo inferior: **Día a día · Reservas · Pagos · Ayuda** (navegable por `#dias`, `#reservas`, `#pagos`, `#ayuda`, `#dia-N`).
 - Día a día: selector de días, línea de tiempo con íconos, "Hoy" resaltado y aviso de saldo pendiente. Pagos: barra de avance, o "viaje liquidado" cuando no hay saldo (punto rojo en el menú si hay saldo).
