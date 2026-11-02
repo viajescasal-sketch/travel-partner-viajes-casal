@@ -144,7 +144,7 @@
     };
     function setView(k, top) {
       names.forEach((n) => { document.getElementById(`v-${n}`).hidden = n !== k; });
-      document.querySelectorAll('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.v === k));
+      document.querySelectorAll('#tabs a').forEach((a) => { const on = a.dataset.v === k; a.classList.toggle('on', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
       if (top) window.scrollTo(0, 0);
     }
     window.addEventListener('hashchange', show);
