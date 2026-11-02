@@ -449,3 +449,7 @@ Operaciones, Consulta y Proveedor no cambian (Operaciones ya no registra comisio
 - El PDF de confirmación se mantiene (misma estructura y medidas) con acabados más sobrios: colores neutros, sin sombras ni degradados, pie en azul marino.
 ## Skills de diseño para Claude Code
 En `.claude/skills/` hay dos skills de terceros para trabajar la interfaz del CRM y del portal: **impeccable** (Apache 2.0, github.com/pbakaus/impeccable) y **ui-ux-pro-max** (MIT, github.com/nextlevelbuilder/ui-ux-pro-max-skill). Son solo herramientas de desarrollo: no forman parte de la app ni se sirven en `public/`.
+
+## Accesibilidad y legibilidad (TP-317)
+- `public/accesible.css` se carga al final en portal, itinerario, cotización, pago, contrato, encuesta, referidos y formulario. Botones y textos usan coral oscuro `#c8432a` y turquesa oscuro `#00798a` (contraste ≥ 4.5:1, WCAG AA); los tonos brillantes de la marca quedan en logos y adornos.
+- Texto secundario más oscuro, letra mínima de 12 px, áreas táctiles de 44 px, foco visible con teclado, `prefers-reduced-motion`, fotos de tours con proporción fija y `aria-current` en el menú del itinerario.

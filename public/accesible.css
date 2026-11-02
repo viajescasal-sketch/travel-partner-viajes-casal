@@ -1,0 +1,42 @@
+/* TP-317 · Accesibilidad y legibilidad de las páginas del cliente (portal, itinerario, cotización,
+   pago, contrato, encuesta, referidos, formulario). Se carga al final para ajustar contrastes
+   sin tocar el diseño: el coral y el turquesa brillantes siguen en logos y adornos; los textos y
+   botones usan tonos más oscuros (contraste mínimo 4.5:1, WCAG AA). */
+
+:root{--coral-ink:#c8432a;--coral-ink-2:#b53a22;--teal-ink:#00798a;--teal-ink-2:#00687a;--wa-ink:#167a3d}
+@media (prefers-color-scheme:light){:root{--coral:#c8432a;--muted:#5b6b77}}
+
+/* Botones con texto blanco */
+.btn,.doc-btn,.wf-btn.primary,.nps button.on{background-image:none}
+.btn,.wf-btn.primary{background:linear-gradient(135deg,var(--teal-ink),var(--teal-ink-2));color:#fff}
+.btn.coral,button.btn.coral,.doc-btn.coral,.pay .btn{background:linear-gradient(135deg,var(--coral-ink),var(--coral-ink-2));color:#fff}
+.btn.wa,.doc-btn.wa{background:var(--wa-ink);color:#fff}
+.btn.alt{background:var(--card,#fff);color:var(--text,#203342);border:1px solid var(--line,#dce6ea)}
+.btn.teal{background:linear-gradient(135deg,var(--teal-ink),var(--teal-ink-2))}
+.doc-btn.coral{background:var(--coral-ink)}
+.nps button.on{background:var(--teal-ink);border-color:var(--teal-ink)}
+.pills a.today,.day.today .dot,.contact .av,.pill.warn{background:var(--coral-ink);border-color:var(--coral-ink);color:#fff}
+.dot{background:var(--teal-ink)}
+
+/* Textos turquesa sobre fondo claro */
+.map,.phone a,.doc a,.day-h small,.tp-tb small,.tp-ask a,.hc-cat{color:var(--teal-ink)}
+@media (prefers-color-scheme:dark){.map,.phone a,.doc a,.day-h small,.tp-tb small{color:#4fd8e6}.day.today .day-h small{color:#ff9a80}.q-price,.qv-price{color:#ff9a80}}
+
+/* Letra mínima de 12 px y áreas táctiles de 44 px */
+.pills small,.tp-tb small,.day-h small,.nps-l,.banner small,.eyebrow{font-size:12px}
+.chips a{display:inline-flex;align-items:center;min-height:44px;padding:0 16px}
+.tabs a{min-height:48px;justify-content:center}
+.pills a{min-height:56px}
+.btn,.wf-btn,.doc-btn,.tp-ask a{min-height:44px}
+.map{min-height:44px}
+
+/* Foco visible con teclado */
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--navy,#073b66);outline-offset:2px;border-radius:8px}
+@media (prefers-color-scheme:dark){a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline-color:#4fd8e6}}
+.tabs a[aria-current=page]{box-shadow:inset 0 0 0 2px var(--teal-ink)}
+
+/* Movimiento reducido */
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* Fotos de tours: proporción fija para que la página no salte al cargar */
+.tp-tour img{aspect-ratio:16/9;height:auto}
