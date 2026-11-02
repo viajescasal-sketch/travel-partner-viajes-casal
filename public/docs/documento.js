@@ -106,7 +106,7 @@
     if (full.length) note(`La hoja ${full.map((p) => (p.classList.contains('pdf-page-one') ? 1 : 2)).join(' y ')} tiene más texto del que cabe en A4 y se recortará. Acorta textos largos (tips, datos del hotel, actividades) en la confirmación del viaje.`);
   }
   function renderReservation(payload) {
-    $('#docStyles').href = '/docs/reserva.css?v=notas20';
+    $('#docStyles').href = '/docs/reserva.css?v=tp316';
     const c = D.mergeConfirmation(payload.trip.confirmation, D.confirmationDefaults(payload));
     state = { payload, c };
     document.title = `${c.reservation} · ${c.holder || 'Confirmación'}`;
