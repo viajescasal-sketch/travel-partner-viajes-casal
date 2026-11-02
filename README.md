@@ -436,3 +436,6 @@ Operaciones, Consulta y Proveedor no cambian (Operaciones ya no registra comisio
 - **Elegir esta opción:** muestra un resumen (destino, fechas, viajeros, servicios, forma de pago y total) en la barra inferior y dentro de la ventana de aceptación.
 - **Portal e itinerario:** mensaje motivador, botón *Conocer mi viaje* / *Ver mi cotización*, iconos de redes sociales y apartado *¿Qué necesito para mi viaje?* (documentos y consejos editables en Configuración › Documentos, y dudas rápidas por WhatsApp).
 - **PDF de confirmación:** muestra la clave de reserva de hotel, traslado, tours y seguro cuando ya están confirmadas en Reservas.
+
+## Skills de diseño para Claude Code
+En `.claude/skills/` hay dos skills de terceros para trabajar la interfaz del CRM y del portal: **impeccable** (Apache 2.0, github.com/pbakaus/impeccable) y **ui-ux-pro-max** (MIT, github.com/nextlevelbuilder/ui-ux-pro-max-skill). Son solo herramientas de desarrollo: no forman parte de la app ni se sirven en `public/`.
