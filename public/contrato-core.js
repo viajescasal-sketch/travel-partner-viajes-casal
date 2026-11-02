@@ -13,7 +13,7 @@
   const DEFAULT_TITLE = 'Contrato de prestación de servicios turísticos';
   const DEFAULT_CLAUSES = [
     'OBJETO. {agencia} ("LA AGENCIA") se obliga a gestionar y reservar, como intermediaria entre EL CLIENTE y los prestadores finales (hoteles, aerolíneas, operadores y demás proveedores), los servicios turísticos descritos en este contrato y en la cotización {folio}.',
-    'PRECIO Y FORMA DE PAGO. EL CLIENTE pagará {total} MXN conforme al plan de pagos de este contrato. El precio y la disponibilidad quedan garantizados al recibir el anticipo de {anticipo}. Si un pago no se cubre en su fecha límite, LA AGENCIA podrá cancelar las reservas y se aplicarán los cargos que fije cada proveedor.',
+    'PRECIO Y FORMA DE PAGO. EL CLIENTE pagará {total} MXN conforme al plan de pagos de este contrato. El precio y la disponibilidad quedan garantizados al recibir {pago_inicial}. Si un pago no se cubre en su fecha límite, LA AGENCIA podrá cancelar las reservas y se aplicarán los cargos que fije cada proveedor.',
     'CAMBIOS, CANCELACIONES Y REEMBOLSOS. Cualquier cambio o cancelación debe solicitarse por escrito (WhatsApp o correo) a LA AGENCIA. {politicas}',
     'RESPONSABILIDAD. {terminos}',
     'DOCUMENTACIÓN DEL VIAJERO. EL CLIENTE es responsable de contar con pasaporte, visas, permisos de menores, vacunas y demás documentos vigentes que exijan el destino y la aerolínea, así como de presentarse a tiempo a sus vuelos y servicios.',
@@ -26,7 +26,7 @@
   const DEFAULTS = { enabled: true, title: DEFAULT_TITLE, clauses: DEFAULT_CLAUSES, city: 'Cancún, Quintana Roo' };
   const PLACEHOLDERS = [
     ['{agencia}', 'Nombre de la agencia'], ['{cliente}', 'Nombre del cliente'], ['{folio}', 'Folio de la cotización'], ['{destino}', 'Destino'],
-    ['{fechas}', 'Fechas del viaje'], ['{total}', 'Total del viaje'], ['{anticipo}', 'Monto del anticipo'], ['{ciudad}', 'Ciudad del contrato'],
+    ['{fechas}', 'Fechas del viaje'], ['{total}', 'Total del viaje'], ['{anticipo}', 'Monto del anticipo'], ['{pago_inicial}', 'Primer pago ("el anticipo de $X" o "el pago total de $X")'], ['{ciudad}', 'Ciudad del contrato'],
     ['{politicas}', 'Políticas de la Confirmación (Plantilla PDF)'], ['{terminos}', 'Términos de la Confirmación (Plantilla PDF)'], ['{politicas_cotizacion}', 'Políticas de la Cotización (Plantilla PDF)']
   ];
 
@@ -60,9 +60,11 @@
     const fechas = start ? `${longDate(start)}${end && end !== start ? ` al ${longDate(end)}` : ''}` : 'Por definir';
     const total = plan?.total ?? Number(quote.price) ?? 0;
     const anticipo = plan?.installments?.[0]?.amount;
+    const first = plan?.installments?.[0];
+    const pagoInicial = first ? `${/^pago total$/i.test(first.label) || plan.installments.length === 1 ? 'el pago total' : 'el anticipo'} de ${money(first.amount)} MXN` : 'el primer pago';
     const vars = {
       '{agencia}': agencyName, '{cliente}': str(client.name) || 'EL CLIENTE', '{folio}': str(quote.folio), '{destino}': str(quote.destination),
-      '{fechas}': fechas, '{total}': money(total), '{anticipo}': anticipo != null ? `${money(anticipo)} MXN` : 'el anticipo', '{ciudad}': c.city,
+      '{fechas}': fechas, '{total}': money(total), '{pago_inicial}': pagoInicial, '{anticipo}': anticipo != null ? `${money(anticipo)} MXN` : 'el anticipo', '{ciudad}': c.city,
       '{politicas}': str(documents.resPolicies).replace(/\n+/g, ' '), '{terminos}': str(documents.resTerms).replace(/\n+/g, ' '), '{politicas_cotizacion}': str(documents.quotePolicies).replace(/\n+/g, ' ')
     };
     const fill = (text) => String(text).replace(/\{[a-z_]+\}/g, (k) => (k in vars ? vars[k] : k)).replace(/[ \t]+/g, ' ').trim();

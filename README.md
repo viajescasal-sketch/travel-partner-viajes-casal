@@ -453,3 +453,8 @@ En `.claude/skills/` hay dos skills de terceros para trabajar la interfaz del CR
 ## Accesibilidad y legibilidad (TP-317)
 - `public/accesible.css` se carga al final en portal, itinerario, cotización, pago, contrato, encuesta, referidos y formulario. Botones y textos usan coral oscuro `#c8432a` y turquesa oscuro `#00798a` (contraste ≥ 4.5:1, WCAG AA); los tonos brillantes de la marca quedan en logos y adornos.
 - Texto secundario más oscuro, letra mínima de 12 px, áreas táctiles de 44 px, foco visible con teclado, `prefers-reduced-motion`, fotos de tours con proporción fija y `aria-current` en el menú del itinerario.
+
+## Pulido final de las páginas del cliente (TP-317b)
+- Contrato: la cláusula de precio ahora usa `{pago_inicial}` ("el anticipo de $X" o "el pago total de $X"), así que con "Pago total" ya no menciona anticipo. `{anticipo}` sigue disponible para textos personalizados.
+- Íconos de redes también en las páginas de pago y contrato (se agregó `documents` a sus datos públicos).
+- Tipografía con serif (Georgia) en títulos del portal, itinerario y pago, como el PDF y la cotización; sin franja lateral gruesa en tarjetas; botones de la página de pago con contraste AA.

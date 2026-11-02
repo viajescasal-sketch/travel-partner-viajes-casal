@@ -50,7 +50,7 @@
       tail = `<div class="card noprint">${payBtn}<button type="button" class="btn alt" id="printBtn">Descargar PDF / imprimir</button></div>`;
     }
     $('#app').innerHTML = `${note}${steps}${d.state === 'waived' ? '<div class="note info">Tu Travel Partner registró tu contrato firmado por otro medio. Aquí puedes consultarlo.</div>' : ''}<div class="card">${docHtml(d.doc)}${signedBox}</div>${tail}`;
-    $('#foot').innerHTML = `${esc(d.agency.name || 'Viajes Casal')}${d.agency.whatsapp ? ` · WhatsApp ${esc(d.agency.whatsapp)}` : ''}${d.agency.email ? ` · ${esc(d.agency.email)}` : ''}`;
+    $('#foot').innerHTML = `${window.TPExtras ? TPExtras.social(d.documents) : ''}${esc(d.agency.name || 'Viajes Casal')}${d.agency.whatsapp ? ` · WhatsApp ${esc(d.agency.whatsapp)}` : ''}${d.agency.email ? ` · ${esc(d.agency.email)}` : ''}`;
     if ($('#printBtn')) $('#printBtn').onclick = () => window.print();
     if (d.state === 'pending') setupSign();
   }

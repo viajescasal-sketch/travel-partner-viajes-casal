@@ -40,3 +40,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 
 /* Fotos de tours: proporción fija para que la página no salte al cargar */
 .tp-tour img{aspect-ratio:16/9;height:auto}
+
+/* TP-317b · Tipografía cálida (igual que el PDF y la cotización) y sin franja lateral gruesa en tarjetas */
+.hero h1,.hero .eyebrow+h1,main h2,.card h3,.q-price,.banner b{font-family:Georgia,"Times New Roman",serif}
+.hero h1{letter-spacing:-.01em}
+.card h3{font-weight:700}
+.day{border-left-width:1px}
+.day.today{border-color:var(--coral-ink);border-left-color:var(--coral-ink)}
+
+/* Página de pago: sus botones se llaman .pay */
+a.pay,button.pay{background:linear-gradient(135deg,var(--teal-ink),var(--teal-ink-2));color:#fff;min-height:44px}
+a.pay.alt,button.pay.alt{background:#fff;color:var(--navy,#073b66);border:1px solid var(--border,#dce6ea)}

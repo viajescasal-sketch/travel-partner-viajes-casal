@@ -81,7 +81,7 @@
       ${payBox}
       <div class="card"><h2>Tus pagos</h2>${rows}</div>
       ${contract.url && contract.state !== 'pending' ? `<p style="text-align:center"><a href="${esc(contract.url)}" style="color:#007985;font-size:14px">📄 Ver mi contrato${contract.state === 'signed' ? ' firmado' : ''}</a></p>` : ''}`;
-    $('#foot').innerHTML = `${esc(d.agency.name || 'Viajes Casal')}${d.seller ? ` · Tu Travel Partner: ${esc(d.seller.name)}` : ''}${d.agency.whatsapp ? ` · WhatsApp ${esc(d.agency.whatsapp)}` : ''}`;
+    $('#foot').innerHTML = `${window.TPExtras ? TPExtras.social(d.documents) : ''}${esc(d.agency.name || 'Viajes Casal')}${d.seller ? ` · Tu Travel Partner: ${esc(d.seller.name)}` : ''}${d.agency.whatsapp ? ` · WhatsApp ${esc(d.agency.whatsapp)}` : ''}`;
 
     document.querySelectorAll('[data-copy]').forEach((btn) => { btn.onclick = async () => { try { await navigator.clipboard.writeText(btn.dataset.copy); btn.textContent = '¡Copiado!'; } catch { btn.textContent = btn.dataset.copy; } }; });
     const mp = $('#payMp');
