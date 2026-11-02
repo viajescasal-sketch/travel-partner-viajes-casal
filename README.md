@@ -436,3 +436,8 @@ Operaciones, Consulta y Proveedor no cambian (Operaciones ya no registra comisio
 - **Elegir esta opción:** muestra un resumen (destino, fechas, viajeros, servicios, forma de pago y total) en la barra inferior y dentro de la ventana de aceptación.
 - **Portal e itinerario:** mensaje motivador, botón *Conocer mi viaje* / *Ver mi cotización*, iconos de redes sociales y apartado *¿Qué necesito para mi viaje?* (documentos y consejos editables en Configuración › Documentos, y dudas rápidas por WhatsApp).
 - **PDF de confirmación:** muestra la clave de reserva de hotel, traslado, tours y seguro cuando ya están confirmadas en Reservas.
+
+## Itinerario rediseñado (TP-316)
+- `/viaje/<token>` ahora es una "historia por día" con menú fijo inferior: **Día a día · Reservas · Pagos · Ayuda** (navegable por `#dias`, `#reservas`, `#pagos`, `#ayuda`, `#dia-N`).
+- Día a día: selector de días, línea de tiempo con íconos, "Hoy" resaltado y aviso de saldo pendiente. Pagos: barra de avance, o "viaje liquidado" cuando no hay saldo (punto rojo en el menú si hay saldo).
+- El PDF de confirmación se mantiene (misma estructura y medidas) con acabados más sobrios: colores neutros, sin sombras ni degradados, pie en azul marino.

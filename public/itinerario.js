@@ -57,19 +57,23 @@
     const sections = [];
     const add = (id, label, html) => { if (html) sections.push({ id, label, html }); };
 
-    // Pagos pendientes
-    let payHtml = '';
-    if (p.payment) {
-      const n = p.payment.next;
-      payHtml = `<div class="card pay"><b>💳 Saldo pendiente: ${money(p.payment.balance)}</b><p class="muted" style="margin:4px 0 0">Pagado ${money(p.payment.paid)} de ${money(p.payment.total)}${n ? ` · Siguiente: ${esc(n.label)} ${money(n.amount)} antes del ${esc(fmtY(n.due))}` : ''}</p>${p.payment.url ? `<a class="btn coral" href="${esc(p.payment.url)}">Ver mi plan y pagar</a>` : ''}</div>`;
-    }
+    // Pagos: aviso corto (Día a día) y tarjeta completa (pestaña Pagos)
+    const pay = p.payment;
+    const owes = !!(pay && Number(pay.balance) > 0);
+    const nx = pay && pay.next;
+    const payBanner = owes ? `<a class="banner" href="#pagos"><span>💳</span><div><b>Saldo pendiente: ${money(pay.balance)}</b>${nx ? `<small>${esc(nx.label)} ${money(nx.amount)} · antes del ${esc(fmtY(nx.due))}</small>` : ''}</div><i>›</i></a>` : '';
+    const payHtml = !pay ? '' : owes
+      ? `<div class="card pay"><b>💳 Saldo pendiente: ${money(pay.balance)}</b><div class="bar"><i style="width:${pay.total > 0 ? Math.min(100, Math.round((pay.paid / pay.total) * 100)) : 0}%"></i></div><p class="muted" style="margin:4px 0 0">Pagado ${money(pay.paid)} de ${money(pay.total)}${nx ? ` · Siguiente: ${esc(nx.label)} ${money(nx.amount)} antes del ${esc(fmtY(nx.due))}` : ''}</p>${pay.url ? `<a class="btn coral" href="${esc(pay.url)}">Ver mi plan y pagar</a>` : ''}</div>`
+      : `<div class="card ok"><b>✅ Tu viaje está liquidado</b><p class="muted" style="margin:4px 0 0">Pagaste ${money(pay.total)}. ¡Todo listo, solo falta disfrutar!</p>${pay.url ? `<a class="btn alt" href="${esc(pay.url)}">Ver mi plan de pagos</a>` : ''}</div>`;
 
     // Día por día
-    add('dias', 'Día por día', plan.map((d, i) => {
+    const ico = (t) => (/vuelo|aeropuerto.*(sale|llega)|✈/i.test(t) ? '✈️' : /traslado/i.test(t) ? '🚐' : /check-?in|check-?out|hotel|hospeda/i.test(t) ? '🏨' : /tour|excursi|actividad|isla|cena|show|snorkel|parque/i.test(t) ? '🎟️' : /desayuno|comida|cena|restaurante/i.test(t) ? '🍽️' : '•');
+    const pills = plan.map((d, i) => `<a href="#dia-${i + 1}" class="${d.date === today ? 'today' : d.date < today ? 'past' : ''}"><small>${esc(wd(d.date).slice(0, 3))}</small><b>${Number(d.date.slice(8, 10))}</b></a>`).join('');
+    add('dias', 'Día a día', `${payBanner}<div class="pills">${pills}</div><div class="story">${plan.map((d, i) => {
       const cls = d.date === today ? ' today' : d.date < today ? ' past' : '';
-      const body = lines(d.text).map((l) => { const m = /^(\d{1,2}:\d{2}(?:\s*(?:hrs|h|am|pm))?)\s+(.*)$/i.exec(l); return m ? `<div class="line"><time>${esc(m[1])}</time><span>${esc(m[2])}</span></div>` : `<div class="line nt"><span>${esc(l)}</span></div>`; }).join('');
-      return `<article class="card day${cls}" id="dia-${i + 1}"><div class="day-h"><small>${d.date === today ? 'Hoy · ' : ''}Día ${i + 1}</small><span>${esc(wd(d.date))} ${esc(fmt(d.date))}</span></div><h3>${esc(d.title || `Día ${i + 1}`)}</h3>${body}${d.place ? `<a class="map" href="${esc(mapUrl(`${d.place} ${trip.destination}`))}" target="_blank" rel="noopener">📍 ${esc(d.place)} en el mapa</a>` : ''}</article>`;
-    }).join(''));
+      const body = lines(d.text).map((l) => { const m = /^(\d{1,2}:\d{2}(?:\s*(?:hrs|h|am|pm))?)\s+(.*)$/i.exec(l); const raw = m ? m[2] : l; const em = /^(\p{Extended_Pictographic}\uFE0F?)\s*/u.exec(raw); const txt = em ? raw.slice(em[0].length) : raw; return `<div class="line"><em>${em ? em[1] : ico(txt)}</em><span>${m ? `<time>${esc(m[1])}</time>` : ''}${esc(txt)}</span></div>`; }).join('');
+      return `<article class="day${cls}" id="dia-${i + 1}"><span class="dot">${i + 1}</span><div class="card"><div class="day-h"><small>${d.date === today ? 'Hoy · ' : ''}Día ${i + 1}</small><span>${esc(wd(d.date))} ${esc(fmt(d.date))}</span></div><h3>${esc(d.title || `Día ${i + 1}`)}</h3>${body}${d.place ? `<a class="map" href="${esc(mapUrl(`${d.place} ${trip.destination}`))}" target="_blank" rel="noopener">📍 ${esc(d.place)} en el mapa</a>` : ''}</div></article>`;
+    }).join('')}</div>`);
 
     // Vuelos
     if (on('flight') && (c.outboundFlight || c.airline || c.flightBooking)) {
@@ -120,11 +124,34 @@
     add('contacto', 'Contacto', `<div class="card">${s ? `<div class="contact">${photo ? `<img src="${esc(photo)}" alt="${esc(s.name)}">` : `<span class="av">${esc(s.name.slice(0, 1))}</span>`}<div><b>${esc(s.name)}</b><div class="muted">Tu Travel Partner · antes, durante y después de tu viaje</div></div></div>` : ''}${sellerWa ? `<a class="btn wa" href="${esc(sellerWa)}" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>` : ''}
       ${phones.map(([k, v]) => `<div class="phone"><span>${esc(k)}</span><a href="${esc(tel(v))}">${esc(v)}</a></div>`).join('')}</div>`);
 
-    $('#chips').innerHTML = sections.map((x) => `<a href="#${x.id}">${esc(x.label)}</a>`).join('');
-    $('#app').innerHTML = payHtml + sections.map((x) => `<section id="${x.id}"><h2>${esc(x.label)}</h2>${x.html}</section>`).join('');
+    // Cuatro vistas con menú fijo: Día a día · Reservas · Pagos · Ayuda
+    const by = Object.fromEntries(sections.map((x) => [x.id, x]));
+    const grp = (ids) => ids.map((id) => by[id]).filter(Boolean).map((x) => `<section id="${x.id}"><h2>${esc(x.label)}</h2>${x.html}</section>`).join('');
+    const views = {
+      dias: { label: 'Día a día', icon: '🗓️', html: grp(['dias']) },
+      reservas: { label: 'Reservas', icon: '🎫', html: grp(['vuelos', 'hotel', 'traslados', 'actividades', 'seguro', 'reservas', 'viajeros', 'documentos']) || '<p class="muted empty">Aquí verás tus vuelos, hotel y claves de confirmación en cuanto estén listos.</p>' },
+      pagos: { label: 'Pagos', icon: '💳', badge: owes, html: `<section><h2>Mis pagos</h2>${payHtml || '<p class="muted empty">Tu Travel Partner te compartirá aquí tu plan de pagos.</p>'}</section>` },
+      ayuda: { label: 'Ayuda', icon: '💬', html: grp(['preparar', 'contacto']) },
+    };
+    const names = Object.keys(views);
+    $('#app').innerHTML = names.map((k) => `<div class="view" id="v-${k}" hidden>${views[k].html}</div>`).join('');
+    $('#tabs').innerHTML = names.map((k) => `<a href="#${k}" data-v="${k}"><span>${views[k].icon}${views[k].badge ? '<i class="bd"></i>' : ''}</span>${esc(views[k].label)}</a>`).join('');
+    $('#chips').hidden = true;
+    const show = () => {
+      const h = location.hash.slice(1);
+      if (/^dia-\d+$/.test(h)) { setView('dias'); const el = document.getElementById(h); if (el) el.scrollIntoView({ block: 'center' }); return; }
+      setView(names.includes(h) ? h : 'dias', true);
+    };
+    function setView(k, top) {
+      names.forEach((n) => { document.getElementById(`v-${n}`).hidden = n !== k; });
+      document.querySelectorAll('#tabs a').forEach((a) => a.classList.toggle('on', a.dataset.v === k));
+      if (top) window.scrollTo(0, 0);
+    }
+    window.addEventListener('hashchange', show);
+    show();
     $('#foot').innerHTML = `${window.TPExtras ? TPExtras.social(p.documents) : ''}${esc(`${p.agency.name || 'Viajes Casal'}${p.agency.website ? ` · ${p.agency.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}` : ''}`)}`;
     const todayCard = document.querySelector('.day.today');
-    if (todayCard) setTimeout(() => todayCard.scrollIntoView({ block: 'center' }), 300);
+    if (todayCard && !location.hash) setTimeout(() => todayCard.scrollIntoView({ block: 'center' }), 300);
   }
 
   load();
