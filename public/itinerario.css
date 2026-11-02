@@ -36,3 +36,26 @@ h2{font-size:18px;margin:22px 4px 10px;color:var(--navy)}@media (prefers-color-s
 .tip{white-space:pre-line;font-size:13px;color:var(--muted);margin-top:8px}
 footer{text-align:center;color:var(--muted);font-size:12px;padding:0 16px calc(30px + env(safe-area-inset-bottom))}
 .err{max-width:520px;margin:50px auto;text-align:center;padding:0 20px}
+
+/* TP-316: rediseño "historia por día" + menú fijo */
+body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+.hero{padding-bottom:40px;border-radius:0 0 28px 28px}
+.view[hidden]{display:none}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(4,1fr);background:var(--card);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom));box-shadow:0 -8px 24px rgba(7,59,102,.10)}
+.tabs a{display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;font-size:11px;font-weight:bold;color:var(--muted);padding:6px 0;border-radius:12px}
+.tabs a span{position:relative;font-size:20px;line-height:1}.tabs a.on{color:var(--navy);background:rgba(0,184,200,.12)}@media (prefers-color-scheme:dark){.tabs a.on{color:#fff}}
+.bd{position:absolute;top:-2px;right:-6px;width:9px;height:9px;border-radius:50%;background:var(--coral);border:2px solid var(--card)}
+.banner{display:flex;align-items:center;gap:12px;text-decoration:none;background:linear-gradient(135deg,#fff3ea,#fff);border:1px solid #f3c9a8;border-radius:16px;padding:12px 14px;margin:14px 0 4px}@media (prefers-color-scheme:dark){.banner{background:var(--card)}}
+.banner span{font-size:22px}.banner div{flex:1;min-width:0}.banner b{display:block;font-size:14px}.banner small{color:var(--muted);font-size:12px}.banner i{font-style:normal;font-size:22px;color:var(--coral)}
+.pills{display:flex;gap:8px;overflow-x:auto;padding:12px 2px 4px;scrollbar-width:none}.pills::-webkit-scrollbar{display:none}
+.pills a{flex-shrink:0;width:50px;text-align:center;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 0}
+.pills small{display:block;font-size:10px;text-transform:uppercase;color:var(--muted)}.pills b{font-size:17px}.pills a.today{background:var(--coral);border-color:var(--coral);color:#fff}.pills a.today small{color:#fff}.pills a.past{opacity:.55}
+.story{position:relative;padding-left:34px;margin-top:10px}.story:before{content:"";position:absolute;left:13px;top:8px;bottom:20px;width:2px;background:var(--line)}
+.story .day{position:relative;border:0;box-shadow:none;background:none;padding:0}.story .day .card{border-left:1px solid var(--line);margin-bottom:16px}
+.dot{position:absolute;left:-34px;top:10px;width:28px;height:28px;border-radius:50%;background:var(--teal);color:#fff;font-weight:bold;font-size:13px;display:grid;place-items:center;border:3px solid var(--bg)}
+.day.today .dot{background:var(--coral)}.day.today .card{border-color:var(--coral)}
+.story .line{grid-template-columns:26px 1fr;align-items:start}.line em{font-style:normal;text-align:center}.line time{display:block;margin-bottom:1px}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin:10px 0 6px}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--teal),var(--ok))}
+.card.ok{border-color:#a8dcc6}.empty{text-align:center;padding:30px 10px}
+@media print{.tabs{display:none}}
+.chips[hidden]{display:none}

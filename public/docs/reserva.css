@@ -54,3 +54,16 @@
   .rd-pages .box{box-shadow:none}
   @page{size:A4;margin:0}
 }
+
+/* TP-316: PDF más sobrio (solo color y acabados; no cambia medidas ni paginación) */
+.hero-overlay{background:linear-gradient(90deg,rgba(5,47,82,.55),rgba(5,47,82,.12))}
+.codebox{border-radius:2.5mm;box-shadow:none}
+.box,.card{border-radius:2.5mm;box-shadow:none}
+.section-title,.card h3,.card-head-left,.tip h4{color:var(--navy)}
+.service .circle,.service:nth-child(n) .circle{background:#f1f4f6;border-radius:2.5mm}
+.legal,.legal:nth-child(n){background:#f6f7f8;border:1px solid #e2e6e9;border-radius:2.5mm}
+.legal h3{color:var(--navy)}
+.tip,.tip.sand{background:#f3f6f8;border-radius:2mm}
+.blogBtn{background:var(--navy);border-radius:2mm}
+.footer{background:var(--navy)}
+.thanks{font-family:Georgia,serif;font-style:italic;font-size:15pt}
