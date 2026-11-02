@@ -7,7 +7,7 @@
   const LEAD_STAGES = ['Nuevo', 'Calificado', 'Cotizado', 'Negociación', 'Vendido', 'Perdido'];
   const SOURCES = ['WhatsApp', 'Instagram', 'Facebook', 'Sitio web', 'Referido', 'Otro'];
   const QUOTE_STATUSES = ['Enviada', 'Aceptada', 'Rechazada'];
-  const TRIP_STATUSES = ['Confirmado', 'Documentación pendiente', 'En viaje', 'Solicitar reseña', 'Postventa', 'Cerrado'];
+  const TRIP_STATUSES = ['Pendiente de pago', 'Confirmado', 'Documentación pendiente', 'En viaje', 'Solicitar reseña', 'Postventa', 'Cerrado'];
   const FOLLOWUP_TYPES = ['Llamada', 'WhatsApp', 'Cotización', 'Pago', 'Otro'];
   const PRIORITIES = ['Alta', 'Media', 'Baja'];
   const MAX_RULES = 60;

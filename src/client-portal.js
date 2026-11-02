@@ -113,6 +113,8 @@ function createClientPortal(dataStore, { assignment = null, mailer = null, postv
         destination: t.destination, start_date: t.start_date, end_date: t.end_date, status: t.status,
         phase: !t.start_date ? 'próximo' : t.start_date > today ? 'próximo' : t.end_date && t.end_date < today ? 'pasado' : 'en curso',
         days: t.start_date && t.start_date > today ? Math.round((Date.parse(`${t.start_date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000) : null,
+        pending: t.status === 'Pendiente de pago',
+        payUrl: (() => { const q = data.quotes.find((x) => x.id === t.quote_id); return q && q.pay_token && q.payment_plan ? (TPContract.pending(q) ? `/contrato/${q.pay_token}` : `/pagar/${q.pay_token}`) : null; })(),
         itinerary: t.share_token ? `/viaje/${t.share_token}` : null,
         confirmed: list.filter((b) => b.status === 'Confirmada').length, services: list.length,
         survey: t.survey?.token && !t.survey?.answers ? `/encuesta/${t.survey.token}` : null

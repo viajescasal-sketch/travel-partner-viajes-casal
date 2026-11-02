@@ -427,3 +427,12 @@ Operaciones, Consulta y Proveedor no cambian (Operaciones ya no registra comisio
 - **Íconos:** un solo juego de íconos de línea (estilo Lucide) en `public/iconos.js`. En HTML se usa `<i data-ic="nombre"></i>`; en JS, `icon('nombre')`.
 - **Avatar de cada agente:** clic en la foto del menú → subir foto o elegir uno de 12 animales ilustrados con movimiento suave (`public/avatares.js`). Sin elección, cada usuario recibe un animal fijo por defecto. Se guarda en el ajuste `ui_prefs` (`PUT /api/me/avatar`).
 - **Recorrido guiado:** aparece solo la primera vez que alguien entra, con la opción "No volver a mostrar". Se repite con "Abrir guía" en el menú, y cada sección tiene un botón **?** con su guía propia (`public/recorrido.js`). En Configuración → Usuarios, el administrador puede volver a mostrarlo a todo el equipo (`POST /api/tour/reset`).
+
+
+## Portal y flujo de aceptación más claros (TP-314)
+
+- **Aceptar crea el viaje:** al aceptar una cotización (en línea o desde el CRM) se crea el viaje con estado **Pendiente de pago** si la cotización o el lead traen fecha de salida; con el primer pago pasa a **Confirmado**. El cliente lo ve en su portal con el botón *Continuar con mi reserva*. Sin fechas, el viaje lo sigue creando el vendedor.
+- **Cotización:** esquema de pago nuevo **Pago total (sin anticipo)** junto a *Anticipo + saldo* y *Plan de pagos*. El botón de pago del cliente es *Continuar con mi reserva* y el mensaje final es *¡Todo listo, cotización aceptada!* con la etiqueta *Pendiente de pago*.
+- **Elegir esta opción:** muestra un resumen (destino, fechas, viajeros, servicios, forma de pago y total) en la barra inferior y dentro de la ventana de aceptación.
+- **Portal e itinerario:** mensaje motivador, botón *Conocer mi viaje* / *Ver mi cotización*, iconos de redes sociales y apartado *¿Qué necesito para mi viaje?* (documentos y consejos editables en Configuración › Documentos, y dudas rápidas por WhatsApp).
+- **PDF de confirmación:** muestra la clave de reserva de hotel, traslado, tours y seguro cuando ya están confirmadas en Reservas.

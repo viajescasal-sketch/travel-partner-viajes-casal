@@ -11,7 +11,7 @@ const PRIORITIES = ['Alta', 'Media', 'Baja'];
 const SOURCES = ['WhatsApp', 'Instagram', 'Facebook', 'Sitio web', 'Referido', 'Otro'];
 const QUOTE_STATUSES = ['Borrador', 'PDF generado', 'Enviada', 'Aceptada', 'Rechazada'];
 const QUOTE_MODES = ['Total', 'Por persona', 'Por noche'];
-const TRIP_STATUSES = ['Confirmado', 'Documentación pendiente', 'En viaje', 'Solicitar reseña', 'Postventa', 'Cerrado'];
+const TRIP_STATUSES = ['Pendiente de pago', 'Confirmado', 'Documentación pendiente', 'En viaje', 'Solicitar reseña', 'Postventa', 'Cerrado'];
 const FOLLOWUP_TYPES = ['Llamada', 'WhatsApp', 'Cotización', 'Pago', 'Otro'];
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const MONTHS_LONG = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -1376,10 +1376,12 @@ function proposalHtml(det, p, i) {
       ${czInput(det, `${pre}.price.total`, 'Precio total (MXN)*', 'inputmode="decimal" placeholder="32850" maxlength="20"')}
       ${czInput(det, `${pre}.price.pp`, 'Precio por persona (MXN)', 'inputmode="decimal" placeholder="10950" maxlength="20"')}
       ${czInput(det, `${pre}.price.base`, 'Base pasajeros', 'placeholder="3 pasajeros" maxlength="40"')}
-      ${czSelect(det, `${pre}.pay.esquema`, 'Esquema de pago', [['anticipo', 'Anticipo + saldo'], ['plan', 'Plan de pagos (varias fechas)']], { struct: true, fallback: 'anticipo' })}
+      ${czSelect(det, `${pre}.pay.esquema`, 'Esquema de pago', [['anticipo', 'Anticipo + saldo'], ['plan', 'Plan de pagos (varias fechas)'], ['total', 'Pago total (sin anticipo)']], { struct: true, fallback: 'anticipo' })}
     </div>
     <div class="cz-block">${plan
       ? `<b>Plan de pagos</b><div class="cz-grid g3">${[0, 1, 2].map((n) => `<div>${czInput(det, `${pre}.pay.pagos.${n}.fecha`, n === 2 ? 'Pago 3 (liquidación)' : `Pago ${n + 1}`, 'type="date"')}${czInput(det, `${pre}.pay.pagos.${n}.monto`, 'Monto', 'inputmode="decimal" placeholder="$ monto" maxlength="20"')}</div>`).join('')}</div>`
+      : p.pay?.esquema === 'total'
+      ? `<b>Pago total (sin anticipo)</b><div class="cz-grid g2">${czInput(det, `${pre}.pay.anticipoFecha`, 'Fecha límite de pago', 'type="date"')}</div><p class="muted-note">El cliente verá un solo pago por el total de la propuesta.</p>`
       : `<b>Anticipo</b><div class="cz-grid g2">${czInput(det, `${pre}.pay.anticipo`, 'Anticipo (MXN)', 'inputmode="decimal" placeholder="8213" maxlength="20"')}${czInput(det, `${pre}.pay.anticipoFecha`, 'Fecha límite de anticipo', 'type="date"')}</div>`}
     </div></div>`;
 }
@@ -1448,7 +1450,7 @@ function quoteModal(id, preset = {}) {
       <section class="cz-card"><h4>Notas</h4><p class="cz-hint">Opcional. Aparecen al final del PDF y de la cotización en línea, en un bloque “Notas”.</p>
         <div class="cz-grid g2">${czArea(det, 'notas', 'Notas para el cliente', 'rows="4" maxlength="2000" placeholder="Ej. Tarifas sujetas a disponibilidad al momento de reservar. Precio para salida en temporada baja…"', 'full')}</div>
       </section>
-      ${quote?.status === 'Aceptada' ? `<div class="quick-actions"><button type="button" class="btn secondary small" data-pay-plan="${quote.id}">💳 Plan de pagos y liga</button><button type="button" class="btn secondary small" data-trip-from-quote="${quote.id}">Crear viaje con esta cotización</button></div>` : ''}
+      ${quote?.status === 'Aceptada' ? `<div class="quick-actions"><button type="button" class="btn secondary small" data-pay-plan="${quote.id}">💳 Plan de pagos y liga</button>${db.trips.some((t) => t.quote_id === quote.id) ? '<span class="tag-ok">✓ Viaje creado</span>' : `<button type="button" class="btn secondary small" data-trip-from-quote="${quote.id}">Crear viaje con esta cotización</button>`}</div>` : ''}
       ${quote ? historyButton('quotes', quote.id) : ''}
       ${deleteBlock('cotización', quote?.id)}
       <div class="cz-actions"><button type="button" class="btn secondary close">Cancelar</button><button type="button" class="btn secondary" data-save="0">${quote ? 'Guardar cambios' : 'Guardar cotización'}</button><button type="button" class="btn coral-btn" data-save="1">Guardar y ver PDF</button></div>

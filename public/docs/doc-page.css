@@ -33,3 +33,14 @@
 .accept-err{color:#b03a2e;font-weight:700}.accept-acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 @media print{.accept-bar,.accept-modal{display:none!important}}
 @media(max-width:560px){.accept-bar{flex-direction:column;align-items:stretch;text-align:center}.accept-bar .doc-btn{justify-content:center}}
+
+/* Resumen de la opción elegida y estado pendiente de pago */
+.accept-more{background:none;border:0;padding:2px 0 0;color:#2a7f78;font-size:12px;font-weight:700;cursor:pointer;text-align:left;font-family:inherit}
+.accept-detail{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:54;width:min(760px,calc(100% - 24px));background:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 10px 32px rgba(15,55,75,.22);font-family:Arial,Helvetica,sans-serif;max-height:46vh;overflow:auto}
+.accept-detail.hidden{display:none}.accept-detail>b{display:block;margin-bottom:8px;color:#173733;font-size:14px}
+.accept-detail-list{margin:0;display:grid;gap:8px}.accept-detail-list>div{display:grid;grid-template-columns:110px 1fr;gap:8px;font-size:13px;line-height:1.4}
+.accept-detail-list dt{font-weight:800;color:#2a7f78}.accept-detail-list dd{margin:0;color:#203342}
+.accept-card .accept-detail-list{background:#f6faf9;border-radius:12px;padding:12px 14px}
+.accept-status{margin:-2px 0 2px}.pill-wait{display:inline-block;background:#fff4e0;color:#9a5b00;font-weight:800;font-size:12px;border-radius:999px;padding:5px 12px}
+@media print{.accept-detail{display:none!important}}
+@media(max-width:560px){.accept-detail{bottom:132px}.accept-detail-list>div{grid-template-columns:92px 1fr}}

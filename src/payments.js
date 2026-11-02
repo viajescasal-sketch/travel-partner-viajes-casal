@@ -88,6 +88,10 @@ function buildPlan(quote, lead, settings, today) {
     const sum = round2(list.reduce((s, i) => s + i.amount, 0));
     if (total - sum >= 1) list.push(newInst('Liquidación', saldoDue, total - sum));
     else if (sum > total) total = sum;
+  } else if (pay.esquema === 'total') {
+    // Sin anticipo: un solo pago por el total (fecha límite opcional en la cotización).
+    const due = ISO_DATE.test(String(pay.anticipoFecha || '')) && pay.anticipoFecha >= earliest ? pay.anticipoFecha : addDays(today, cfg.anticipoDays);
+    list.push(newInst('Pago total', due, total));
   } else {
     let anticipo = round2(num(pay.anticipo)) || Math.round((total * cfg.anticipoPct) / 100);
     anticipo = Math.min(anticipo, total);
@@ -209,6 +213,12 @@ function createPayments(dataStore, { assignment = null, mailer = null, env = {},
     }
   }
 
+  // Con el primer pago el viaje deja de estar "Pendiente de pago".
+  async function confirmTrips(quote) {
+    const trips = (await dataStore.listRecords('trips')).filter((t) => t.quote_id === quote.id && t.status === 'Pendiente de pago');
+    for (const t of trips) await dataStore.updateRecord('trips', t.id, { status: 'Confirmado' });
+  }
+
   /** Crea el plan si la cotización está aceptada y aún no tiene uno. */
   async function ensurePlan(quote, { force = false } = {}) {
     if (!quote || quote.status !== 'Aceptada') return quote;
@@ -279,6 +289,7 @@ ${outro ? `<p style="font-size:14px">${escapeHtml(outro)}</p>` : ''}
       recalc(plan);
       const updated = await dataStore.updateRecord('quotes', quote.id, { payment_plan: plan });
       await syncTrips(updated, plan);
+      await confirmTrips(updated);
       const auto = Boolean(opts.provider);
       await dataStore.logActivity(opts.userId ?? null, 'crm_quotes_update', opts.req || null, { entity: 'quotes', entityId: quote.id, summary: `${quote.folio} · ${client?.name || ''}`, note: `${auto ? 'Pago recibido por Mercado Pago' : 'Pago registrado'}: ${inst.label} ${money(amount)} (${method}) · saldo ${money(plan.balance)}` });
       // Avisos: vendedor del cliente y administradores (menos quien lo registró).

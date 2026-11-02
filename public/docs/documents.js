@@ -204,6 +204,10 @@
     const pagos = (pay.pagos || []).filter((p) => p && (p.fecha || p.monto));
     const deposit = pay.esquema === 'plan' && pagos.length
       ? `<span>PLAN DE PAGOS</span><ul class="payplan">${pagos.map((p, i) => `<li><span>${i === pagos.length - 1 && pagos.length > 1 ? `Pago ${i + 1} (liquidación)` : `Pago ${i + 1}`}${p.fecha ? ` · ${esc(formatSingleDate(p.fecha))}` : ''}</span><b>${esc(money(p.monto))}</b></li>`).join('')}</ul>`
+      : pay.esquema === 'total'
+      ? `<span>PAGO TOTAL</span><br><strong>${esc(money(price.total))}</strong>
+         <p>Sin anticipo: un solo pago para asegurar tu viaje.</p>
+         <p><b>Vigencia:</b> ${esc(pay.anticipoFecha ? formatSingleDate(pay.anticipoFecha) : vigenciaTxt)}</p>`
       : `<span>APARTA TU VIAJE CON</span><br><strong>${esc(money(pay.anticipo))}</strong>
          <p>Saldo pendiente: ${esc(money(num(price.total) - num(pay.anticipo)))}</p>
          <p><b>Vigencia:</b> ${esc(pay.anticipoFecha ? formatSingleDate(pay.anticipoFecha) : vigenciaTxt)}</p>`;
@@ -664,18 +668,24 @@
     const grid = (cards) => { const v = cards.filter(Boolean); return v.length ? `<section class="main3" style="grid-template-columns:repeat(${Math.min(v.length, 3)},1fr)">${v.join('')}</section>` : ''; };
     const head = (file, title, value) => `<div class="card-head"><div class="card-head-left"><img src="${icon(file)}" alt=""><span>${title}</span></div>${value !== undefined ? `<div class="card-head-value">${esc(value)}</div>` : ''}</div>`;
 
+    // TP-314: claves de confirmación de las reservas ya confirmadas (módulo Reservas) en cada servicio del PDF.
+    const bookingList = (() => { const b = payload?.trip?.bookings; const l = Array.isArray(b) ? b : b?.list || []; return l.filter((x) => x && x.confirmation && (!x.status || x.status === 'Confirmada')); })();
+    const keysOf = (type) => bookingList.filter((b) => b.type === type).map((b) => str(b.confirmation)).filter(Boolean).join(' · ');
+    const keyRow = (type) => (keysOf(type) ? [['Clave de reserva:', keysOf(type)]] : []);
+    const keyLine = (type) => (keysOf(type) ? `<div class="value" style="margin:0 0 2.5mm"><b>Clave de reserva:</b> ${esc(keysOf(type))}</div>` : '');
+
     const flight = on('flight') ? `<div class="card primary-detail">${head('icon-flight.png', 'Vuelo', c.airline)}${dl([
       ['Vuelo de ida:', c.outboundFlight], ['Vuelo de regreso:', c.returnFlight], ['Reserva:', c.flightBooking],
       ['Salida ida:', c.outboundDeparture], ['Llegada ida:', c.outboundArrival], ['Salida regreso:', c.returnDeparture], ['Llegada regreso:', c.returnArrival],
       ['Pasajeros:', paxCount ? `${paxCount} ${paxCount === 1 ? 'pasajero' : 'pasajeros'}` : ''], ['Equipaje permitido:', c.baggage]
     ])}${lines(c.flightTips).length ? `<div class="tip"><h4>Tips útiles para tu vuelo</h4><ul>${list(c.flightTips)}</ul></div>` : ''}</div>` : '';
     const hotel = on('hotel') ? `<div class="card primary-detail">${head('icon-hotel.png', 'Hotel', c.hotelName)}${dl([
-      ['Clasificación:', stars], ['Habitación:', c.room], ['Check-in:', c.checkin], ['Check-out:', c.checkout], ['Plan alimenticio:', c.mealPlan]
+      ['Clasificación:', stars], ['Habitación:', c.room], ['Check-in:', c.checkin], ['Check-out:', c.checkout], ['Plan alimenticio:', c.mealPlan], ...keyRow('Hotel')
     ])}<div class="hotel-img">${hotelImg ? `<img src="${hotelImg}" alt="Imagen del hotel">` : ''}</div>${lines(c.hotelHighlights).length ? `<div class="tip"><h4>Datos destacables del hotel</h4><ul>${list(c.hotelHighlights)}</ul></div>` : ''}</div>` : '';
     const transferRows = (dir) => dl([['Origen:', c[`transfer${dir}Origin`]], ['Destino:', c[`transfer${dir}Destination`]], ['Fecha:', c[`transfer${dir}Date`]], ['Horario:', c[`transfer${dir}Time`]], ['Operador:', c.operator], ['Contacto:', c.transferContact]]);
-    const transfer = on('transfer') ? `<div class="card primary-detail">${head('icon-transfer.png', 'Traslados')}<div class="label" style="margin-bottom:2mm">TRASLADO DE IDA</div>${transferRows('Out')}<hr style="border:0;border-top:1px dashed #c8d6dc;margin:6mm 0"><div class="label" style="margin-bottom:2mm">TRASLADO DE REGRESO</div>${transferRows('Back')}</div>` : '';
-    const activities = on('activities') ? `<div class="card">${head('icon-activities.png', 'Actividades y Tours')}<div class="value">${esc(c.activitiesDetail)}</div></div>` : '';
-    const insurance = on('insurance') ? `<div class="card">${head('icon-insurance.png', 'Seguro de Viaje', c.insuranceProvider)}${dl([['Póliza:', c.insurancePolicy], ['Cobertura:', c.insuranceDetail]])}</div>` : '';
+    const transfer = on('transfer') ? `<div class="card primary-detail">${head('icon-transfer.png', 'Traslados')}${keyLine('Traslado')}<div class="label" style="margin-bottom:2mm">TRASLADO DE IDA</div>${transferRows('Out')}<hr style="border:0;border-top:1px dashed #c8d6dc;margin:6mm 0"><div class="label" style="margin-bottom:2mm">TRASLADO DE REGRESO</div>${transferRows('Back')}</div>` : '';
+    const activities = on('activities') ? `<div class="card">${head('icon-activities.png', 'Actividades y Tours')}${keyLine('Tour')}<div class="value">${esc(c.activitiesDetail)}</div></div>` : '';
+    const insurance = on('insurance') ? `<div class="card">${head('icon-insurance.png', 'Seguro de Viaje', c.insuranceProvider)}${dl([['Póliza:', c.insurancePolicy], ['Cobertura:', c.insuranceDetail], ...keyRow('Seguro')])}</div>` : '';
     const blog = safeUrl(documents.blogUrl);
     const partner = on('partner') ? `<div class="card">${head('icon-partner.png', 'Travel Partner 24/7', c.partnerName)}${dl([['WhatsApp:', c.partnerPhone], ['Atención:', c.partnerDetail]])}${blog ? `<a class="blogBtn" href="${esc(blog)}" target="_blank" rel="noopener">Prepara tu viaje: guías y tips →</a>` : ''}</div>` : '';
 

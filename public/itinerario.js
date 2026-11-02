@@ -106,6 +106,12 @@
     // Documentos
     if (p.vouchers.length) add('documentos', 'Documentos', `<div class="card">${p.vouchers.map((v) => `<div class="doc"><span>${v.mime === 'application/pdf' ? '📄' : '🖼'} ${esc(v.name)}</span><span><a href="${esc(file(v.id))}" target="_blank" rel="noopener">Ver</a><a href="${esc(file(v.id))}?download=1">Descargar</a></span></div>`).join('')}<p class="muted" style="margin:10px 0 0">Tip: descárgalos antes de salir por si no tienes señal.</p></div>`);
 
+    // TP-314: ¿Qué necesito para mi viaje?
+    const sx = p.seller;
+    if (window.TPExtras && until >= -total) {
+      add('preparar', '¿Qué necesito?', TPExtras.prepare({ documents: p.documents, destination: trip.destination, waLink: (text) => D.waLink(sx?.phone || p.agency.whatsapp, text) }));
+    }
+
     // Contactos
     const s = p.seller;
     const sellerWa = D.waLink(s?.phone || p.agency.whatsapp, `Hola${s ? ` ${s.name.split(' ')[0]}` : ''}, te escribo por mi viaje a ${trip.destination}.`);
@@ -116,7 +122,7 @@
 
     $('#chips').innerHTML = sections.map((x) => `<a href="#${x.id}">${esc(x.label)}</a>`).join('');
     $('#app').innerHTML = payHtml + sections.map((x) => `<section id="${x.id}"><h2>${esc(x.label)}</h2>${x.html}</section>`).join('');
-    $('#foot').textContent = `${p.agency.name || 'Viajes Casal'}${p.agency.website ? ` · ${p.agency.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}` : ''}`;
+    $('#foot').innerHTML = `${window.TPExtras ? TPExtras.social(p.documents) : ''}${esc(`${p.agency.name || 'Viajes Casal'}${p.agency.website ? ` · ${p.agency.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}` : ''}`)}`;
     const todayCard = document.querySelector('.day.today');
     if (todayCard) setTimeout(() => todayCard.scrollIntoView({ block: 'center' }), 300);
   }

@@ -7,6 +7,7 @@
    ========================================================= */
 (function () {
   const $ = (s) => document.querySelector(s);
+  const MOTIVA = 'Viajar tranquilo también se planea ✨ Aquí te acompañamos paso a paso.';
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const token = (location.pathname.match(/\/mi-portal\/([a-f0-9]{40})/) || [])[1];
   const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -27,7 +28,7 @@
   /* ---------- Entrar con código ---------- */
   function codeScreen(p) {
     $('#heroTitle').textContent = `Hola${p.client?.first ? `, ${p.client.first}` : ''} 👋`;
-    $('#heroSub').textContent = 'Tus cotizaciones, pagos y viajes en un solo lugar.';
+    $('#heroSub').textContent = MOTIVA;
     $('#app').innerHTML = `<div class="card code-card">
       <b>Confirma que eres tú</b>
       <p class="muted">${p.byEmail ? `Te enviaremos un código de 6 dígitos a <b>${esc(p.emailMasked)}</b>.` : 'Tu Travel Partner te enviará un código de 6 dígitos por WhatsApp.'} Solo se pide la primera vez en este equipo.</p>
@@ -61,7 +62,7 @@
     const add = (id, label, html) => sec.push({ id, label, html });
     const next = p.trips.find((t) => t.phase !== 'pasado');
     $('#heroTitle').textContent = `Hola, ${p.client.first || p.client.name} 👋`;
-    $('#heroSub').textContent = next ? `${next.destination} · ${range(next.start_date, next.end_date)}${next.days != null ? ` · faltan ${next.days} día${next.days === 1 ? '' : 's'}` : ''}` : 'Tus cotizaciones, pagos y viajes en un solo lugar.';
+    $('#heroSub').textContent = next ? `${next.destination} · ${range(next.start_date, next.end_date)}${next.days != null ? ` · faltan ${next.days} día${next.days === 1 ? '' : 's'}` : ''}` : MOTIVA;
 
     // Pagos pendientes primero: es lo más urgente para el cliente.
     const due = p.payments.filter((x) => x.balance > 0.5);
@@ -76,16 +77,17 @@
     }).join(''));
 
     add('viajes', 'Mis viajes', p.trips.length ? p.trips.map((t) => `<div class="card day${t.phase === 'en curso' ? ' today' : t.phase === 'pasado' ? ' past' : ''}">
-        <div class="trip-h"><div><h3>${esc(t.destination)}</h3><p class="muted">${esc(range(t.start_date, t.end_date))}</p></div><span class="pill${t.phase === 'pasado' ? ' off' : t.phase === 'en curso' ? ' warn' : ''}">${t.phase === 'próximo' ? (t.days != null ? `Faltan ${t.days} días` : 'Próximo') : t.phase === 'en curso' ? '¡De viaje!' : 'Realizado'}</span></div>
+        <div class="trip-h"><div><h3>${esc(t.destination)}</h3><p class="muted">${esc(range(t.start_date, t.end_date))}</p></div><span class="pill${t.pending ? ' warn' : t.phase === 'pasado' ? ' off' : t.phase === 'en curso' ? ' warn' : ''}">${t.pending ? '⏳ Pendiente de pago' : t.phase === 'próximo' ? (t.days != null ? `Faltan ${t.days} días` : 'Próximo') : t.phase === 'en curso' ? '¡De viaje!' : 'Realizado'}</span></div>
+        ${t.pending ? `<p class="muted">Tu viaje se confirma con tu primer pago.${t.days != null ? ` Faltan ${t.days} días para tu salida.` : ''}</p>${t.payUrl ? `<a class="btn coral" href="${esc(t.payUrl)}">Continuar con mi reserva</a>` : ''}` : ''}
         ${t.services ? `<p class="muted">🧾 ${t.confirmed} de ${t.services} servicios confirmados</p>` : ''}
         ${t.itinerary ? `<a class="btn" href="${esc(t.itinerary)}">🗺️ Ver itinerario, vouchers y documentos</a>` : '<p class="muted">Tu itinerario digital estará aquí en cuanto tu Travel Partner lo prepare.</p>'}
-        ${t.survey ? `<a class="btn coral" href="${esc(t.survey)}">⭐ Cuéntanos cómo te fue (1 minuto)</a>` : ''}</div>`).join('') : '<div class="card"><p class="muted">Aún no tienes viajes confirmados. Cuando aceptes una cotización, aquí verás tu viaje.</p></div>');
+        ${t.survey ? `<a class="btn coral" href="${esc(t.survey)}">⭐ Cuéntanos cómo te fue (1 minuto)</a>` : ''}</div>`).join('') : '<div class="card"><p class="muted">Aún no tienes viajes. En cuanto aceptes una cotización, tu viaje aparecerá aquí.</p></div>');
 
     add('cotizaciones', 'Cotizaciones', p.quotes.length ? p.quotes.map((q) => `<div class="card"><div class="q-head"><b>${esc(q.destination)}</b><small>${esc(q.folio)}</small></div>
         <p class="muted">${esc(q.hotel)}${q.proposals > 1 ? ` · ${q.proposals} opciones` : ''}</p>
         <div class="q-price">${money(q.price)} <small class="muted">${esc(String(q.mode || '').toLowerCase())}</small></div>
         <p>${q.status === 'Aceptada' ? '<span class="pill ok">✓ Aceptada</span>' : q.expired ? '<span class="pill off">Vigencia terminada · pide una actualización</span>' : `<span class="pill">Por decidir${q.valid_until ? ` · vigente al ${esc(fmt(q.valid_until))}` : ''}</span>`}</p>
-        <a class="btn${q.status === 'Aceptada' || q.expired ? ' alt' : ''}" href="${esc(q.url)}" ${q.external ? 'target="_blank" rel="noopener"' : ''}>${q.external ? '📄 Ver cotización' : q.status === 'Aceptada' || q.expired ? 'Ver cotización' : 'Ver y aceptar cotización'}</a></div>`).join('') : '<div class="card"><p class="muted">No tienes cotizaciones pendientes.</p></div>');
+        <a class="btn${q.status === 'Aceptada' || q.expired ? ' alt' : ''}" href="${esc(q.url)}" ${q.external ? 'target="_blank" rel="noopener"' : ''}>${q.external ? '📄 Ver mi cotización' : q.status === 'Aceptada' || q.expired ? 'Ver mi cotización' : 'Conocer mi viaje →'}</a></div>`).join('') : '<div class="card"><p class="muted">No tienes cotizaciones pendientes.</p></div>');
 
     add('nueva', 'Nueva cotización', `<div class="card"><b>¿Planeas otro viaje?</b><p class="muted">Cuéntanos y ${s ? esc(s.name.split(' ')[0]) : 'tu Travel Partner'} te prepara una propuesta.</p>
       <form class="form" id="reqForm">
@@ -99,6 +101,12 @@
       <div class="ref-code">${esc(p.referral.code)}</div>
       <div class="row2"><a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(`Te recomiendo a Viajes Casal para tu próximo viaje ✈️ Con mi código ${p.referral.code} tienes ${money(p.referral.welcomeAmount)} de descuento: ${p.referral.url}`)}" target="_blank" rel="noopener">Compartir</a><button class="btn alt" type="button" id="copyRef">Copiar liga</button></div></div>`);
 
+    // TP-314: ¿Qué necesito para mi viaje? (solo si tiene un viaje por realizar)
+    if (next && window.TPExtras) {
+      const prep = TPExtras.prepare({ documents: p.documents, destination: next.destination, waLink: (text) => wa(s?.phone || p.agency.whatsapp, text) });
+      if (prep) add('preparar', '¿Qué necesito para mi viaje?', prep);
+    }
+
     const sellerWa = wa(s?.phone || p.agency.whatsapp, `Hola${s ? ` ${s.name.split(' ')[0]}` : ''}, te escribo desde mi portal de Viajes Casal.`);
     add('contacto', 'Mi asesor', `<div class="card">${s ? `<div class="contact">${s.photoUrl ? `<img src="${esc(s.photoUrl)}" alt="${esc(s.name)}">` : `<span class="av">${esc(s.name.slice(0, 1))}</span>`}<div><b>${esc(s.name)}</b><div class="muted">Tu Travel Partner · antes, durante y después de tu viaje</div></div></div>` : ''}
       ${sellerWa ? `<a class="btn wa" href="${esc(sellerWa)}" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>` : ''}
@@ -108,7 +116,7 @@
     $('#chips').innerHTML = sec.map((x) => `<a href="#${x.id}">${esc(x.label)}${x.id === 'pagos' && due.length ? ' ⚠' : ''}</a>`).join('');
     $('#chips').classList.remove('hidden');
     $('#app').innerHTML = sec.map((x) => `<section id="${x.id}"><h2>${esc(x.label)}</h2>${x.html}</section>`).join('');
-    $('#foot').innerHTML = `${esc(p.agency.name)} · Portal privado de ${esc(p.client.name)}<br><button class="logout" id="logout" type="button">Salir en este equipo</button>`;
+    $('#foot').innerHTML = `${window.TPExtras ? TPExtras.social(p.documents) : ''}${esc(p.agency.name)} · Portal privado de ${esc(p.client.name)}<br><button class="logout" id="logout" type="button">Salir en este equipo</button>`;
 
     $('#reqForm').onsubmit = async (e) => {
       e.preventDefault();

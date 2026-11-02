@@ -93,12 +93,14 @@ test('TP-313: el equipo activa la liga y el cliente entra con código por correo
 });
 
 test('TP-313: el cliente ve sus cotizaciones, pagos y viajes; y pide una nueva cotización', async (context) => {
-  const { baseUrl, partner, lead, sent } = await setup(context);
+  const { baseUrl, partner, lead, sent, store } = await setup(context);
   const draft = (await partner('POST', '/api/quotes', { client_id: lead.client_id, lead_id: lead.id, destination: 'Cancún', hotel: 'Borrador interno', price: 1000 })).body.record;
   const sentQ = (await partner('POST', '/api/quotes', { client_id: lead.client_id, lead_id: lead.id, destination: 'Cancún', hotel: 'Riu Caribe', price: 32000, status: 'Enviada' })).body.record;
   const acc = (await partner('POST', '/api/quotes', { client_id: lead.client_id, lead_id: lead.id, destination: 'Cancún', hotel: 'Hyatt Ziva', price: 45000, status: 'Aceptada' })).body.record;
   await partner('POST', `/api/quotes/${acc.id}/payment-plan`, {});
-  const trip = (await partner('POST', '/api/trips', { client_id: lead.client_id, quote_id: acc.id, destination: 'Cancún', start_date: '2026-12-20', end_date: '2026-12-24' })).body.record;
+  // TP-314: al aceptar la cotización el viaje se crea solo (pendiente de pago); aquí se activa su itinerario.
+  const trip = (await store.listRecords('trips')).find((t) => t.quote_id === acc.id);
+  assert.equal(trip.status, 'Pendiente de pago');
   await partner('POST', `/api/trips/${trip.id}/share`, { enabled: true });
   // Otro cliente no debe aparecer.
   await partner('POST', '/api/leads', { client: { name: 'Otro Cliente', phone: '998 999 0000' }, destination: 'Tulum' });
@@ -116,6 +118,8 @@ test('TP-313: el cliente ve sus cotizaciones, pagos y viajes; y pide una nueva c
   assert.match(p.payments[0].url, /^\/pagar\//);
   assert.equal(p.trips.length, 1);
   assert.equal(p.trips[0].destination, 'Cancún');
+  assert.equal(p.trips[0].pending, true, 'el portal marca el viaje como pendiente de pago');
+  assert.match(p.trips[0].payUrl, /^\/(pagar|contrato)\//, 'y trae el paso para continuar con la reserva');
   assert.ok(!JSON.stringify(p).includes('Tulum'));
   assert.ok(!JSON.stringify(p).includes('owner_id'));
   // La liga de la cotización que da el portal sí abre.
