@@ -8,6 +8,7 @@
 //  - Recordatorios: N días antes y el día del vencimiento (vendedor + correo al cliente) y aviso si se vence.
 
 const crypto = require('crypto');
+const { DEFAULT_DOCUMENTS } = require('./documents');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { ENTITY_ORDER, ValidationError, nowCancun, sanitize } = require('./crm-schema');
@@ -429,6 +430,7 @@ ${outro ? `<p style="font-size:14px">${escapeHtml(outro)}</p>` : ''}
     return {
       ok: true,
       agency: await agencyInfo(),
+      documents: { ...DEFAULT_DOCUMENTS, ...((await dataStore.getSetting('documents')) || {}) },
       seller: seller ? { name: seller.name, whatsapp: seller.phone || null } : null,
       client: { firstName: String(client?.name || '').trim().split(/\s+/)[0] || '' },
       quote: { folio: quote.folio, destination: quote.destination, hotel: quote.hotel, start_date: lead?.start_date || quote.details?.startDate || null, end_date: lead?.end_date || quote.details?.endDate || null },

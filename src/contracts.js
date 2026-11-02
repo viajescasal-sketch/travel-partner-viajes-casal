@@ -56,6 +56,7 @@ function createContracts(dataStore, { assignment = null, mailer = null, env = {}
       ok: true,
       state: TPContract.state(quote),
       agency: await agencyInfo(),
+      documents: { ...DEFAULT_DOCUMENTS, ...((await dataStore.getSetting('documents')) || {}) },
       client: { name: client?.name || '' },
       folio: quote.folio,
       doc, hash,
