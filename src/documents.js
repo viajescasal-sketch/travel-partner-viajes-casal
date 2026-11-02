@@ -17,6 +17,8 @@ const DOCUMENT_FIELDS = {
   youtube: { max: 300, url: true },
   reviewsUrl: { max: 300, url: true },
   blogUrl: { max: 300, url: true },
+  storeUrl: { max: 300, url: true },
+  storeItems: { max: 1200 },
   quoteImportant: { max: 600 },
   quotePolicies: { max: 600 },
   quoteNote: { max: 600 },
@@ -46,6 +48,9 @@ const DEFAULT_DOCUMENTS = {
   youtube: 'https://www.youtube.com/@inspirateaviajar',
   reviewsUrl: 'https://g.page/r/CdrMmhT2jbS5EBM/review',
   blogUrl: 'https://paulina.viajescasal.com/blog/index.html',
+  // TP-315: "Prepara tu maleta" en el portal del cliente (tienda Casal Go). Una línea por producto: icono | nombre | precio
+  storeUrl: 'https://go.viajescasal.com',
+  storeItems: ['🎒 | Mochila de viaje impermeable | $915', '🔋 | Power bank 10,000 mAh con cables integrados | $545', '🧳 | Organizador de maleta 6 piezas | $445', '🧴 | Neceser impermeable (set x3) | $450', '🎁 | Kit Primer Viaje (ahorras $605) | $1,750'].join('\n'),
   quoteImportant: 'Tarifas sujetas a disponibilidad. Impuestos locales pueden pagarse directamente en destino cuando corresponda.',
   quotePolicies: 'Cambios, cancelaciones y reembolsos están sujetos a las condiciones de cada proveedor.',
   quoteNote: 'La tarifa no queda garantizada hasta confirmar disponibilidad y realizar el pago correspondiente.',

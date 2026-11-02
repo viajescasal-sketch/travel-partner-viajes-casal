@@ -107,6 +107,12 @@
       if (prep) add('preparar', '¿Qué necesito para mi viaje?', prep);
     }
 
+    // TP-315: Prepara tu maleta (Casal Go), solo si el viaje está lejos y los productos alcanzan a llegar.
+    if (next && next.phase === 'próximo' && window.TPExtras) {
+      const shop = TPExtras.shop({ documents: p.documents, daysLeft: next.days });
+      if (shop) add('maleta', '🧳 Prepara tu maleta', shop);
+    }
+
     const sellerWa = wa(s?.phone || p.agency.whatsapp, `Hola${s ? ` ${s.name.split(' ')[0]}` : ''}, te escribo desde mi portal de Viajes Casal.`);
     add('contacto', 'Mi asesor', `<div class="card">${s ? `<div class="contact">${s.photoUrl ? `<img src="${esc(s.photoUrl)}" alt="${esc(s.name)}">` : `<span class="av">${esc(s.name.slice(0, 1))}</span>`}<div><b>${esc(s.name)}</b><div class="muted">Tu Travel Partner · antes, durante y después de tu viaje</div></div></div>` : ''}
       ${sellerWa ? `<a class="btn wa" href="${esc(sellerWa)}" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>` : ''}

@@ -19,6 +19,8 @@
     .tp-prep h3{margin:14px 0 6px;font-size:15px}.tp-prep h3:first-child{margin-top:0}
     .tp-prep ul{margin:0;padding-left:0;list-style:none}.tp-prep li{padding:5px 0 5px 26px;position:relative;font-size:14px}
     .tp-prep li:before{content:"✓";position:absolute;left:4px;color:var(--ok,#18815d);font-weight:bold}
+    .tp-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line,#dce6ea);font-size:14px}.tp-item:first-of-type{border-top:0}
+    .tp-ic{font-size:22px;width:30px;text-align:center}.tp-nm{flex:1}.tp-item b{color:var(--coral,#ff7959);white-space:nowrap}
     .tp-ask{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
     .tp-ask a{display:block;text-align:center;text-decoration:none;padding:11px 8px;border-radius:12px;font-size:13px;font-weight:bold;border:1px solid var(--line,#dce6ea);color:var(--text,#203342);background:var(--card,#fff)}
   `;
@@ -46,5 +48,20 @@
       ${ask ? `<h3>¿Tienes una duda? Pregúntale a tu Travel Partner</h3><div class="tp-ask">${ask}</div>` : ''}</div>`;
   }
 
-  global.TPExtras = { social, prepare };
+  // Los productos de Casal Go tardan 4 a 8 días hábiles en llegar: solo se ofrecen si el viaje está lejos.
+  const SHOP_MIN_DAYS = 14;
+
+  /** "Prepara tu maleta": productos de Casal Go. daysLeft = días que faltan para salir (null si no se sabe). */
+  function shop({ documents = {}, daysLeft = null } = {}) {
+    const url = safe(documents.storeUrl);
+    if (!url || (daysLeft != null && daysLeft < SHOP_MIN_DAYS)) return '';
+    const items = lines(documents.storeItems).map((l) => l.split('|').map((x) => x.trim())).filter((p) => p[1]);
+    if (!items.length) return '';
+    const link = `${url}${url.includes('?') ? '&' : '?'}utm_source=portal&utm_medium=crm&utm_campaign=prepara-tu-maleta`;
+    return `<div class="card tp-shop"><p class="muted" style="margin:0 0 8px">Viajar tranquilo también se empaca. Lo esencial para tu viaje, con envío gratis a todo México (llega en 4 a 8 días hábiles).</p>
+      ${items.map(([icon, name, price]) => `<div class="tp-item"><span class="tp-ic">${esc(icon || '🧳')}</span><span class="tp-nm">${esc(name)}</span><b>${esc(price || '')}</b></div>`).join('')}
+      <a class="btn coral" style="margin-top:12px" href="${esc(link)}" target="_blank" rel="noopener">🛍️ Ver en Casal Go</a></div>`;
+  }
+
+  global.TPExtras = { social, prepare, shop };
 }(window));

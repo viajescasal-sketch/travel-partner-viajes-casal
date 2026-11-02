@@ -2797,6 +2797,9 @@ const DOC_SETTINGS = [
     ['website', 'Sitio web', 'url'], ['reviewsUrl', 'Reseñas de Google', 'url'], ['facebook', 'Facebook', 'url'], ['instagram', 'Instagram', 'url'],
     ['tiktok', 'TikTok', 'url'], ['youtube', 'YouTube', 'url'], ['blogUrl', 'Blog / guías de viaje', 'url']
   ]],
+  ['Casal Go · Prepara tu maleta (portal del cliente)', [
+    ['storeUrl', 'Enlace de la tienda Casal Go', 'url'], ['storeItems', 'Productos que se muestran', 'area', 'Uno por línea: icono | nombre | precio. Déjalo vacío para ocultar la sección.']
+  ]],
   ['Cotización', [
     ['quoteImportant', 'Información importante', 'area'], ['quotePolicies', 'Políticas', 'area'], ['quoteNote', 'Esta cotización', 'area', 'También aparece en los circuitos'],
     ['circImportant', 'Información importante (circuitos)', 'area'], ['circPolicies', 'Políticas (circuitos)', 'area'],
