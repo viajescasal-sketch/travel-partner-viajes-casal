@@ -2800,6 +2800,9 @@ const DOC_SETTINGS = [
   ['Casal Go · Prepara tu maleta (portal del cliente)', [
     ['storeUrl', 'Enlace de la tienda Casal Go', 'url'], ['storeItems', 'Productos que se muestran', 'area', 'Uno por línea: icono | nombre | precio. Déjalo vacío para ocultar la sección.']
   ]],
+  ['Tours por destino (portal del cliente)', [
+    ['tours', 'Catálogo de tours', 'area', 'Uno por línea: Destino | Nombre | Tipo | Duración | Desde (solo número) | Descripción | Link de foto https | Sí/No. Solo se muestran los del destino del viaje.']
+  ]],
   ['Cotización', [
     ['quoteImportant', 'Información importante', 'area'], ['quotePolicies', 'Políticas', 'area'], ['quoteNote', 'Esta cotización', 'area', 'También aparece en los circuitos'],
     ['circImportant', 'Información importante (circuitos)', 'area'], ['circPolicies', 'Políticas (circuitos)', 'area'],
