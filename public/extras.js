@@ -19,6 +19,9 @@
     .tp-prep h3{margin:14px 0 6px;font-size:15px}.tp-prep h3:first-child{margin-top:0}
     .tp-prep ul{margin:0;padding-left:0;list-style:none}.tp-prep li{padding:5px 0 5px 26px;position:relative;font-size:14px}
     .tp-prep li:before{content:"✓";position:absolute;left:4px;color:var(--ok,#18815d);font-weight:bold}
+    .tp-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line,#dce6ea);font-size:14px}.tp-item:first-of-type{border-top:0}
+    .tp-ic{font-size:22px;width:30px;text-align:center}.tp-nm{flex:1}.tp-item b{color:var(--coral,#ff7959);white-space:nowrap}
+    .tp-tour{padding:0;overflow:hidden}.tp-tour img{width:100%;height:150px;object-fit:cover;display:block}.tp-tb{padding:14px 16px 16px}.tp-tb small{color:var(--teal,#00b8c8);font-weight:bold;text-transform:uppercase;letter-spacing:.05em;font-size:11px}.tp-tb h3{margin:3px 0 6px;font-size:17px}.tp-tb p{margin:0 0 8px;font-size:14px;color:var(--muted,#6c7b87)}.tp-tb b{display:block;color:var(--coral,#ff7959);font-size:14px}
     .tp-ask{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
     .tp-ask a{display:block;text-align:center;text-decoration:none;padding:11px 8px;border-radius:12px;font-size:13px;font-weight:bold;border:1px solid var(--line,#dce6ea);color:var(--text,#203342);background:var(--card,#fff)}
   `;
@@ -46,5 +49,43 @@
       ${ask ? `<h3>¿Tienes una duda? Pregúntale a tu Travel Partner</h3><div class="tp-ask">${ask}</div>` : ''}</div>`;
   }
 
-  global.TPExtras = { social, prepare };
+  // Los productos de Casal Go tardan 4 a 8 días hábiles en llegar: solo se ofrecen si el viaje está lejos.
+  const SHOP_MIN_DAYS = 14;
+
+  /** "Prepara tu maleta": productos de Casal Go. daysLeft = días que faltan para salir (null si no se sabe). */
+  function shop({ documents = {}, daysLeft = null } = {}) {
+    const url = safe(documents.storeUrl);
+    if (!url || (daysLeft != null && daysLeft < SHOP_MIN_DAYS)) return '';
+    const items = lines(documents.storeItems).map((l) => l.split('|').map((x) => x.trim())).filter((p) => p[1]);
+    if (!items.length) return '';
+    const link = `${url}${url.includes('?') ? '&' : '?'}utm_source=portal&utm_medium=crm&utm_campaign=prepara-tu-maleta`;
+    return `<div class="card tp-shop"><p class="muted" style="margin:0 0 8px">Viajar tranquilo también se empaca. Lo esencial para tu viaje, con envío gratis a todo México (llega en 4 a 8 días hábiles).</p>
+      ${items.map(([icon, name, price]) => `<div class="tp-item"><span class="tp-ic">${esc(icon || '🧳')}</span><span class="tp-nm">${esc(name)}</span><b>${esc(price || '')}</b></div>`).join('')}
+      <a class="btn coral" style="margin-top:12px" href="${esc(link)}" target="_blank" rel="noopener">🛍️ Ver en Casal Go</a></div>`;
+  }
+
+
+  /** TP-316b: tours por destino. Línea: Destino | Nombre | Tipo | Duración | Desde | Descripción | Foto | Sí/No */
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const QROO = ['cancun', 'riviera maya', 'playa del carmen', 'tulum', 'cozumel', 'isla mujeres', 'quintana roo', 'puerto morelos', 'akumal'];
+  function sameArea(a, b) {
+    const x = norm(a); const y = norm(b);
+    if (!x || !y) return false;
+    if (x.includes(y) || y.includes(x)) return true;
+    return QROO.some((k) => x.includes(k)) && QROO.some((k) => y.includes(k));
+  }
+  function tours({ documents = {}, destination = '', waLink = () => '' } = {}) {
+    const list = lines(documents.tours).map((l) => l.split('|').map((x) => x.trim()))
+      .filter((p) => p[0] && p[1] && !/^no$/i.test(p[7] || '') && sameArea(p[0], destination));
+    if (!list.length) return '';
+    const money = (n) => (Number(n) > 0 ? `Desde $${Number(n).toLocaleString('es-MX')} MXN por persona` : '');
+    return `<div class="tp-tours">${list.map(([dest, name, type, dur, price, desc, img]) => {
+      const href = waLink(`Hola, me interesa el tour "${name}" (${dest}) para mi viaje. ¿Me das disponibilidad y precio?`);
+      return `<div class="card tp-tour">${safe(img) ? `<img src="${esc(safe(img))}" alt="${esc(name)}" loading="lazy">` : ''}
+        <div class="tp-tb"><small>${esc([type, dur].filter(Boolean).join(' · '))}</small><h3>${esc(name)}</h3>${desc ? `<p>${esc(desc)}</p>` : ''}
+        ${money(price) ? `<b>${esc(money(price))}</b>` : ''}${href ? `<a class="btn" href="${esc(href)}" target="_blank" rel="noopener">Quiero este tour</a>` : ''}</div></div>`;
+    }).join('')}</div>`;
+  }
+
+  global.TPExtras = { social, prepare, shop, tours };
 }(window));
