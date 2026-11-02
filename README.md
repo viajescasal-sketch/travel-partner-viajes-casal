@@ -447,3 +447,5 @@ Operaciones, Consulta y Proveedor no cambian (Operaciones ya no registra comisio
 - `/viaje/<token>` ahora es una "historia por día" con menú fijo inferior: **Día a día · Reservas · Pagos · Ayuda** (navegable por `#dias`, `#reservas`, `#pagos`, `#ayuda`, `#dia-N`).
 - Día a día: selector de días, línea de tiempo con íconos, "Hoy" resaltado y aviso de saldo pendiente. Pagos: barra de avance, o "viaje liquidado" cuando no hay saldo (punto rojo en el menú si hay saldo).
 - El PDF de confirmación se mantiene (misma estructura y medidas) con acabados más sobrios: colores neutros, sin sombras ni degradados, pie en azul marino.
+## Skills de diseño para Claude Code
+En `.claude/skills/` hay dos skills de terceros para trabajar la interfaz del CRM y del portal: **impeccable** (Apache 2.0, github.com/pbakaus/impeccable) y **ui-ux-pro-max** (MIT, github.com/nextlevelbuilder/ui-ux-pro-max-skill). Son solo herramientas de desarrollo: no forman parte de la app ni se sirven en `public/`.
