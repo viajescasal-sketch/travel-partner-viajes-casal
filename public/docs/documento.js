@@ -138,7 +138,7 @@
     $('#docTabs').innerHTML = count > 1 ? model.dataList.map((d, i) => `<button type="button" data-tab="${i}">Opción ${i + 1} · ${D.esc(D.optionLabel(model.g.varying, d))}</button>`).join('') : '';
     $('#docTabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(Number(b.dataset.tab)); };
     showTab(0);
-    if (payload.payUrl) button(payload.payLabel || 'Pagar mi anticipo', '', null, { href: payload.payUrl });
+    if (payload.payUrl) button(payload.payLabel || 'Continuar con mi reserva', '', null, { href: payload.payUrl });
     button('Descargar PDF', '', async () => { await waitImages(); window.print(); });
     const sellerPhone = payload.seller?.phone || payload.agency?.whatsapp;
     const wa = D.waLink(sellerPhone, `Hola, vi la cotización ${payload.quote.folio} para ${payload.quote.destination} y tengo una pregunta.`);
@@ -148,13 +148,25 @@
 
   /* ---------- TP-203: elegir opción y aceptar en línea ---------- */
   const fmtMoney = (n) => `$${Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 2 })}`;
+  // Resumen corto de lo que incluye la opción elegida: destino, fechas, viajeros, servicios y forma de pago.
+  function optionSummary(payload, opt) {
+    const m = state.model;
+    const g = m?.g || {};
+    const d = (m?.dataList || [])[Math.min(opt.index, (m?.dataList || []).length - 1)] || {};
+    const svc = (D.SERVICES || []).filter((s) => g.services && g.services[s.key]).map((s) => s.label);
+    const pay = d.pay || {};
+    const payTxt = pay.esquema === 'total' ? 'Pago total' : pay.esquema === 'plan' ? 'Plan de pagos en varias fechas' : pay.anticipo ? `Apartas con ${D.money(pay.anticipo)} y liquidas después` : '';
+    const rows = [['Destino', payload.quote.destination], ['Fechas', g.fechasTexto || ''], ['Viajeros', g.pax || ''], ['Hospedaje', d.hotel?.plan ? `${opt.label}${/—/.test(opt.label) ? '' : ` — ${d.hotel.plan}`}` : (svc.includes('Hotel') ? opt.label : '')], ['Incluye', svc.join(' · ')], ['Forma de pago', payTxt], ['Total', opt.total ? `${fmtMoney(opt.total)} MXN` : '']].filter(([, v]) => v);
+    return `<dl class="accept-detail-list">${rows.map(([k, v]) => `<div><dt>${D.esc(k)}</dt><dd>${D.esc(v)}</dd></div>`).join('')}</dl>`;
+  }
   function acceptUi(payload, count) {
     const a = payload.accept;
     if (!a) return;
     document.querySelector('#acceptBar')?.remove();
+    document.querySelector('#acceptDetail')?.remove();
     if (a.accepted) {
       const opt = a.options.find((o) => o.index === a.acceptedOption);
-      note(`✅ ¡Aceptaste esta cotización${opt && a.options.length > 1 ? ` (opción ${opt.index + 1}: ${opt.label})` : ''}! Tu Travel Partner ya fue avisado.${payload.payUrl ? (/\/contrato\//.test(payload.payUrl) ? ' Firma tu contrato para apartar tu viaje con el anticipo.' : ' Ya puedes apartar tu viaje con el anticipo.') : ''}`, 'info');
+      note(`✅ ¡Todo listo, cotización aceptada${opt && a.options.length > 1 ? ` (opción ${opt.index + 1}: ${opt.label})` : ''}! Tu viaje está pendiente de pago y tu Travel Partner ya fue avisado.${payload.payUrl ? (/\/contrato\//.test(payload.payUrl) ? ' Firma tu contrato para continuar con tu reserva.' : ' Continúa con tu reserva para asegurar precio y disponibilidad.') : ''}`, 'info');
       if (a.options.length > 1 && Number.isInteger(a.acceptedOption)) showTab(a.acceptedOption);
       return;
     }
@@ -166,8 +178,12 @@
     document.body.append(bar);
     const paint = () => {
       const opt = a.options[count > 1 ? state.tab : 0] || a.options[0];
-      bar.innerHTML = `<div><b>${count > 1 ? `Opción ${opt.index + 1}: ` : ''}${D.esc(opt.label)}</b><span>${opt.total ? `${fmtMoney(opt.total)} MXN` : ''}${count > 1 ? ' · cambia de opción con las pestañas de arriba' : ''}</span></div><button type="button" class="doc-btn coral" id="acceptOpen">${count > 1 ? 'Elegir esta opción' : 'Aceptar cotización'}</button>`;
+      bar.innerHTML = `<div><b>${count > 1 ? `Opción ${opt.index + 1}: ` : ''}${D.esc(opt.label)}</b><span>${opt.total ? `${fmtMoney(opt.total)} MXN` : ''}${count > 1 ? ' · cambia de opción con las pestañas de arriba' : ''}</span><button type="button" class="accept-more" id="acceptMore" aria-expanded="false">Ver resumen de esta opción ▾</button></div><button type="button" class="doc-btn coral" id="acceptOpen">${count > 1 ? 'Elegir esta opción' : 'Aceptar cotización'}</button>`;
       bar.querySelector('#acceptOpen').onclick = () => openAccept(payload, opt);
+      let panel = document.querySelector('#acceptDetail');
+      if (!panel) { panel = document.createElement('div'); panel.id = 'acceptDetail'; panel.className = 'accept-detail hidden'; document.body.append(panel); }
+      panel.innerHTML = `<b>Lo que incluye ${count > 1 ? `la opción ${opt.index + 1}` : 'tu cotización'}</b>${optionSummary(payload, opt)}`;
+      bar.querySelector('#acceptMore').onclick = (e) => { const open = panel.classList.toggle('hidden') === false; e.currentTarget.setAttribute('aria-expanded', String(open)); e.currentTarget.textContent = open ? 'Ocultar resumen ▴' : 'Ver resumen de esta opción ▾'; };
     };
     paint();
     $('#docTabs').addEventListener('click', () => setTimeout(paint, 0));
@@ -179,8 +195,9 @@
     wrap.innerHTML = `<form class="accept-card">
       <h3>Aceptar y apartar mi viaje</h3>
       <div class="accept-sum">${a.options.length > 1 ? `<small>Opción ${opt.index + 1} de ${a.options.length}</small>` : ''}<b>${D.esc(opt.label)}</b><span>${D.esc(payload.quote.destination)} · ${D.esc(payload.quote.folio)}</span>${opt.total ? `<strong>${fmtMoney(opt.total)} MXN</strong>` : ''}</div>
+      ${optionSummary(payload, opt)}
       <label>Tu nombre completo<input name="name" required minlength="3" maxlength="120" autocomplete="name" value="${D.esc(payload.client?.name || '')}"></label>
-      <label class="accept-check"><input type="checkbox" name="terms" required> Acepto esta propuesta, sus condiciones y políticas. Sé que los precios y la disponibilidad se garantizan al pagar el anticipo.</label>
+      <label class="accept-check"><input type="checkbox" name="terms" required> Acepto esta propuesta, sus condiciones y políticas. Sé que los precios y la disponibilidad se garantizan al realizar el pago de mi reserva.</label>
       <p class="accept-err hidden"></p>
       <div class="accept-acts"><button type="button" class="doc-btn ghost" data-x>Cancelar</button><button type="submit" class="doc-btn coral">Aceptar cotización</button></div>
     </form>`;
@@ -197,9 +214,9 @@
         const r = await api(`/api/public/quote/${shareToken}/accept`, { method: 'POST', body: JSON.stringify({ option: opt.index, name: form.name.value, terms: form.terms.checked }) });
         // TP-204: si la agencia pide contrato, primero se firma y después se paga el anticipo.
         const next = r.contractUrl
-          ? `<p>Para apartar tu viaje, firma tu contrato (2 minutos desde tu celular) y después paga tu anticipo:</p><a class="doc-btn coral" href="${D.esc(r.contractUrl)}">Firmar mi contrato</a>`
-          : r.payUrl ? `<p>Para apartar tu viaje y garantizar precio y disponibilidad, paga tu anticipo:</p><a class="doc-btn coral" href="${D.esc(r.payUrl)}">Pagar mi anticipo</a>` : '';
-        form.innerHTML = `<h3>🎉 ¡Listo, cotización aceptada!</h3><p>Tu Travel Partner ya recibió el aviso y te confirmará tu reserva.</p>${next}<div class="accept-acts"><button type="button" class="doc-btn ghost" data-x>Cerrar</button></div>`;
+          ? `<p>Siguiente paso: firma tu contrato (2 minutos desde tu celular) para continuar con tu reserva.</p><a class="doc-btn coral" href="${D.esc(r.contractUrl)}">Continuar con mi reserva</a>`
+          : r.payUrl ? `<p>Siguiente paso: continúa con tu reserva para asegurar precio y disponibilidad.</p><a class="doc-btn coral" href="${D.esc(r.payUrl)}">Continuar con mi reserva</a>` : '';
+        form.innerHTML = `<h3>🎉 ¡Todo listo, cotización aceptada!</h3><div class="accept-status"><span class="pill-wait">⏳ Pendiente de pago</span></div><p>Tu cotización a <b>${D.esc(payload.quote.destination)}</b> quedó aceptada y tu viaje está pendiente de pago. Tu Travel Partner recibió el aviso y te acompañará en cada paso hasta que regreses a casa.</p>${next}<div class="accept-acts"><button type="button" class="doc-btn ghost" data-x>Cerrar</button></div>`;
         const fresh = await api(`/api/public/quote/${shareToken}`);
         $('#docActions').innerHTML = '';
         renderPublicQuote(fresh);

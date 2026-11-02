@@ -9,7 +9,7 @@ const PRIORITIES = ['Alta', 'Media', 'Baja'];
 const LEAD_SOURCES = ['WhatsApp', 'Instagram', 'Facebook', 'Sitio web', 'Referido', 'Otro'];
 const QUOTE_STATUSES = ['Borrador', 'PDF generado', 'Enviada', 'Aceptada', 'Rechazada'];
 const QUOTE_MODES = ['Total', 'Por persona', 'Por noche'];
-const TRIP_STATUSES = ['Confirmado', 'Documentación pendiente', 'En viaje', 'Solicitar reseña', 'Postventa', 'Cerrado'];
+const TRIP_STATUSES = ['Pendiente de pago', 'Confirmado', 'Documentación pendiente', 'En viaje', 'Solicitar reseña', 'Postventa', 'Cerrado'];
 const FOLLOWUP_TYPES = ['Llamada', 'WhatsApp', 'Cotización', 'Pago', 'Otro'];
 
 const ENTITIES = {

@@ -108,7 +108,7 @@ test('TP-204: el cliente firma su contrato antes de pagar el anticipo', async (c
   const token = quote.pay_token;
   const qpub = await pub(ctx.baseUrl, 'GET', `/api/public/quote/${share}`);
   assert.equal(qpub.body.payUrl, `/contrato/${token}`);
-  assert.equal(qpub.body.payLabel, 'Firmar mi contrato y pagar');
+  assert.equal(qpub.body.payLabel, 'Continuar con mi reserva');
   assert.doesNotMatch(JSON.stringify(qpub.body), /"contract"|seller_commission/);
   const pay = await pub(ctx.baseUrl, 'GET', `/api/public/pay/${token}`);
   assert.deepEqual(pay.body.contract, { state: 'pending', url: `/contrato/${token}` });

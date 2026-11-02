@@ -2,7 +2,7 @@
 
 // Efectos de cambiar el estado de una cotización (los usa el CRM y la aceptación en línea del cliente, TP-203).
 
-const { nowCancun } = require('./crm-schema');
+const { nowCancun, sanitize } = require('./crm-schema');
 const hooks = require('./hooks');
 
 const str = (v) => String(v ?? '').trim();
@@ -28,6 +28,25 @@ function quoteOptions(quote) {
     const label = merged.hotel?.hotel ? `${merged.hotel.hotel}${merged.hotel.plan ? ` — ${merged.hotel.plan}` : ''}` : optionLabel(varying, merged);
     return { index, label: label || `Paquete a ${quote.destination}`, total: num(p?.price?.total) };
   });
+}
+
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Al aceptarse la cotización se crea el viaje (si no existe) para que el cliente lo vea en su portal como "Pendiente de pago". */
+async function ensureTripForQuote(dataStore, quote) {
+  const trips = (await dataStore.listRecords('trips')).filter((t) => t.quote_id === quote.id);
+  if (trips.length) return trips[0];
+  const lead = quote.lead_id ? await dataStore.getRecord('leads', quote.lead_id) : null;
+  const start = [quote.details?.startDate, lead?.start_date].find((d) => ISO.test(String(d || '')));
+  if (!start) return null; // sin fecha de salida no se puede armar el viaje: lo crea el vendedor a mano
+  let end = [quote.details?.endDate, lead?.end_date].find((d) => ISO.test(String(d || ''))) || start;
+  if (end < start) end = start;
+  const paid = Number(quote.payment_plan?.paid) > 0;
+  const data = sanitize('trips', { client_id: quote.client_id, quote_id: quote.id, destination: String(quote.destination || '').trim() || 'Por definir', start_date: start, end_date: end, status: paid ? 'Confirmado' : 'Pendiente de pago' });
+  const trip = await dataStore.insertRecord('trips', data, quote.owner_id || lead?.owner_id || null);
+  const client = await dataStore.getRecord('clients', quote.client_id);
+  await dataStore.logActivity(null, 'crm_trips_create', null, { entity: 'trips', entityId: trip.id, summary: [client?.name, trip.destination, trip.start_date].filter(Boolean).join(' · '), note: 'Viaje creado al aceptar la cotización (pendiente de pago)' });
+  return trip;
 }
 
 function createQuoteEffects(dataStore, { payments = null, onLeadUpdate = null } = {}) {
@@ -58,8 +77,12 @@ function createQuoteEffects(dataStore, { payments = null, onLeadUpdate = null } 
     if (payments && quote.status === 'Aceptada' && !quote.payment_plan) {
       try { quote = await payments.ensurePlan(quote); } catch (error) { console.error('Plan de pagos:', error.message); }
     }
+    // El viaje aparece en el portal del cliente desde que acepta, marcado como "Pendiente de pago" hasta su primer pago.
+    if (quote.status === 'Aceptada') {
+      try { await ensureTripForQuote(dataStore, quote); } catch (error) { console.error('Viaje automático:', error.message); }
+    }
     return quote;
   };
 }
 
-module.exports = { createQuoteEffects, quoteOptions, optionLabel };
+module.exports = { createQuoteEffects, quoteOptions, optionLabel, ensureTripForQuote };

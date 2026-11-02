@@ -62,7 +62,8 @@ function createPublicQuote(dataStore, assignment, { publicDirectory, payments = 
       // TP-201: si ya se aceptó, botón para pagar el anticipo / ver su plan de pagos
       // TP-204: si falta firmar el contrato, el botón lleva primero al contrato.
       payUrl: quote.status === 'Aceptada' && pay_token && payment_plan ? (TPContract.pending(quote) ? `/contrato/${pay_token}` : `/pagar/${pay_token}`) : null,
-      payLabel: payment_plan ? (TPContract.pending(quote) ? 'Firmar mi contrato y pagar' : payment_plan.paid > 0 ? 'Ver mi plan de pagos' : 'Pagar mi anticipo') : null,
+      payLabel: payment_plan ? (payment_plan.paid > 0 && !TPContract.pending(quote) ? 'Ver mi plan de pagos' : 'Continuar con mi reserva') : null,
+      tripPending: quote.status === 'Aceptada' && !(payment_plan && payment_plan.paid > 0),
       agency: { ...DEFAULT_AGENCY, ...((await dataStore.getSetting('agency')) || {}) },
       documents: { ...DEFAULT_DOCUMENTS, ...((await dataStore.getSetting('documents')) || {}) }
     };
