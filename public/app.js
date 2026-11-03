@@ -29,7 +29,15 @@ let loaded = false;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const money = (n) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(Number(n) || 0);
-const initials = (n) => String(n || '?').split(' ').filter(Boolean).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
+// Iniciales: primer nombre + primer apellido. Ignora partículas (de, del, la, los, y, van, von…).
+// 2–3 palabras: 1.ª y 2.ª ("Ana Pérez López" → AP). 4 o más: 1.ª y 3.ª ("Juan Carlos Pérez López" → JP).
+const initials = (n) => {
+  const seg = (s) => (typeof Intl !== 'undefined' && Intl.Segmenter ? [...new Intl.Segmenter('es', { granularity: 'grapheme' }).segment(s)].map((g) => g.segment)[0] : [...s][0]) || '';
+  const parts = String(n || '').trim().split(/\s+/).filter(Boolean).filter((w, i) => i === 0 || !/^(de|del|la|las|los|y|e|da|das|do|dos|van|von|der|di|le|el)$/i.test(w));
+  if (!parts.length) return '?';
+  const second = parts.length >= 4 ? parts[2] : parts[1];
+  return (seg(parts[0]) + (second ? seg(second) : '')).toLocaleUpperCase('es');
+};
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
 const ROLE_LABELS = { admin: 'Administrador', direccion: 'Dirección', travel_partner: 'Travel Partner', vendedor: 'Vendedor', operaciones: 'Operaciones', consulta: 'Consulta', proveedor: 'Proveedor' };
 const WRITE_RULES = {
