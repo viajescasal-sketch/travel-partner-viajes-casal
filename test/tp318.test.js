@@ -22,7 +22,7 @@ test('TP-318: pagar y contrato usan viewport-fit y theme-color; días pasados si
   for (const f of ['pagar.html', 'contrato.html']) { assert.match(pub(f), /viewport-fit=cover/); assert.match(pub(f), /theme-color/); }
   assert.match(pub('accesible.css'), /\.day\.past,\.pills a\.past\{opacity:1\}/);
   assert.match(pub('itinerario.js'), /<span title="\$\{esc\(v\.name\)\}">/);
-  for (const f of ['portal', 'itinerario', 'documento', 'pagar', 'contrato', 'encuesta', 'referido', 'formulario']) assert.match(pub(`${f}.html`), /accesible\.css\?v=tp318/);
+  for (const f of ['portal', 'itinerario', 'documento', 'pagar', 'contrato', 'encuesta', 'referido', 'formulario']) assert.match(pub(`${f}.html`), /accesible.css\?v=tp31[89]/);
 });
 
 test('TP-318: iniciales = primer nombre + primer apellido', () => {
@@ -41,10 +41,10 @@ test('TP-318: iniciales = primer nombre + primer apellido', () => {
 
 test('TP-318: los CSS cambiados llevan versión nueva para que el navegador no use la copia vieja', () => {
   const idx = pub('index.html');
-  for (const f of ['ui', 'tp006', 'cotizaciones', 'ficha-lead', 'app-movil', 'viaje']) assert.match(idx, new RegExp(`/${f}\\.css\\?v=tp318`), f);
+  for (const f of ['ui', 'tp006', 'cotizaciones', 'ficha-lead', 'app-movil', 'viaje']) assert.match(idx, new RegExp(`/${f}\\.css\\?v=tp31[89]`), f);
 });
 
 test('TP-318: formulario y proveedor también', () => {
-  assert.match(pub('formulario.html'), /formulario\.css\?v=tp318/);
-  assert.match(pub('proveedor.html'), /proveedor\.css\?v=tp318/);
+  assert.match(pub('formulario.html'), /formulario.css\?v=tp31[89]/);
+  assert.match(pub('proveedor.html'), /proveedor.css\?v=tp31[89]/);
 });

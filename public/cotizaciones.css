@@ -7,8 +7,8 @@
 .qv-seg button { border: 0; background: transparent; color: var(--muted); font-weight: 700; font-size: 12px; padding: 7px 12px; border-radius: 8px; cursor: pointer; }
 .qv-seg button.on { background: var(--surface); color: var(--navy); box-shadow: 0 2px 8px rgba(7, 59, 102, .12); }
 body.dark .qv-seg button.on { color: #fff; }
-.mini .qv-filter { cursor: pointer; transition: border-color .15s, transform .15s; }
-@media (hover:hover) and (pointer:fine){.mini .qv-filter:hover { border-color: var(--teal); transform: translateY(-1px); }}
+.mini .qv-filter { cursor: pointer; transition: border-color .15s ease-out; }
+@media (hover:hover) and (pointer:fine){.mini .qv-filter:hover { border-color: var(--teal); }}
 .mini .qv-filter.on { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(0, 184, 200, .25); color: var(--navy); }
 body.dark .mini .qv-filter.on { color: #fff; }
 .qv-active { grid-column: 1 / -1; font-size: 12px; color: var(--muted); margin: -4px 0 4px; }
@@ -16,7 +16,8 @@ body.dark .mini .qv-filter.on { color: #fff; }
 /* ---- Tarjetas compactas ---- */
 .qv-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
 .qv-card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px 14px 10px; box-shadow: var(--shadow); cursor: pointer; display: flex; flex-direction: column; gap: 4px; border-top: 4px solid var(--qv-accent, var(--border)); transition: transform .15s, box-shadow .15s; min-width: 0; }
-.qv-card:hover, .qv-card:focus-visible { transform: translateY(-2px); box-shadow: 0 16px 34px rgba(7, 59, 102, .14); outline: none; }
+@media (hover:hover) and (pointer:fine){.qv-card:hover { transform: translateY(-2px); box-shadow: 0 16px 34px rgba(7, 59, 102, .14); }}
+.qv-card:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 .s-new { --qv-accent: #7fb6d6; } .s-qualified { --qv-accent: var(--teal); } .s-quoted { --qv-accent: var(--gold); } .s-accepted { --qv-accent: #22a36f; } .s-lost { --qv-accent: #c9ced3; }
 .qv-card.is-dup { background: linear-gradient(0deg, rgba(246, 185, 59, .07), rgba(246, 185, 59, .07)), var(--surface); }
 .qv-top { display: flex; align-items: center; gap: 8px; }
@@ -60,7 +61,8 @@ body.dark .qv-chip.late { background: rgba(255, 121, 89, .16); color: #ff9a80; }
 .qv-table th { position: sticky; top: 0; background: var(--surface); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; z-index: 1; }
 .qv-table td { white-space: normal; vertical-align: middle; padding: 9px 10px; }
 .qv-row { cursor: pointer; transition: background .12s; }
-.qv-row:hover, .qv-row:focus-visible { background: rgba(0, 184, 200, .06); outline: none; }
+@media (hover:hover) and (pointer:fine){.qv-row:hover { background: rgba(0, 184, 200, .06); }}
+.qv-row:focus-visible { background: rgba(0, 184, 200, .06); outline: 2px solid var(--teal); outline-offset: -2px; }
 .qv-row.is-dup { background: rgba(246, 185, 59, .08); }
 .qv-row td small { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
 .qv-row .c-client b { color: var(--navy); }
@@ -77,8 +79,9 @@ body.dark .qv-row .c-client b { color: #fff; }
 .qv-group small { color: var(--muted); margin-left: 6px; }
 
 /* ---- Ficha rápida (panel lateral) ---- */
-.qv-drawer-bg { position: fixed; inset: 0; background: rgba(5, 20, 32, .38); z-index: 90; backdrop-filter: blur(1px); }
-.qv-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); background: var(--surface); z-index: 95; box-shadow: -18px 0 40px rgba(5, 20, 32, .22); transform: translateX(105%); transition: transform .22s ease; display: flex; flex-direction: column; }
+.qv-drawer-bg { position: fixed; inset: 0; background: rgba(5, 20, 32, .38); z-index: 90; backdrop-filter: blur(1px); opacity: 1; transition: opacity .2s ease-out; }
+@starting-style { .qv-drawer-bg { opacity: 0; } }
+.qv-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); background: var(--surface); z-index: 95; box-shadow: -18px 0 40px rgba(5, 20, 32, .22); transform: translateX(105%); transition: transform .22s cubic-bezier(.32,.72,0,1); display: flex; flex-direction: column; }
 .qv-drawer.open { transform: none; }
 .qv-dh { padding: 20px 20px 16px; background: linear-gradient(135deg, var(--navy), #0b5a8a); color: #fff; display: flex; gap: 10px; align-items: flex-start; border-bottom: 4px solid var(--qv-accent, var(--teal)); }
 .qv-dh .eyebrow { color: #9fe6ee; margin-bottom: 4px; }

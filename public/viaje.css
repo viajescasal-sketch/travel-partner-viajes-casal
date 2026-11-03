@@ -250,8 +250,8 @@ body.dark .ref-box { background: rgba(0, 184, 200, .12); }
 .au-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
 .au-switch { position: relative; width: 40px; height: 22px; display: inline-block; margin-top: 2px; }
 .au-switch input { opacity: 0; width: 0; height: 0; }
-.au-switch span { position: absolute; inset: 0; background: var(--border); border-radius: 22px; transition: .2s; cursor: pointer; }
-.au-switch span::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+.au-switch span { position: absolute; inset: 0; background: var(--border); border-radius: 22px; transition: background-color .15s ease; cursor: pointer; }
+.au-switch span::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .15s cubic-bezier(.23,1,.32,1); }
 .au-switch input:checked + span { background: var(--teal); }
 .au-switch input:checked + span::before { transform: translateX(18px); }
 .au-h { margin: 18px 0 8px; font-size: 14px; color: var(--navy, #073b66); }

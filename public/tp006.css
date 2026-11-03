@@ -4,7 +4,6 @@
 .logo.big { border: 0; }
 
 .modal.wide { width: min(1080px, 100%); }
-.modal-bg .modal { transition: width .15s; }
 
 /* Editor del cotizador y de la confirmación */
 .cz { display: grid; gap: 14px; }
@@ -132,7 +131,7 @@ body.dark .doc-settings legend { color: #fff; }
 .qual-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .qual-score { font-weight: 800; font-size: 13px; }
 .qual-bar { height: 8px; border-radius: 6px; background: var(--border); overflow: hidden; }
-.qual-bar i { display: block; height: 100%; border-radius: 6px; transition: width .2s; }
+.qual-bar i { display: block; height: 100%; border-radius: 6px; transition: width .2s cubic-bezier(.23,1,.32,1); }
 .qual-q { display: grid; gap: 6px; }
 .qual-q .qual-label { font-size: 12px; font-weight: 700; }
 .qual-q .qual-label small { font-weight: 600; color: var(--muted); margin-left: 6px; }
@@ -589,8 +588,7 @@ body.dark .dupe-banner { background: rgba(246,185,59,.1); }
 /* ===== Menú lateral colapsable (escritorio) ===== */
 @media (min-width: 801px) {
   #menu.mobile { display: grid; }
-  .platform, aside { transition: grid-template-columns .2s ease, width .2s ease, padding .2s ease; }
-
+  
   body.nav-collapsed .platform { grid-template-columns: 76px 1fr; }
   body.nav-collapsed aside { width: 76px; padding-left: 10px; padding-right: 10px; }
 

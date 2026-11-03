@@ -54,7 +54,7 @@
         const out = await r.json();
         if (!r.ok || !out.ok) throw new Error(out.error || 'No se pudo enviar');
         data = out; thanks(true);
-        scrollTo({ top: 0, behavior: 'smooth' });
+        scrollTo({ top: 0, behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth') });
       } catch (error) { $('#err').textContent = error.message; btn.disabled = false; }
     };
   }
