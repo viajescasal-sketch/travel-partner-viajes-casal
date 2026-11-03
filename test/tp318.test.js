@@ -24,3 +24,17 @@ test('TP-318: pagar y contrato usan viewport-fit y theme-color; días pasados si
   assert.match(pub('itinerario.js'), /<span title="\$\{esc\(v\.name\)\}">/);
   for (const f of ['portal', 'itinerario', 'documento', 'pagar', 'contrato', 'encuesta', 'referido', 'formulario']) assert.match(pub(`${f}.html`), /accesible\.css\?v=tp318/);
 });
+
+test('TP-318: iniciales = primer nombre + primer apellido', () => {
+  const src = pub('app.js');
+  const start = src.indexOf('const initials = ');
+  const end = src.indexOf('\n};', start) + 3;
+  const initials = new Function(`${src.slice(start, end)}; return initials;`)();
+  assert.equal(initials('Ana Pérez López'), 'AP');
+  assert.equal(initials('Juan Carlos Pérez López'), 'JP');
+  assert.equal(initials('María de la Cruz'), 'MC');
+  assert.equal(initials('Jo'), 'J');
+  assert.equal(initials('aleksandra wiśniewska-kowalczyk'), 'AW');
+  assert.equal(initials('  '), '?');
+  assert.equal(initials(null), '?');
+});

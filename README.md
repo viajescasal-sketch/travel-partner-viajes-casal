@@ -466,4 +466,5 @@ En `.claude/skills/` hay dos skills de terceros para trabajar la interfaz del CR
 - `pagar.html` y `contrato.html`: `viewport-fit=cover` y `theme-color`.
 - Itinerario: días pasados sin bajar el contraste del texto, nombres de archivo hasta 2 líneas con `title`, pestañas de días con `scroll-snap`.
 - `ui.css`: `transition: all` del tour guiado reemplazada por propiedades explícitas.
-- Pendiente (decisión de Joel): panel del equipo en celular, paginación de listas largas, iniciales del avatar.
+- Iniciales del avatar: primer nombre + primer apellido (ignora de/del/la/los…).
+- Pendiente: paginar listas largas (revisar en febrero 2027 o al pasar de ~300 registros). Panel en celular: no necesario por ahora (se usa en PC y tablet).
