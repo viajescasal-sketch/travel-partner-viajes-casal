@@ -458,3 +458,5 @@ En `.claude/skills/` hay dos skills de terceros para trabajar la interfaz del CR
 - Contrato: la cláusula de precio ahora usa `{pago_inicial}` ("el anticipo de $X" o "el pago total de $X"), así que con "Pago total" ya no menciona anticipo. `{anticipo}` sigue disponible para textos personalizados.
 - Íconos de redes también en las páginas de pago y contrato (se agregó `documents` a sus datos públicos).
 - Tipografía con serif (Georgia) en títulos del portal, itinerario y pago, como el PDF y la cotización; sin franja lateral gruesa en tarjetas; botones de la página de pago con contraste AA.
+
+**Skills de Emil Kowalski** (MIT, github.com/emilkowalski/skills): 17 skills de diseño y movimiento para la interfaz (emil-design-eng, animate, mobile-native, break-ui, review-animations, animation-performance, etc.) en `.claude/skills/`. También son solo herramientas de desarrollo.
