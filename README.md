@@ -470,3 +470,12 @@ En `.claude/skills/` hay dos skills de terceros para trabajar la interfaz del CR
 - `ui.css`: `transition: all` del tour guiado reemplazada por propiedades explícitas.
 - Iniciales del avatar: primer nombre + primer apellido (ignora de/del/la/los…).
 - Pendiente: paginar listas largas (revisar en febrero 2027 o al pasar de ~300 registros). Panel en celular: no necesario por ahora (se usa en PC y tablet).
+
+## TP-319 · Movimiento del panel (revisión con review-animations)
+
+- Navegar por el menú ya no hace scroll animado; el panel respeta "reducir movimiento" (`ui.css`) y los scrolls suaves de formulario, encuesta y contrato también.
+- Sin animación de layout al colapsar el menú ni al cambiar el ancho del modal.
+- Cajón de cotizaciones y menú móvil con curva tipo iOS; el fondo oscuro del cajón aparece con fundido.
+- Tarjetas de cotización: hover solo con mouse; chips de filtro sin salto.
+- Tour guiado: hueco y tarjeta con la misma curva. Toggle y barra offline con propiedades y curvas explícitas.
+- Avatares animados solo en el perfil y en el selector de avatar (quietos en listas, kanban y campanita).

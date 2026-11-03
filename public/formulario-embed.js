@@ -30,7 +30,7 @@
     if (data.height) frame.style.height = Math.max(400, Math.min(4000, Number(data.height) || 0)) + 'px';
     if (data.scroll) {
       var top = frame.getBoundingClientRect().top;
-      if (top < 0 || top > window.innerHeight * 0.6) frame.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (top < 0 || top > window.innerHeight * 0.6) frame.scrollIntoView({ behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'), block: 'start' });
     }
   });
 }());

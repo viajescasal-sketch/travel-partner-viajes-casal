@@ -1,7 +1,7 @@
 /* TP-312 · App instalable */
 #appBtn { position: relative; }
 #appBtn em { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--coral); }
-.offline-bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%) translateY(150%); z-index: 130; max-width: min(560px, calc(100% - 24px)); background: #3b2a12; color: #fff3dc; border-left: 4px solid var(--gold); border-radius: 12px; padding: 10px 14px; font-size: 13px; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); transition: transform .25s; pointer-events: none; }
+.offline-bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%) translateY(150%); z-index: 130; max-width: min(560px, calc(100% - 24px)); background: #3b2a12; color: #fff3dc; border-left: 4px solid var(--gold); border-radius: 12px; padding: 10px 14px; font-size: 13px; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); transition: transform .25s cubic-bezier(.23,1,.32,1); pointer-events: none; }
 .offline-bar.show { transform: translateX(-50%) translateY(0); }
 body.is-offline .toasts { bottom: 74px; }
 .app-ok { font-weight: 700; color: #18815d; }

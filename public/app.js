@@ -3408,7 +3408,7 @@ function navigate(page) {
   if (page === 'clients') renderDuplicatesBanner();
   if (page === 'settings' && currentUser?.role === 'direccion') showSettingsTab(ui.settingsTab); // la Dirección solo ve asignación y metas
   $('#sidebar').classList.remove('open');
-  scrollTo({ top: 0, behavior: 'smooth' });
+  scrollTo({ top: 0, behavior: 'instant' });
 }
 function toast(text, ms = 3200) {
   const el = document.createElement('div');

@@ -94,7 +94,7 @@
         if (!r.ok || !out.ok) throw new Error(out.error || 'No pudimos registrar tu firma');
         data = out;
         render(`<div class="note ok">✅ ¡Listo! Tu contrato quedó firmado.${out.emailed ? ' Te enviamos una copia por correo.' : ''} ${out.balance > 0.5 ? 'Ya puedes pagar tu anticipo.' : ''}</div>`);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth') });
       } catch (error) { show(error.message); btn.disabled = false; btn.textContent = 'Firmar contrato'; }
     };
   }

@@ -133,7 +133,7 @@
     $('#wfBar').style.width = `${Math.round((index / STEPS.length) * 100)}%`;
     const first = $('#wfStep input:not([type=hidden]), #wfStep textarea');
     if (first && index === 0 && !embed) first.focus();
-    if (scroll) { if (embed) { window.scrollTo(0, 0); postHeight(true); } else window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (scroll) { if (embed) { window.scrollTo(0, 0); postHeight(true); } else window.scrollTo({ top: 0, behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth') }); }
   }
 
   function readInputs() {
@@ -238,7 +238,7 @@
       <p>Ya recibimos tu información. En menos de 15 minutos alguien de nuestro equipo te escribe por WhatsApp con tu propuesta.</p>
       <p><b>Viajar tranquilo también se planea.</b></p>
       ${number ? `<a class="wf-btn wa" href="https://wa.me/${esc(number)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">💬 Escríbenos por WhatsApp</a>` : ''}</div>`;
-    if (embed) { window.scrollTo(0, 0); postHeight(true); } else window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (embed) { window.scrollTo(0, 0); postHeight(true); } else window.scrollTo({ top: 0, behavior: (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth') });
   }
 
   // ---------- Inicio ----------
