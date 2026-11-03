@@ -38,3 +38,13 @@ test('TP-318: iniciales = primer nombre + primer apellido', () => {
   assert.equal(initials('  '), '?');
   assert.equal(initials(null), '?');
 });
+
+test('TP-318: los CSS cambiados llevan versión nueva para que el navegador no use la copia vieja', () => {
+  const idx = pub('index.html');
+  for (const f of ['ui', 'tp006', 'cotizaciones', 'ficha-lead', 'app-movil', 'viaje']) assert.match(idx, new RegExp(`/${f}\\.css\\?v=tp318`), f);
+});
+
+test('TP-318: formulario y proveedor también', () => {
+  assert.match(pub('formulario.html'), /formulario\.css\?v=tp318/);
+  assert.match(pub('proveedor.html'), /proveedor\.css\?v=tp318/);
+});
