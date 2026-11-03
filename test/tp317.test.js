@@ -11,7 +11,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
 
 test('TP-317: las páginas del cliente cargan accesible.css y los botones cumplen contraste AA', () => {
   for (const f of ['portal', 'itinerario', 'documento', 'pagar', 'contrato', 'encuesta', 'referido', 'formulario']) {
-    assert.match(pub(`${f}.html`), /\/accesible\.css\?v=tp317/, `${f}.html`);
+    assert.match(pub(`${f}.html`), /\/accesible\.css\?v=tp31[78]/, `${f}.html`);
   }
   const css = pub('accesible.css');
   const hex = (name) => css.match(new RegExp(`--${name}:(#[0-9a-f]{6})`, 'i'))[1];

@@ -460,3 +460,13 @@ En `.claude/skills/` hay dos skills de terceros para trabajar la interfaz del CR
 - Tipografía con serif (Georgia) en títulos del portal, itinerario y pago, como el PDF y la cotización; sin franja lateral gruesa en tarjetas; botones de la página de pago con contraste AA.
 
 **Skills de Emil Kowalski** (MIT, github.com/emilkowalski/skills): 17 skills de diseño y movimiento para la interfaz (emil-design-eng, animate, mobile-native, break-ui, review-animations, animation-performance, etc.) en `.claude/skills/`. También son solo herramientas de desarrollo.
+
+## TP-318 · Pulido móvil (revisión con skills de diseño)
+
+- Estado al presionar (`scale(.97)`), sin destello gris al tocar y `touch-action: manipulation` en botones y pestañas (`accesible.css`, `ui.css`).
+- Los `:hover` simples solo aplican con mouse (`@media (hover:hover) and (pointer:fine)`), para que no se queden pegados en el celular.
+- `pagar.html` y `contrato.html`: `viewport-fit=cover` y `theme-color`.
+- Itinerario: días pasados sin bajar el contraste del texto, nombres de archivo hasta 2 líneas con `title`, pestañas de días con `scroll-snap`.
+- `ui.css`: `transition: all` del tour guiado reemplazada por propiedades explícitas.
+- Iniciales del avatar: primer nombre + primer apellido (ignora de/del/la/los…).
+- Pendiente: paginar listas largas (revisar en febrero 2027 o al pasar de ~300 registros). Panel en celular: no necesario por ahora (se usa en PC y tablet).

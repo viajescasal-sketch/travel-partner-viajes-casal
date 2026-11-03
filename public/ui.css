@@ -1,9 +1,11 @@
+html{-webkit-tap-highlight-color:transparent}
+button,a,select{touch-action:manipulation}
 /* Diseño: menú lateral que se ajusta a cualquier alto de pantalla, íconos uniformes, avatares y recorrido guiado. */
 
 /* ---------- Íconos ---------- */
 .ic { width: 1.15em; height: 1.15em; flex: none; vertical-align: -0.2em; }
 .icon { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; padding: 0; }
-.icon:hover { background: var(--bg); }
+@media (hover:hover) and (pointer:fine){.icon:hover { background: var(--bg); }}
 .icon .ic { width: 20px; height: 20px; }
 #theme .ic-sun { display: none; }
 body.dark #theme .ic-sun { display: block; }
@@ -31,7 +33,7 @@ aside nav button.active .ic { color: var(--teal); opacity: 1; }
 .help .btn { width: 100%; }
 .profile { padding: 12px 2px 4px; gap: 8px; }
 .profile .icon { color: #c8dce7; width: 34px; height: 34px; }
-.profile .icon:hover { background: rgba(255,255,255,.1); color: #fff; }
+@media (hover:hover) and (pointer:fine){.profile .icon:hover { background: rgba(255,255,255,.1); color: #fff; }}
 .profile-avatar { position: relative; border: 0; padding: 0; background: transparent; cursor: pointer; border-radius: 50%; flex: none; }
 .profile-avatar #profileInitial { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--coral); color: #fff; font-weight: 800; overflow: hidden; }
 .profile-avatar #profileInitial.has-av { background: transparent; }
@@ -91,7 +93,7 @@ aside nav button.active .ic { color: var(--teal); opacity: 1; }
 .av-actions .btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .av-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
 .av-opt { border: 2px solid transparent; background: var(--bg); border-radius: 14px; padding: 10px 6px 8px; display: grid; justify-items: center; gap: 4px; cursor: pointer; color: var(--text); }
-.av-opt:hover { border-color: var(--border); }
+@media (hover:hover) and (pointer:fine){.av-opt:hover { border-color: var(--border); }}
 .av-opt.on { border-color: var(--teal); background: rgba(0,184,200,.08); }
 .av-opt small { font-size: 11px; color: var(--muted); }
 @media (max-width: 520px) { .av-pick .av-current { flex-direction: column; text-align: center; } .av-actions { justify-content: center; } }
@@ -99,9 +101,9 @@ aside nav button.active .ic { color: var(--teal); opacity: 1; }
 /* ---------- Recorrido guiado ---------- */
 .guide-btn { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-left: 10px; vertical-align: middle; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--teal); cursor: pointer; padding: 0; }
 .guide-btn .ic { width: 17px; height: 17px; }
-.guide-btn:hover { background: rgba(0,184,200,.1); }
+@media (hover:hover) and (pointer:fine){.guide-btn:hover { background: rgba(0,184,200,.1); }}
 #tourLayer { position: fixed; inset: 0; z-index: 1000; }
-.tour-hole { position: fixed; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(5,22,38,.62); pointer-events: none; transition: all .25s ease; outline: 2px solid var(--teal); outline-offset: 2px; }
+.tour-hole { position: fixed; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(5,22,38,.62); pointer-events: none; transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease; outline: 2px solid var(--teal); outline-offset: 2px; }
 .tour-card { position: fixed; width: min(360px, calc(100vw - 24px)); background: var(--surface); color: var(--text); border-radius: 16px; padding: 16px 18px; box-shadow: 0 20px 50px rgba(0,0,0,.3); transition: top .25s, left .25s; }
 .tour-top { display: flex; align-items: center; gap: 8px; color: var(--teal); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .tour-top .ic { width: 18px; height: 18px; }
