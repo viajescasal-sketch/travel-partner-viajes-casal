@@ -138,7 +138,7 @@ body.dark .doc-settings legend { color: #fff; }
 .qual-q .qual-label small { font-weight: 600; color: var(--muted); margin-left: 6px; }
 .qual-btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .qual-btns button { border: 1.5px solid var(--border); background: var(--surface); color: var(--text); border-radius: 18px; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
-.qual-btns button:hover { border-color: #4fa8a0; }
+@media (hover:hover) and (pointer:fine){.qual-btns button:hover { border-color: #4fa8a0; }}
 .qual-btns button.on { background: #1f4e4a; border-color: #1f4e4a; color: #fff; }
 .lvl-hot { color: #b13e3e; } .lvl-warm { color: #b07a00; } .lvl-cold { color: #1677a8; }
 .bar-hot { background: #e2794f; } .bar-warm { background: #f6b93b; } .bar-cold { background: #7fb3d5; }
@@ -216,7 +216,7 @@ body.dark .kb-col .kb-head b { color: #fff; }
 .kb-empty { text-align: center; color: var(--muted); font-size: 11px; border: 1.5px dashed var(--border); border-radius: 10px; padding: 16px 6px; margin: 0; }
 .kb-card { min-width: 0; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--teal); border-radius: 10px; padding: 10px 10px 8px; cursor: pointer; box-shadow: 0 2px 6px rgba(7,59,102,.06); }
 .kb-card[draggable=true] { cursor: grab; }
-.kb-card:hover { border-color: var(--teal); }
+@media (hover:hover) and (pointer:fine){.kb-card:hover { border-color: var(--teal); }}
 .kb-card:focus-visible { outline: 3px solid rgba(0,184,200,.35); }
 .kb-card.late { border-left-color: #d64545; }
 .kb-card.dragging { opacity: .45; }
@@ -265,7 +265,7 @@ body.dark .kb-lost { background: rgba(214,69,69,.1); color: #f2a7a7; }
 .bell-avail small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
 .bell-list { display: grid; gap: 4px; }
 .bell-item { text-align: left; border: 0; background: transparent; border-radius: 10px; padding: 9px 10px; cursor: pointer; color: var(--text); display: grid; gap: 2px; }
-.bell-item:hover { background: var(--bg); }
+@media (hover:hover) and (pointer:fine){.bell-item:hover { background: var(--bg); }}
 .bell-item b { font-size: 12px; font-weight: 600; }
 .bell-item.unread { background: #e8f8fa; }
 body.dark .bell-item.unread { background: rgba(0,184,200,.14); }
@@ -273,7 +273,7 @@ body.dark .bell-item.unread { background: rgba(0,184,200,.14); }
 .bell-item small { font-size: 11px; color: var(--muted); }
 .bell-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 18px 0; }
 button.kb-owner { border: 0; cursor: pointer; padding: 0; }
-button.kb-owner:hover { outline: 2px solid var(--teal); }
+@media (hover:hover) and (pointer:fine){button.kb-owner:hover { outline: 2px solid var(--teal); }}
 .as-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
 .as-mode { display: flex; gap: 10px; border: 1.5px solid var(--border); border-radius: 12px; padding: 12px; cursor: pointer; }
 .as-mode:has(input:checked) { border-color: var(--teal); background: #e8f8fa; }
@@ -316,7 +316,7 @@ body.dark .as-mode:has(input:checked) { background: rgba(0,184,200,.12); }
 
 .cal-ev { display: block; position: relative; background: color-mix(in srgb, var(--ev) 14%, var(--surface)); border-left: 3px solid var(--ev); border-radius: 6px; padding: 3px 6px; font-size: 10px; line-height: 1.3; color: var(--text); cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cal-ev[draggable="true"] { cursor: grab; }
-.cal-ev:hover { filter: brightness(.97); box-shadow: 0 2px 6px rgba(7,59,102,.15); }
+@media (hover:hover) and (pointer:fine){.cal-ev:hover { filter: brightness(.97); box-shadow: 0 2px 6px rgba(7,59,102,.15); }}
 .cal-ev .t { font-weight: 800; color: var(--muted); }
 .cal-ev b { font-weight: 700; }
 .cal-ev small { display: block; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
@@ -332,7 +332,7 @@ body.cal-dragging .cal-place, body.cal-dragging .cal-cell .cal-ev { pointer-even
 .cal-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .cal-wd { font-size: 10px; font-weight: 800; color: var(--muted); text-align: center; padding: 2px 0 4px; }
 .cal-cell { min-height: 96px; background: var(--bg); border: 1px solid transparent; border-radius: 9px; padding: 4px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; min-width: 0; }
-.cal-cell:hover { border-color: var(--border); }
+@media (hover:hover) and (pointer:fine){.cal-cell:hover { border-color: var(--border); }}
 .cal-cell.out { opacity: .45; }
 .cal-cell.selected { border-color: var(--teal); }
 .cal-cell .n { font-size: 11px; font-weight: 800; color: var(--muted); width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; }
@@ -477,7 +477,7 @@ body.dark .c360-pinned { background: rgba(246,185,59,.08); }
 .tl-item.payment .tl-icon { background: #e8f7ef; } .tl-item.message .tl-icon { background: #e3f7ee; } .tl-item.review .tl-icon { background: #fff5d9; } .tl-item.quote .tl-icon { background: #eaf7ff; } .tl-item.trip .tl-icon { background: #e8f8fa; }
 .tl-main { min-width: 0; }
 .tl-main[role=button] { cursor: pointer; }
-.tl-main[role=button]:hover b { color: var(--teal); }
+@media (hover:hover) and (pointer:fine){.tl-main[role=button]:hover b { color: var(--teal); }}
 .tl-main b { font-size: 13px; }
 .tl-main small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .tl-body { margin: 5px 0 0; font-size: 12px; color: var(--text); background: var(--bg); border-radius: 8px; padding: 7px 9px; white-space: pre-wrap; max-height: 140px; overflow: auto; }
@@ -655,7 +655,7 @@ body.role-vendedor .pt-box [data-pt-price] { display: none !important; }
 /* Tablero de viajes compacto: nombre + resumen; ventana emergente al hacer clic; scroll si hay más de 3 */
 .trip-board #upcoming, .trip-board #activeTrips, .trip-board #pastTrips { max-height: 212px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 4px; }
 .trip-mini { padding: 9px 12px; margin-bottom: 8px; height: 62px; display: flex; flex-direction: column; justify-content: center; gap: 3px; cursor: pointer; }
-.trip-mini:hover { border-color: var(--teal); }
+@media (hover:hover) and (pointer:fine){.trip-mini:hover { border-color: var(--teal); }}
 .trip-mini .tm-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .trip-mini .tm-top b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trip-mini .tm-top small { font-size: 10px; white-space: nowrap; }

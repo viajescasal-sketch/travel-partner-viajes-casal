@@ -20,7 +20,7 @@ button, input, select, textarea { font: inherit; }
 .pv-menu { position: absolute; right: 0; top: 46px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 8px; min-width: 220px; display: grid; }
 .pv-menu p { margin: 4px 8px 8px; font-size: 12px; color: var(--muted); }
 .pv-menu button { border: 0; background: transparent; text-align: left; padding: 10px; border-radius: 8px; cursor: pointer; color: var(--text); }
-.pv-menu button:hover { background: var(--bg); }
+@media (hover:hover) and (pointer:fine){.pv-menu button:hover { background: var(--bg); }}
 
 .pv-tabs { position: sticky; top: 58px; z-index: 20; display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .pv-tabs button { border: 0; background: transparent; padding: 9px 12px; border-radius: 10px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }

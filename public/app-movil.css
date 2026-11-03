@@ -33,7 +33,7 @@ body.is-offline .toasts { bottom: 74px; }
 .hc-cat { margin: 8px 2px 0; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--teal); }
 .hc-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .hc-item { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; text-align: left; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 12px; padding: 10px 12px; cursor: pointer; }
-.hc-item:hover { border-color: var(--teal); background: rgba(0, 184, 200, .06); }
+@media (hover:hover) and (pointer:fine){.hc-item:hover { border-color: var(--teal); background: rgba(0, 184, 200, .06); }}
 .hc-item b { font-size: 13px; }
 .hc-item small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
 .hc-ico { font-size: 22px; width: 36px; height: 36px; display: grid; place-items: center; background: var(--bg); border-radius: 10px; }

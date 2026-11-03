@@ -17,7 +17,7 @@
 /* Barra de etapas */
 .lf-stages { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
 .lf-stages button { flex: 1 0 auto; border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 10px; padding: 9px 12px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-.lf-stages button:hover { border-color: var(--teal); color: var(--text); }
+@media (hover:hover) and (pointer:fine){.lf-stages button:hover { border-color: var(--teal); color: var(--text); }}
 .lf-stages button.done { background: rgba(0, 184, 200, .08); color: #007985; border-color: rgba(0, 184, 200, .35); }
 .lf-stages button.on { background: linear-gradient(135deg, var(--teal), #058ab6); color: #fff; border-color: transparent; }
 .lf-stages button.lost { flex: 0 0 auto; color: #b13e3e; }
@@ -28,7 +28,7 @@
 .lf-actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .lf-actions button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 12px; padding: 10px 6px; font-size: 11px; font-weight: 700; cursor: pointer; display: grid; justify-items: center; gap: 4px; text-align: center; line-height: 1.2; }
 .lf-actions button span { font-size: 20px; }
-.lf-actions button:hover { border-color: var(--teal); background: rgba(0, 184, 200, .06); }
+@media (hover:hover) and (pointer:fine){.lf-actions button:hover { border-color: var(--teal); background: rgba(0, 184, 200, .06); }}
 
 /* Pestañas */
 .lf-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
