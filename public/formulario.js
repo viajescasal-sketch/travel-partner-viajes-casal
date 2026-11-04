@@ -227,6 +227,7 @@
   }
 
   function done(number) {
+    if (window.fbq) window.fbq('track', 'Lead'); // Pixel de Meta: solicitud enviada
     const first = String(s.nombre || '').trim().split(/\s+/)[0];
     const dmy = (iso) => iso.split('-').reverse().join('/');
     const fechas = s.llegada ? ` del ${dmy(s.llegada)}${s.regreso ? ` al ${dmy(s.regreso)}` : ''}` : '';

@@ -362,7 +362,12 @@ async function createApp(options = {}) {
   const formPage = path.join(publicDirectory, 'formulario.html');
   app.get(['/formulario', '/formulario.html'], (req, res) => {
     res.removeHeader('X-Frame-Options');
-    res.setHeader('Content-Security-Policy', String(res.getHeader('Content-Security-Policy') || '').replace("frame-ancestors 'none'", 'frame-ancestors *'));
+    // El formulario carga el Pixel de Meta (solo esta página): se permiten únicamente los dominios de Meta que necesita.
+    res.setHeader('Content-Security-Policy', String(res.getHeader('Content-Security-Policy') || '')
+      .replace("frame-ancestors 'none'", 'frame-ancestors *')
+      .replace("script-src 'self'", "script-src 'self' https://connect.facebook.net")
+      .replace("img-src 'self'", "img-src 'self' https://www.facebook.com")
+      .replace("connect-src 'self'", "connect-src 'self' https://www.facebook.com https://connect.facebook.net"));
     res.set('Cache-Control', 'no-cache');
     res.sendFile(formPage);
   });
