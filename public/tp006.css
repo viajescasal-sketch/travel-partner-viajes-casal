@@ -184,6 +184,7 @@ body.role-consulta #exportBtn { display: none; }
 
 /* TP-102 formulario web */
 .bot-chip.web { background: #e8f1ff; color: #1f5fbf; }
+.bot-chip.origin { background: #fde8f2; color: #a3236a; }
 .bot-row input[type=checkbox] { width: auto; margin: 0; }
 .bot-row .wf-wa { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 8px; width: 170px; }
 #webformCard .int-side { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
