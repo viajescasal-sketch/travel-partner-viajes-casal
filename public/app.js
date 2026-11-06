@@ -320,7 +320,7 @@ function renderLeads() {
   const cols = admin ? 7 : 6;
   $('#leadRows').innerHTML = list.length ? list.map((l) => {
     const badge = shared.has(l.client_id) ? '<span class="badge-shared" title="Este cliente tiene leads con más de un vendedor">Cliente compartido</span>' : '';
-    return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}${String(l.notes || '').includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip" title="Llegó por el bot de WhatsApp">🤖 Bot</span>' : ''}${String(l.notes || '').includes('🌐 Formulario web') ? '<span class="bot-chip web" title="Llegó por el formulario web">🌐 Web</span>' : ''}${qualChip(l)}${typeof customChipsHtml === 'function' ? customChipsHtml('leads', l) : ''}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
+    return `<tr class="clickable" data-lead="${l.id}"><td>${clientCell(clientById(l.client_id))}</td><td>${escapeHtml(l.destination)}${badge}${String(l.notes || '').includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip" title="Llegó por el bot de WhatsApp">🤖 Bot</span>' : ''}${String(l.notes || '').includes('🌐 Formulario web') ? '<span class="bot-chip web" title="Llegó por el formulario web">🌐 Web</span>' : ''}${sourceChip(l)}${qualChip(l)}${typeof customChipsHtml === 'function' ? customChipsHtml('leads', l) : ''}</td><td>${escapeHtml(fmtRange(l.start_date, l.end_date))}</td><td><span class="status ${statusClass(l.stage)}">${escapeHtml(l.stage)}</span></td><td>${escapeHtml(l.priority)}</td>${admin ? `<td>${escapeHtml(userName(l.owner_id))}</td>` : ''}<td>${escapeHtml(fmtDue(nextFollowupFor(l.id)?.due_at))}</td></tr>`;
   }).join('') : emptyRow(cols, db.leads.length ? 'Ningún lead coincide con la búsqueda.' : 'Aún no hay leads registrados.');
 }
 /* ---------- tablero Kanban de oportunidades (TP-103) ---------- */
@@ -351,7 +351,7 @@ function boardCard(l, admin) {
   const next = nextFollowupFor(l.id);
   const overdue = next && next.due_at.slice(0, 16) < nowLocal().toISOString().slice(0, 16).replace('T', ' ');
   const notes = String(l.notes || '');
-  const chips = `${contactChip(l)}${notes.includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip">🤖 Bot</span>' : ''}${notes.includes('🌐 Formulario web') ? '<span class="bot-chip web">🌐 Web</span>' : ''}${qualChip(l)}${typeof customChipsHtml === 'function' ? customChipsHtml('leads', l) : ''}`;
+  const chips = `${contactChip(l)}${notes.includes('🤖 Bot de WhatsApp') ? '<span class="bot-chip">🤖 Bot</span>' : ''}${notes.includes('🌐 Formulario web') ? '<span class="bot-chip web">🌐 Web</span>' : ''}${sourceChip(l)}${qualChip(l)}${typeof customChipsHtml === 'function' ? customChipsHtml('leads', l) : ''}`;
   const value = boardValue(l);
   const canMove = canWrite('leads');
   return `<div class="kb-card${late ? ' late' : ''}" data-lead="${l.id}"${canMove ? ' draggable="true"' : ''} tabindex="0" aria-label="${escapeHtml(`${c?.name || ''}, ${l.destination}, ${l.stage}`)}">
@@ -2724,6 +2724,13 @@ function scoreAnswers(answers) {
   });
   const score = answeredCount && max ? Math.round((points / max) * 100) : null;
   return { score, answered: answeredCount, total: qs.length, level: score == null ? null : score >= 70 ? 'Caliente' : score >= 40 ? 'Tibio' : 'Frío' };
+}
+// Origen del lead (red social, Maps, blog, referido…). WhatsApp es el valor por omisión y "Sitio web" ya lo marca el chip Web.
+function sourceChip(lead) {
+  const src = lead && lead.source;
+  if (!src || src === 'WhatsApp') return '';
+  if (src === 'Sitio web' && String(lead.notes || '').includes('🌐 Formulario web')) return '';
+  return `<span class="bot-chip origin" title="Origen del lead">📍 ${escapeHtml(src)}</span>`;
 }
 function qualChip(lead) {
   // TP-109: puntaje automático (datos del lead + respuesta + preguntas)
