@@ -7,7 +7,7 @@ const rateLimit = require('express-rate-limit');
 const { nowCancun, ValidationError } = require('./crm-schema');
 const { SELLER_ROLES } = require('./access');
 const { createLeadIntake } = require('./lead-intake');
-const { cleanPhone, norm } = require('./bot-intake');
+const { cleanPhone, norm, sourceFromText } = require('./bot-intake');
 
 // Preguntas del formulario (mismas que el Tally, más las de calificación). El navegador las recibe de aquí.
 const FORM = {
@@ -236,7 +236,7 @@ function createWebform(dataStore, mailer, env = {}, { assignment } = {}) {
       const warn = honeypot ? '\n⚠ Revisar: el campo oculto antispam llegó lleno (puede ser autocompletado del navegador).' : '';
       const notes = `🌐 Formulario web · ${now.slice(0, 16)}\n${summaryRows(f).map(([k, v]) => `• ${k}: ${v}`).join('\n')}${warn}`;
       const result = await intake.intake({
-        channel: { label: 'formulario web', source: 'Sitio web', ownerId: cfg.ownerId },
+        channel: { label: 'formulario web', source: sourceFromText([f.origen, f.utm].filter(Boolean).join(' '), 'Sitio web'), ownerId: cfg.ownerId },
         person: { name: f.nombre, phone: f.telefono, email: f.correo || null },
         lead: { destination: f.destino, start: f.llegada, end: f.regreso, travelers, budget: perPerson ? perPerson * travelers : null },
         answers,

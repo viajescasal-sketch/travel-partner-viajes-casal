@@ -5,7 +5,7 @@
    Lo usan la plataforma (editor), el servidor (motor) y las pruebas. */
 (function (global) {
   const LEAD_STAGES = ['Nuevo', 'Calificado', 'Cotizado', 'Negociación', 'Vendido', 'Perdido'];
-  const SOURCES = ['WhatsApp', 'Instagram', 'Facebook', 'Sitio web', 'Referido', 'Otro'];
+  const SOURCES = ['WhatsApp', 'Instagram', 'Facebook', 'TikTok', 'YouTube', 'Pinterest', 'Google Maps', 'Sitio web', 'Blog', 'Referido', 'Otro'];
   const QUOTE_STATUSES = ['Enviada', 'Aceptada', 'Rechazada'];
   const TRIP_STATUSES = ['Pendiente de pago', 'Confirmado', 'Documentación pendiente', 'En viaje', 'Solicitar reseña', 'Postventa', 'Cerrado'];
   const FOLLOWUP_TYPES = ['Llamada', 'WhatsApp', 'Cotización', 'Pago', 'Otro'];

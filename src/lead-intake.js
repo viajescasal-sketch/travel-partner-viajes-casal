@@ -78,6 +78,7 @@ function createLeadIntake(dataStore, assignment) {
       // Lead abierto: se completa con lo nuevo y se agregan las respuestas a las notas.
       const changes = { notes: `${open.notes ? `${open.notes}\n\n` : ''}${notes}`.slice(-4000) };
       changes.reengaged_at = now; // TP-109: el cliente volvió a escribir (señal de interés)
+      if (channel.fillSource && (!open.source || open.source === 'WhatsApp')) changes.source = channel.source; // el cliente dijo cómo nos conoció
       if (data.destination) changes.destination = data.destination;
       if (data.start) { changes.start_date = data.start; changes.end_date = data.end && data.end >= data.start ? data.end : null; }
       if (data.travelers) changes.travelers = data.travelers;

@@ -114,7 +114,7 @@ test('el formulario web crea el lead calificado, avisa y se puede incrustar', as
   const crm = (await paulina('GET', '/api/crm')).body;
   assert.equal(crm.leads.length, 1, 'el lead llega a Paulina');
   const lead = crm.leads[0];
-  assert.deepEqual([lead.destination, lead.start_date, lead.end_date, lead.travelers, lead.budget, lead.source, lead.stage], ['Los Cabos', addDays(today, 20), addDays(today, 25), 3, 75000, 'Sitio web', 'Nuevo']);
+  assert.deepEqual([lead.destination, lead.start_date, lead.end_date, lead.travelers, lead.budget, lead.source, lead.stage], ['Los Cabos', addDays(today, 20), addDays(today, 25), 3, 75000, 'Instagram', 'Nuevo']);
   assert.equal(lead.qualification.answered, 5);
   assert.equal(lead.qualification.level, 'Caliente');
   assert.match(lead.notes, /🌐 Formulario web[\s\S]*Ciudad de salida: Mérida[\s\S]*1 niño \(edades: 7\)[\s\S]*Origen: landing-cabos · instagram · viajescasal.com\/cabos/);
