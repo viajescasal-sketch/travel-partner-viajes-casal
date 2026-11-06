@@ -12,7 +12,7 @@ process.env.PARTNER_INITIAL_PASSWORD = 'PartnerTemporal123';
 
 const { createApp } = require('../server');
 const { MySQLDataStore } = require('../src/data-store');
-const { parseDates, destinationFrom, peopleFrom, budgetFrom, cleanPhone } = require('../src/bot-intake');
+const { parseDates, destinationFrom, peopleFrom, budgetFrom, cleanPhone, sourceFromText } = require('../src/bot-intake');
 
 test('lectura de fechas, personas, presupuesto y teléfono del bot', () => {
   const today = '2026-10-09';
@@ -32,6 +32,17 @@ test('lectura de fechas, personas, presupuesto y teléfono del bot', () => {
   assert.equal(cleanPhone('5219981234567'), '+52 998 123 4567');
   assert.equal(cleanPhone('+52 998 123 4567'), '+52 998 123 4567');
   assert.equal(cleanPhone('<script>'), '');
+});
+
+test('origen del lead según "¿Cómo nos conociste?"', () => {
+  assert.equal(sourceFromText('Instagram'), 'Instagram');
+  assert.equal(sourceFromText('Vi un reel en TikTok'), 'TikTok');
+  assert.equal(sourceFromText('Los encontré en Google Maps'), 'Google Maps');
+  assert.equal(sourceFromText('Me recomendó una amiga'), 'Referido');
+  assert.equal(sourceFromText('Por su página web'), 'Sitio web');
+  assert.equal(sourceFromText('Facebook / utm_source=fb'), 'Facebook');
+  assert.equal(sourceFromText('', 'WhatsApp'), 'WhatsApp');
+  assert.equal(sourceFromText('no recuerdo', 'WhatsApp'), 'WhatsApp');
 });
 
 async function startApp(context) {

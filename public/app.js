@@ -8,7 +8,7 @@
 const STAGES = ['Nuevo', 'Calificado', 'Cotizado', 'Negociación', 'Vendido', 'Perdido'];
 const CLOSED = ['Vendido', 'Perdido'];
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
-const SOURCES = ['WhatsApp', 'Instagram', 'Facebook', 'Sitio web', 'Referido', 'Otro'];
+const SOURCES = ['WhatsApp', 'Instagram', 'Facebook', 'TikTok', 'YouTube', 'Pinterest', 'Google Maps', 'Sitio web', 'Blog', 'Referido', 'Otro'];
 const QUOTE_STATUSES = ['Borrador', 'PDF generado', 'Enviada', 'Aceptada', 'Rechazada'];
 const QUOTE_MODES = ['Total', 'Por persona', 'Por noche'];
 const TRIP_STATUSES = ['Pendiente de pago', 'Confirmado', 'Documentación pendiente', 'En viaje', 'Solicitar reseña', 'Postventa', 'Cerrado'];
@@ -16,7 +16,7 @@ const FOLLOWUP_TYPES = ['Llamada', 'WhatsApp', 'Cotización', 'Pago', 'Otro'];
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const MONTHS_LONG = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const WEEKDAYS = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
-const SOURCE_COLORS = ['var(--teal)', '#0b4f7a', 'var(--coral)', 'var(--gold)', '#7a5bd0', '#8a99a6'];
+const SOURCE_COLORS = ['var(--teal)', '#0b4f7a', 'var(--coral)', 'var(--gold)', '#7a5bd0', '#8a99a6', '#c2417f', '#2f8f83', '#b8742a', '#4a6fa5', '#6b4e9b'];
 
 const db = { clients: [], leads: [], quotes: [], trips: [], followups: [], users: [], agency: {}, documents: {}, leadQuestions: [], me: null };
 const ui = { leadQuery: '', leadStage: '', leadOwner: '', settingsTab: 'agencyPanel', quoteQuery: '', clientQuery: '', funnelRange: 'month', calDay: '', calView: (() => { const fallback = window.innerWidth < 800 ? 'day' : 'week'; try { const v = localStorage.getItem('tp.calView'); return ['day', 'week', 'month'].includes(v) ? v : fallback; } catch { return fallback; } })(), calOwner: '' };

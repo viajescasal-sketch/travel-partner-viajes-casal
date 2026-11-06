@@ -135,4 +135,22 @@ function cleanPhone(value) {
   return `+${digits}`;
 }
 
-module.exports = { parseDates, destinationFrom, peopleFrom, budgetFrom, budgetOption, cleanPhone, norm };
+
+// "Instagram", "me lo recomendó una amiga", "vi un reel en TikTok" → origen del lead en el CRM.
+// Si no se reconoce, devuelve `fallback` (el texto original queda en las notas del lead).
+function sourceFromText(text, fallback = 'WhatsApp') {
+  const t = norm(text);
+  if (!t) return fallback;
+  if (/google maps|\bmaps\b|google business|perfil de negocio|\bgbp\b/.test(t)) return 'Google Maps';
+  if (/instagram|\binsta\b|\big\b/.test(t)) return 'Instagram';
+  if (/facebook|\bface\b|\bfb\b|messenger/.test(t)) return 'Facebook';
+  if (/tiktok|tik tok/.test(t)) return 'TikTok';
+  if (/youtube|you tube|\byt\b/.test(t)) return 'YouTube';
+  if (/pinterest/.test(t)) return 'Pinterest';
+  if (/\bblog\b/.test(t)) return 'Blog';
+  if (/referid|recomend|amig|familiar|conocid/.test(t)) return 'Referido';
+  if (/sitio|pagina web|\bweb\b|google|busque|busqueda/.test(t)) return 'Sitio web';
+  return fallback;
+}
+
+module.exports = { parseDates, destinationFrom, peopleFrom, budgetFrom, budgetOption, cleanPhone, sourceFromText, norm };
