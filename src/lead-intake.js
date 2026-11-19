@@ -79,6 +79,7 @@ function createLeadIntake(dataStore, assignment) {
       const changes = { notes: `${open.notes ? `${open.notes}\n\n` : ''}${notes}`.slice(-4000) };
       changes.reengaged_at = now; // TP-109: el cliente volvió a escribir (señal de interés)
       if (channel.fillSource && (!open.source || open.source === 'WhatsApp')) changes.source = channel.source; // el cliente dijo cómo nos conoció
+      if (channel.originCode && !open.origin_code) changes.origin_code = channel.originCode; // TP-320: el primer código es el que cuenta
       if (data.destination) changes.destination = data.destination;
       if (data.start) { changes.start_date = data.start; changes.end_date = data.end && data.end >= data.start ? data.end : null; }
       if (data.travelers) changes.travelers = data.travelers;
@@ -92,7 +93,7 @@ function createLeadIntake(dataStore, assignment) {
       const fields = sanitize('leads', {
         client_id: client.id, destination: data.destination || 'Por definir', start_date: data.start || null,
         end_date: data.start && data.end && data.end >= data.start ? data.end : null,
-        travelers: data.travelers || null, budget: data.budget || null, source: channel.source, stage: 'Nuevo', priority: 'Media', notes,
+        travelers: data.travelers || null, budget: data.budget || null, source: channel.source, origin_code: channel.originCode || null, stage: 'Nuevo', priority: 'Media', notes,
         ...(hasAnswers ? { qualification: scoreQualification({ answers: validAnswers }, qs) } : {})
       });
       fields.stage_changed_at = now;

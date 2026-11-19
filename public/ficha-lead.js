@@ -45,7 +45,7 @@
   function summaryTab(lead) {
     const step = nextStep(lead);
     const quotes = leadQuotes(lead);
-    const facts = [['Destino', lead.destination], ['Fechas', fmtRange(lead.start_date, lead.end_date)], ['Viajeros', lead.travelers || '—'], ['Presupuesto', lead.budget ? money(lead.budget) : '—'], ['Origen', lead.source || '—'], ['Vendedor', userName(lead.owner_id)]];
+    const facts = [['Destino', lead.destination], ['Fechas', fmtRange(lead.start_date, lead.end_date)], ['Viajeros', lead.travelers || '—'], ['Presupuesto', lead.budget ? money(lead.budget) : '—'], ['Origen', lead.origin_code ? `${lead.source || '—'} · ${lead.origin_code}` : (lead.source || '—')], ['Vendedor', userName(lead.owner_id)]];
     const custom = typeof customSummaryHtml === 'function' ? customSummaryHtml('leads', lead) : '';
     return `${step ? `<button type="button" class="lf-next${step.late ? ' late' : ''}" ${step.attr || 'data-lf-tab="followups"'}><span class="lf-next-ico">${step.icon}</span><span><small>Siguiente paso</small><b>${H(step.text)}</b><em>${H(step.sub)}</em></span><span>›</span></button>` : ''}
       ${leadContactHtml(lead)}
@@ -59,6 +59,7 @@
     return `<form class="modal-form" id="lfTripForm">
       ${field('Destino*', `<input name="destination" required maxlength="120" value="${H(lead.destination)}">`)}
       ${field('Origen', `<select name="source">${options(SOURCES, lead.source || 'WhatsApp')}</select>`)}
+      ${field('Código de origen', `<input name="origin_code" maxlength="40" placeholder="IG-STORY-1112 (viene en el primer mensaje, entre corchetes)" value="${H(lead.origin_code)}">`)}
       ${field('Salida', `<input name="start_date" type="date" value="${H(lead.start_date)}">`)}
       ${field('Regreso', `<input name="end_date" type="date" value="${H(lead.end_date)}">`)}
       ${field('Viajeros', `<input name="travelers" type="number" min="1" max="500" value="${H(lead.travelers)}">`)}
@@ -156,7 +157,7 @@
       tripForm.onsubmit = async (e) => {
         e.preventDefault();
         const v = formValues(tripForm);
-        const payload = clean({ destination: v.destination, source: v.source, start_date: v.start_date || null, end_date: v.end_date || null, travelers: v.travelers || null, budget: v.budget || null, notes: v.notes || null });
+        const payload = clean({ destination: v.destination, source: v.source, origin_code: originCodeOf(v.origin_code), start_date: v.start_date || null, end_date: v.end_date || null, travelers: v.travelers || null, budget: v.budget || null, notes: v.notes || null });
         if (typeof readCustomFields === 'function') { const cf = readCustomFields('leads', tripForm); if (cf) payload.custom = cf; }
         if (v.owner_id) payload.owner_id = Number(v.owner_id);
         const reassigned = payload.owner_id && payload.owner_id !== lead.owner_id;

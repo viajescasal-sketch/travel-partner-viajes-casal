@@ -33,6 +33,6 @@ test('TP-319: avatares animados solo en el perfil y en el selector', () => {
 test('TP-319: versión nueva en los archivos cambiados', () => {
   const idx = pub('index.html');
   for (const f of ['ui', 'tp006', 'cotizaciones', 'viaje', 'app-movil', 'styles']) assert.match(idx, new RegExp(`/${f}\\.css\\?v=tp319`), f);
-  assert.match(idx, /app\.js\?v=tp319/);
+  assert.match(idx, /app\.js\?v=tp3(19|20)/); // TP-320 subió la versión de app.js
   assert.match(pub('formulario.html'), /formulario\.css\?v=tp319/);
 });
