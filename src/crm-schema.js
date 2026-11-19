@@ -49,6 +49,8 @@ const ENTITIES = {
       stage: { type: 'enum', values: LEAD_STAGES, default: 'Nuevo' },
       priority: { type: 'enum', values: PRIORITIES, default: 'Media' },
       source: { type: 'enum', values: LEAD_SOURCES, default: 'WhatsApp' },
+      // TP-320: código de la publicación o enlace que trajo al lead, p. ej. IG-STORY-1112 (llega en el primer mensaje de WhatsApp)
+      origin_code: { type: 'string', max: 40 },
       notes: { type: 'text', max: 4000 },
       qualification: { type: 'json', max: 20000 },
       lost_reason: { type: 'string', max: 160 },

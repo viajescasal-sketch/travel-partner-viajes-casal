@@ -153,4 +153,39 @@ function sourceFromText(text, fallback = 'WhatsApp') {
   return fallback;
 }
 
-module.exports = { parseDates, destinationFrom, peopleFrom, budgetFrom, budgetOption, cleanPhone, sourceFromText, norm };
+// TP-320 · Código de origen que viaja en el primer mensaje de WhatsApp: "Hola, quiero planear mi viaje con Viajes Casal [IG-STORY-1112]".
+// Lo escribe la puerta viajescasal.com/whatsapp (ver Constructor de enlaces). Formato: RED[-DÓNDE][-MMDD].
+const ORIGIN_NETWORKS = {
+  IG: ['Instagram', 'Instagram'], FB: ['Facebook', 'Facebook'], TT: ['TikTok', 'TikTok'], YT: ['YouTube', 'YouTube'],
+  PIN: ['Pinterest', 'Pinterest'], GBP: ['Google Maps', 'Google Maps'], LT: ['Otro', 'Linktree'], REF: ['Referido', 'Referidos'],
+  MAIL: ['Otro', 'Correo'], AFI: ['Otro', 'Afiliados'], ADS: ['Facebook', 'Anuncio de Meta'], WEB: ['Sitio web', 'Sitio web']
+};
+const ORIGIN_PLACES = {
+  BIO: 'bio', STORY: 'historia', POST: 'publicación', REEL: 'reel', ADS: 'anuncio', FIRMA: 'firma de correo',
+  EMAIL: 'correo', CANAL: 'canal', PAGINA: 'página', PERFIL: 'perfil'
+};
+
+// Busca "[CÓDIGO]" en un texto. Solo acepta códigos de redes conocidas (evita confundir con "[1]" o "[nota]").
+function originCodeFrom(text) {
+  const re = /\[\s*([A-Za-z]{2,4}(?:-[A-Za-z0-9]{2,8}){0,3})\s*\]/g;
+  for (const match of String(text || '').matchAll(re)) {
+    const code = match[1].toUpperCase();
+    if (ORIGIN_NETWORKS[code.split('-')[0]]) return code;
+  }
+  return '';
+}
+
+// "IG-STORY-1112" → { code, source: 'Instagram', label: 'Instagram · historia · 12/11' }
+function decodeOrigin(code) {
+  const parts = String(code || '').toUpperCase().split('-').filter(Boolean);
+  const network = ORIGIN_NETWORKS[parts[0]];
+  if (!network) return null;
+  const detail = [network[1]];
+  for (const part of parts.slice(1)) {
+    if (/^\d{4}$/.test(part)) detail.push(`${part.slice(2)}/${part.slice(0, 2)}`);
+    else detail.push(ORIGIN_PLACES[part] || part.toLowerCase());
+  }
+  return { code: parts.join('-'), source: network[0], label: detail.join(' · ') };
+}
+
+module.exports = { parseDates, destinationFrom, peopleFrom, budgetFrom, budgetOption, cleanPhone, sourceFromText, norm, originCodeFrom, decodeOrigin };

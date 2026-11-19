@@ -9,6 +9,8 @@ const STAGES = ['Nuevo', 'Calificado', 'Cotizado', 'Negociación', 'Vendido', 'P
 const CLOSED = ['Vendido', 'Perdido'];
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
 const SOURCES = ['WhatsApp', 'Instagram', 'Facebook', 'TikTok', 'YouTube', 'Pinterest', 'Google Maps', 'Sitio web', 'Blog', 'Referido', 'Otro'];
+// TP-320: acepta "[IG-STORY-1112]", "ig-story-1112" o el mensaje completo; solo redes conocidas (mismo criterio que src/bot-intake.js).
+const originCodeOf = (v) => { const m = /(?:^|[^A-Za-z])((?:IG|FB|TT|YT|PIN|GBP|LT|REF|MAIL|AFI|ADS|WEB)(?:-[A-Za-z0-9]{2,8}){0,3})(?![A-Za-z0-9])/i.exec(String(v || '')); return m ? m[1].toUpperCase() : null; };
 const QUOTE_STATUSES = ['Borrador', 'PDF generado', 'Enviada', 'Aceptada', 'Rechazada'];
 const QUOTE_MODES = ['Total', 'Por persona', 'Por noche'];
 const TRIP_STATUSES = ['Pendiente de pago', 'Confirmado', 'Documentación pendiente', 'En viaje', 'Solicitar reseña', 'Postventa', 'Cerrado'];
@@ -300,7 +302,7 @@ function filteredLeads(ignoreStage = false) {
     if (ui.leadOwner && String(l.owner_id) !== ui.leadOwner) return false;
     if (!q) return true;
     const c = clientById(l.client_id);
-    return [c?.name, c?.phone, c?.email, l.destination, l.stage, l.notes, l.source, ...Object.values(l.custom || {}).flat()].join(' ').toLowerCase().includes(q);
+    return [c?.name, c?.phone, c?.email, l.destination, l.stage, l.notes, l.source, l.origin_code, ...Object.values(l.custom || {}).flat()].join(' ').toLowerCase().includes(q);
   });
 }
 function renderLeads() {
@@ -1217,6 +1219,7 @@ function leadModal(id, presetClientId) {
   const html = `<form class="modal-form">${clientFields}
     ${field('Destino*', `<input name="destination" required maxlength="120" value="${escapeHtml(lead?.destination)}">`)}
     ${field('Origen', `<select name="source">${options(SOURCES, lead?.source || 'WhatsApp')}</select>`)}
+    ${field('Código de origen', `<input name="origin_code" maxlength="40" placeholder="IG-STORY-1112 (opcional)" value="${escapeHtml(lead?.origin_code)}">`)}
     ${field('Salida', `<input name="start_date" type="date" value="${escapeHtml(lead?.start_date)}">`)}
     ${field('Regreso', `<input name="end_date" type="date" value="${escapeHtml(lead?.end_date)}">`)}
     ${field('Viajeros', `<input name="travelers" type="number" min="1" max="500" value="${escapeHtml(lead?.travelers)}">`)}
@@ -1246,7 +1249,7 @@ function leadModal(id, presetClientId) {
   if (lead && typeof paintLeadReferral === 'function') paintLeadReferral(lead); // TP-309
   bindForm(async (v, form) => {
     const body = clean({
-      destination: v.destination, source: v.source, start_date: v.start_date || null, end_date: v.end_date || null,
+      destination: v.destination, source: v.source, origin_code: originCodeOf(v.origin_code), start_date: v.start_date || null, end_date: v.end_date || null,
       travelers: v.travelers || null, budget: v.budget || null, notes: v.notes || null
     });
     if (db.leadQuestions.length) body.qualification = readQualification();

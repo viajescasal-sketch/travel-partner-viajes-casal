@@ -479,3 +479,14 @@ En `.claude/skills/` hay dos skills de terceros para trabajar la interfaz del CR
 - Tarjetas de cotización: hover solo con mouse; chips de filtro sin salto.
 - Tour guiado: hueco y tarjeta con la misma curva. Toggle y barra offline con propiedades y curvas explícitas.
 - Avatares animados solo en el perfil y en el selector de avatar (quietos en listas, kanban y campanita).
+
+## TP-320 · Código de origen del lead (de la publicación al CRM)
+
+El enlace de cada publicación pasa por la "puerta" `viajescasal.com/whatsapp`, que abre WhatsApp con un código en el primer mensaje: `Hola, quiero planear mi viaje con Viajes Casal [IG-STORY-1112]`. El CRM lo lee y lo guarda para saber qué publicación trajo a cada cliente.
+
+- **Formato:** `RED[-DÓNDE][-MMDD]` entre corchetes. Redes: `IG` Instagram, `FB` Facebook, `TT` TikTok, `YT` YouTube, `PIN` Pinterest, `GBP` Google Maps, `LT` Linktree, `REF` referidos, `MAIL` correo, `AFI` afiliados, `ADS` anuncio de Meta, `WEB` sitio web. Dónde: `BIO`, `STORY`, `POST`, `REEL`, `FIRMA`, `CANAL`, `PAGINA`, `PERFIL`. Si no es una red conocida, el texto entre corchetes se ignora (`[1]`, `[nota]`).
+- **Campo nuevo** `origin_code` en `crm_leads` (columna creada sola al iniciar). El **Origen** (Instagram, Facebook…) se llena con la red del código; el código manda sobre lo que el cliente escriba en "¿Cómo nos conociste?". Linktree, correo y afiliados quedan como "Otro" salvo que el cliente diga la red.
+- **El primer código es el que cuenta:** si el cliente vuelve a escribir con otro código, el lead conserva el original.
+- **Bot de Botpress:** `POST /api/integrations/botpress/lead` acepta dos campos nuevos (opcionales): `mensaje` (primer mensaje del cliente; el CRM busca el `[CÓDIGO]`) y `origenCodigo` (el código ya extraído por el bot). La nota del lead agrega la línea "Código de origen: [IG-STORY-1112] · Instagram · historia · 12/11".
+- **Captura manual:** campo **Código de origen** en la ficha del lead (pestaña *Viaje y datos*) y en el formulario de lead; acepta `IG-STORY-1112`, `[ig-story-1112]` o el mensaje completo. Se ve en el Resumen junto al Origen y entra en la búsqueda de leads.
+- **Pruebas:** `test/tp320.test.js`.

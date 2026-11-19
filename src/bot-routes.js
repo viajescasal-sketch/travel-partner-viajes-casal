@@ -6,11 +6,13 @@ const rateLimit = require('express-rate-limit');
 const { nowCancun, ValidationError } = require('./crm-schema');
 const { SELLER_ROLES } = require('./access');
 const { createLeadIntake } = require('./lead-intake');
-const { parseDates, destinationFrom, peopleFrom, budgetFrom, budgetOption, cleanPhone, sourceFromText } = require('./bot-intake');
+const { parseDates, destinationFrom, peopleFrom, budgetFrom, budgetOption, cleanPhone, sourceFromText, originCodeFrom, decodeOrigin } = require('./bot-intake');
 
 const FIELDS = {
   telefono: 40, nombre: 120, producto: 80, destino: 300, ciudadSalida: 160, fechaVuelo: 160, personas: 120, presupuesto: 120,
-  tipoHospedaje: 120, tipoExperiencia: 120, preferencias: 600, traslado: 120, etapa: 300, resumen: 3000, conversacion: 120, origen: 120
+  tipoHospedaje: 120, tipoExperiencia: 120, preferencias: 600, traslado: 120, etapa: 300, resumen: 3000, conversacion: 120, origen: 120,
+  // TP-320: primer mensaje del cliente (trae el código [IG-BIO]) o el código ya extraído por el bot
+  mensaje: 600, origenCodigo: 40
 };
 const hashToken = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
 
@@ -35,7 +37,9 @@ function interpret(body, today) {
     end: dates?.end || null,
     travelers: people,
     perPerson,
-    budget: perPerson ? Math.round(perPerson * (people || 1)) : null
+    budget: perPerson ? Math.round(perPerson * (people || 1)) : null,
+    // TP-320: el código viaja en el primer mensaje; el bot también puede mandarlo ya extraído
+    origin: decodeOrigin(originCodeFrom(`[${input.origenCodigo}]`) || originCodeFrom(input.mensaje) || originCodeFrom(input.origen))
   };
 }
 
@@ -44,7 +48,8 @@ function notesFrom(data, stamp) {
   const rows = [
     ['Servicio', i.producto], ['Destino y fechas', i.destino], ['Ciudad de salida', i.ciudadSalida], ['Fechas del vuelo', i.fechaVuelo],
     ['Personas', i.personas], ['Presupuesto por persona', i.presupuesto], ['Hospedaje', i.tipoHospedaje], ['Experiencia', i.tipoExperiencia],
-    ['Preferencias', i.preferencias], ['Traslado / auto', i.traslado], ['Motivo y etapa', i.etapa], ['Cómo nos conoció', i.origen]
+    ['Preferencias', i.preferencias], ['Traslado / auto', i.traslado], ['Motivo y etapa', i.etapa], ['Cómo nos conoció', i.origen],
+    ['Código de origen', data.origin ? `[${data.origin.code}] · ${data.origin.label}` : '']
   ].filter(([, v]) => v);
   return `🤖 Bot de WhatsApp · ${stamp.slice(0, 16)}\n${rows.map(([k, v]) => `• ${k}: ${v}`).join('\n')}`;
 }
@@ -76,10 +81,12 @@ function createBotRouter(dataStore, { assignment } = {}) {
       const qs = await intake.questions();
       const budgetQuestion = qs.find((q) => q.id === 'q_presupuesto');
       const option = budgetOption(data.perPerson, budgetQuestion, data.input.presupuesto);
-      const source = sourceFromText(data.input.origen, 'WhatsApp'); // "¿Cómo nos conociste?" del bot
+      // El código de origen (TP-320) manda sobre lo que el cliente escriba en "¿Cómo nos conociste?".
+      let source = data.origin ? data.origin.source : sourceFromText(data.input.origen, 'WhatsApp');
+      if (source === 'Otro') source = sourceFromText(data.input.origen, 'Otro'); // Linktree, correo y afiliados: si el cliente dijo la red, se usa
       const destination = data.destination && data.destination !== 'Por definir' ? data.destination : null;
       const { action, lead, client, followup, seller, reason } = await intake.intake({
-        channel: { label: 'bot de WhatsApp', source, fillSource: source !== 'WhatsApp', ownerId: cfg.ownerId },
+        channel: { label: 'bot de WhatsApp', source, fillSource: source !== 'WhatsApp', originCode: data.origin?.code || null, ownerId: cfg.ownerId },
         person: { name: data.name, phone: data.phone, email: null },
         lead: { destination, start: data.start, end: data.end, travelers: data.travelers, budget: data.budget },
         answers: option ? { [budgetQuestion.id]: option } : {},
