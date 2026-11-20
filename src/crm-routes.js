@@ -35,7 +35,7 @@ const { prefsFor } = require('./preferencias');
 const CLOSED_STAGES = ['Vendido', 'Perdido'];
 const AGENCY_FIELDS = { name: 120, whatsapp: 40, email: 254, website: 200 };
 const DEFAULT_AGENCY = {
-  name: 'Viajes Bumeran Casal',
+  name: 'Viajes Casal',
   whatsapp: '+52 998 763 6565',
   email: 'casal@viajesbumeran.com',
   website: 'https://viajescasal.com/'

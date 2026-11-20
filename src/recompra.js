@@ -119,7 +119,7 @@ function createRecompra(dataStore, { assignment = null, mailer = null, env = {},
     await dataStore.setSetting('recompra_state', { ...state, lastDay: today, lastRunAt: current });
     if (!cfg.enabled) return result;
     const [clients, leads, trips] = await Promise.all(['clients', 'leads', 'trips'].map((e) => dataStore.listRecords(e)));
-    const agencyName = { name: 'Viajes Bumeran Casal', ...((await dataStore.getSetting('agency')) || {}) }.name;
+    const agencyName = { name: 'Viajes Casal', ...((await dataStore.getSetting('agency')) || {}) }.name;
     const perSeller = new Map();
     for (const client of clients) {
       const cl = leads.filter((l) => l.client_id === client.id);

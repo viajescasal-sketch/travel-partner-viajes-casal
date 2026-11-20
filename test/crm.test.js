@@ -60,7 +60,7 @@ test('CRM: leads, clientes, cotizaciones, viajes y seguimientos persistentes', a
   const empty = await partner('GET', '/api/crm');
   assert.equal(empty.status, 200);
   assert.deepEqual(empty.body.leads, []);
-  assert.equal(empty.body.settings.agency.name, 'Viajes Bumeran Casal');
+  assert.equal(empty.body.settings.agency.name, 'Viajes Casal');
 
   // Validaciones
   const invalid = await partner('POST', '/api/leads', { client: { name: '' }, destination: 'Cancún' });

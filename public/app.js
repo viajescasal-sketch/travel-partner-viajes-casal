@@ -2496,7 +2496,7 @@ async function renderPaymentsSettings() {
       <label class="full kb-check"><input type="checkbox" name="emailClient" ${st.emailClient ? 'checked' : ''}> Enviar correo al cliente: recordatorio de pago (antes y el día) y recibo cuando se registra un pago</label>
       <p class="full section-label">Datos para transferencia (aparecen en la liga de pago)</p>
       ${field('Banco', `<input name="banco" maxlength="60" value="${escapeHtml(b.banco)}" placeholder="BBVA">`)}
-      ${field('Titular', `<input name="titular" maxlength="120" value="${escapeHtml(b.titular)}" placeholder="Viajes Bumeran Casal">`)}
+      ${field('Titular', `<input name="titular" maxlength="120" value="${escapeHtml(b.titular)}" placeholder="Viajes Casal">`)}
       ${field('CLABE (18 dígitos)', `<input name="clabe" maxlength="22" inputmode="numeric" value="${escapeHtml(b.clabe)}">`)}
       ${field('Número de cuenta (opcional)', `<input name="cuenta" maxlength="30" value="${escapeHtml(b.cuenta)}">`)}
       ${field('Indicaciones (opcional)', `<textarea name="notas" rows="2" maxlength="400" placeholder="Usa tu folio como referencia y envía tu comprobante por WhatsApp.">${escapeHtml(b.notas)}</textarea>`, true)}

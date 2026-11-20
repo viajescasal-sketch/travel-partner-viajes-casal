@@ -67,7 +67,7 @@
     const share = ref ? `Te invito a planear tu viaje con ${data.agency.name}. Con mi liga tienes ${money(ref.welcomeAmount)} de descuento en tu primer viaje: ${ref.url}` : '';
     $('#app').innerHTML = `<div class="card center"><div class="big">${good ? '💙' : '🙏'}</div><h2>${fresh ? '¡Gracias por tus respuestas!' : 'Ya recibimos tus respuestas'}</h2>
         <p>${good ? 'Nos alegra muchísimo que hayas disfrutado tu viaje.' : 'Lamentamos que no todo haya salido como esperabas. Tu Travel Partner te contactará para escucharte.'}</p>
-        ${good && reviewBtns ? `<p class="muted">¿Nos ayudas con una reseña? Toma 30 segundos y ayuda a otros viajeros a confiar en nosotros.</p>${reviewBtns}` : ''}</div>
+        ${reviewBtns ? `<p class="muted">${good ? '' : 'Si lo prefieres, también puedes contar tu experiencia en Google. '}¿Nos ayudas con tu opinión sincera? Toma 30 segundos y ayuda a otros viajeros a decidir.</p>${reviewBtns}` : ''}</div>
       ${ref && good ? `<div class="card center"><h2>🎁 Invita a tus amigos y gana</h2><p>Ellos reciben <b>${money(ref.welcomeAmount)}</b> de descuento en su primer viaje y tú ganas <b>${money(ref.referrerAmount)}</b> para tu próxima aventura cuando viajen.</p>
         <div class="code"><span class="muted">Tu código</span><b>${esc(ref.code)}</b></div>
         <a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(share)}" target="_blank" rel="noopener">💬 Compartir por WhatsApp</a><button class="btn alt" id="copy" type="button">Copiar mi liga</button></div>` : ''}`;

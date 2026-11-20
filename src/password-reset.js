@@ -29,7 +29,7 @@ function appUrlFor(req, env) {
 
 function createPasswordResetService(dataStore, mailer, env = process.env) {
   async function agencyName() {
-    return (await dataStore.getSetting('agency'))?.name || 'Viajes Bumeran Casal';
+    return (await dataStore.getSetting('agency'))?.name || 'Viajes Casal';
   }
 
   // Genera el enlace, invalida los anteriores y envía el correo.

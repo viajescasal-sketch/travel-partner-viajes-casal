@@ -22,7 +22,7 @@ const VOUCHER_TYPES = {
   'image/png': (b) => b.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
   'image/webp': (b) => b.slice(0, 4).toString('latin1') === 'RIFF' && b.slice(8, 12).toString('latin1') === 'WEBP'
 };
-const DEFAULT_AGENCY = { name: 'Viajes Bumeran Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
+const DEFAULT_AGENCY = { name: 'Viajes Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
 // TP-303: en la liga pública solo van nombre y tipo; nunca documentos ni fechas de nacimiento.
 const publicPassengers = (trip) => ({ list: (trip.passengers?.list || []).map((p) => ({ name: p.name, type: p.type, holder: Boolean(p.holder) })) });
 const newTripToken = () => crypto.randomBytes(20).toString('hex');

@@ -186,7 +186,7 @@ function createMercadoPago(env = {}, fetchImpl = globalThis.fetch) {
   };
 }
 
-const DEFAULT_AGENCY = { name: 'Viajes Bumeran Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
+const DEFAULT_AGENCY = { name: 'Viajes Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
 
 function createPayments(dataStore, { assignment = null, mailer = null, env = {}, mercadoPago = null, publicDirectory = null, contracts = null, now = () => nowCancun() } = {}) {
   const mp = mercadoPago || createMercadoPago(env);
