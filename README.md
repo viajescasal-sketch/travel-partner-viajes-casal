@@ -1,6 +1,6 @@
 # Travel Partner Viajes Casal
 
-Prototipo navegable de la plataforma comercial de Viajes Bumeran Casal, servido mediante Node.js y Express.
+Prototipo navegable de la plataforma comercial de Viajes Casal, servido mediante Node.js y Express.
 
 ## Requisitos
 

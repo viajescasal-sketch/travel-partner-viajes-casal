@@ -250,7 +250,7 @@
       F = data.form;
       today = data.today || today;
       whatsapp = data.whatsapp || '';
-      $('#wfAgency').textContent = data.agency || 'Viajes Bumeran Casal';
+      $('#wfAgency').textContent = data.agency || 'Viajes Casal';
       if (!data.enabled) {
         $('#wfNav').classList.add('hidden');
         $('#wfStep').innerHTML = `<div class="wf-done"><h2>Escríbenos por WhatsApp</h2><p>Por ahora atendemos tus solicitudes directo por WhatsApp.</p>${whatsapp ? `<a class="wf-btn wa" href="https://wa.me/${esc(whatsapp)}" target="_blank" rel="noopener">💬 Abrir WhatsApp</a>` : ''}</div>`;

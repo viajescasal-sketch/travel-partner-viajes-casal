@@ -28,7 +28,7 @@ function createLoginFlow({ dataStore, mailer, env = process.env, publicUser, pas
   const cookieOptions = (maxAge) => ({ httpOnly: true, secure: isProduction, sameSite: 'lax', path: '/', maxAge });
 
   const regenerate = (req) => new Promise((resolve, reject) => req.session.regenerate((error) => (error ? reject(error) : resolve())));
-  const agencyName = async () => (await dataStore.getSetting('agency'))?.name || 'Viajes Bumeran Casal';
+  const agencyName = async () => (await dataStore.getSetting('agency'))?.name || 'Viajes Casal';
 
   async function sendEmailCode(user) {
     const code = tf.generateEmailCode();

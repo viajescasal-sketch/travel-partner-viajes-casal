@@ -15,7 +15,7 @@ const hooks = require('./hooks');
 
 const TOKEN_RE = /^[a-f0-9]{40}$/;
 const REVIEW_GAP_MS = 60 * 60 * 1000; // un aviso por hora como máximo
-const DEFAULT_AGENCY = { name: 'Viajes Bumeran Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
+const DEFAULT_AGENCY = { name: 'Viajes Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
 
 const newShareToken = () => crypto.randomBytes(20).toString('hex');
 

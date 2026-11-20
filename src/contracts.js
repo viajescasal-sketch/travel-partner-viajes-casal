@@ -19,7 +19,7 @@ const SETTING = 'contract';
 const TOKEN_RE = /^[a-f0-9]{40}$/;
 const PNG_RE = /^data:image\/png;base64,([A-Za-z0-9+/]+=*)$/;
 const MAX_SIGNATURE = 120 * 1024;
-const DEFAULT_AGENCY = { name: 'Viajes Bumeran Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
+const DEFAULT_AGENCY = { name: 'Viajes Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const sha256 = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 const plain = (v, max) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);

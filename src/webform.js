@@ -203,7 +203,7 @@ function createWebform(dataStore, mailer, env = {}, { assignment } = {}) {
       const cfg = await config();
       const agency = await dataStore.getSetting('agency') || {};
       res.set('Cache-Control', 'no-store');
-      res.json({ ok: true, enabled: Boolean(cfg.enabled), agency: agency.name || 'Viajes Bumeran Casal', whatsapp: await whatsappNumber(cfg), form: FORM, today: nowCancun().slice(0, 10) });
+      res.json({ ok: true, enabled: Boolean(cfg.enabled), agency: agency.name || 'Viajes Casal', whatsapp: await whatsappNumber(cfg), form: FORM, today: nowCancun().slice(0, 10) });
     } catch (error) { next(error); }
   });
 

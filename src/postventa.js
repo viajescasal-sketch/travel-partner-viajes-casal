@@ -2,8 +2,8 @@
 
 // TP-308 Encuesta y reseña postviaje · TP-309 Programa de referidos.
 //  - Un día (configurable) después del regreso se genera la liga privada /encuesta/<token>: se envía por correo al
-//    cliente (si tiene) y el vendedor recibe aviso + seguimiento con el WhatsApp listo. Calificación alta → Google/TripAdvisor;
-//    baja → aviso al vendedor y al administrador para recuperar al cliente.
+//    cliente (si tiene) y el vendedor recibe aviso + seguimiento con el WhatsApp listo. Todos los clientes ven la liga de reseña (Google no permite pedirla solo a los contentos);
+//    una calificación baja además avisa al vendedor y al administrador para recuperar al cliente.
 //  - Cada cliente tiene un código de referido (VC-XXX000) y una liga /r/<código> con WhatsApp y formulario.
 //    El lead referido trae un descuento de bienvenida; cuando se vende, quien refirió gana un crédito para su próximo viaje.
 
@@ -24,7 +24,7 @@ const TOKEN_RE = /^[a-f0-9]{40}$/;
 const CODE_RE = /^VC-[A-Z0-9]{5,7}$/;
 const CODE_IN_TEXT = /\bVC-[A-Z0-9]{5,7}\b/i;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const DEFAULT_AGENCY = { name: 'Viajes Bumeran Casal', whatsapp: '+52 998 763 6565' };
+const DEFAULT_AGENCY = { name: 'Viajes Casal', whatsapp: '+52 998 763 6565' };
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || '';
 const money = (n) => `$${Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 0 })} MXN`;
@@ -270,12 +270,12 @@ function createPostventa(dataStore, { assignment = null, mailer = null, env = {}
       let emailed = false;
       if (!reviewed) {
         const data = { client, trip, hotel: quote?.hotel, sellerName: seller?.name, agencyName, url };
-        if (cfg.reviewEmail && !low && mailer?.configured && client.email) {
+        if (cfg.reviewEmail && mailer?.configured && client.email) {
           try { await mailer.send({ to: client.email, ...reviewEmail(data) }); emailed = true; } catch (error) { console.error('Recordatorio de reseña: no se pudo enviar el correo:', error.message); }
         }
         const title = `Pedir reseña de Google · ${client.name} · ${trip.destination}`.slice(0, 160);
         if (!followups.some((f) => !f.done && f.client_id === client.id && f.title === title)) {
-          const lowNote = low ? `⚠ Calificó ${trip.survey.answers.overall}★ en la encuesta: llámale primero y ajusta el mensaje. No se le mandó correo.\n\n` : '';
+          const lowNote = low ? `⚠ Calificó ${trip.survey.answers.overall}★ en la encuesta: llámale primero y ajusta el mensaje.\n\n` : '';
           const f = await dataStore.insertRecord('followups', sanitize('followups', { client_id: client.id, lead_id: lead?.id || null, type: 'WhatsApp', title, details: `${lowNote}Regresó el ${trip.end_date}.${emailed ? ' Ya se le mandó el correo con la liga de reseña.' : ''} Mensaje listo para copiar y pegar en WhatsApp:\n\n${reviewWhatsAppText(data)}`.slice(0, 2000), due_at: `${today} ${hhmm < workStart ? workStart : hhmm}` }), seller?.id ?? null);
           followups.push(f);
           result.reminders += 1;
@@ -488,4 +488,4 @@ function createPostventa(dataStore, { assignment = null, mailer = null, env = {}
   return { publicRouter, apiRouter, runSurveys, runReviewReminders, rewardIfSold, attachReferral, ensureCode, settings };
 }
 
-module.exports = { createPostventa, cleanSettings, cleanAnswers, surveyStats, reviewWhatsAppText, DEFAULTS };
+module.exports = { createPostventa, cleanSettings, cleanAnswers, surveyStats, reviewWhatsAppText, reviewEmail, DEFAULTS };

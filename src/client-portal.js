@@ -21,7 +21,7 @@ const COOKIE = 'tp.cp';
 const DEVICE_DAYS = 90;
 const CODE_MINUTES = 10;
 const MAX_DEVICES = 10;
-const DEFAULT_AGENCY = { name: 'Viajes Bumeran Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
+const DEFAULT_AGENCY = { name: 'Viajes Casal', whatsapp: '+52 998 763 6565', email: 'casal@viajesbumeran.com', website: 'https://viajescasal.com/' };
 const LIVE_QUOTES = ['Enviada', 'Aceptada'];
 const sha = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
 const newToken = () => crypto.randomBytes(20).toString('hex');
