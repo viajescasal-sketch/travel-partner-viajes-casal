@@ -7,6 +7,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const QRCode = require('qrcode');
 const { ENTITY_ORDER, ValidationError, nowCancun } = require('./crm-schema');
 const { buildScope, isVisible, canWrite, SELLER_ROLES } = require('./access');
 const { DEFAULT_DOCUMENTS, sellerInfo } = require('./documents');
@@ -36,6 +37,14 @@ function createItinerary(dataStore, { publicDirectory, env = {} } = {}) {
     return trips.find((t) => t.share_token && t.share_token.length === token.length && crypto.timingSafeEqual(Buffer.from(t.share_token), Buffer.from(token))) || null;
   }
 
+  // Reseña de Google: liga directa y QR (se generan en el servidor para que la liga pública no dependa de la sesión).
+  async function reviewInfo() {
+    const docs = { ...DEFAULT_DOCUMENTS, ...((await dataStore.getSetting('documents')) || {}) };
+    const url = String(docs.reviewsUrl || '').trim();
+    if (!/^https:\/\/[^\s<>"']+$/i.test(url)) return null;
+    return { url, qr: await QRCode.toDataURL(url, { margin: 1, width: 240, errorCorrectionLevel: 'M' }) };
+  }
+
   async function payloadFor(trip) {
     const quote = trip.quote_id ? await dataStore.getRecord('quotes', trip.quote_id) : null;
     const leads = (await dataStore.listRecords('leads')).filter((l) => l.client_id === trip.client_id).sort((a, b) => b.id - a.id);
@@ -60,6 +69,7 @@ function createItinerary(dataStore, { publicDirectory, env = {} } = {}) {
       seller: info ? { name: info.name, phone: info.phone, photoUrl: info.photoUrl } : null,
       agency: { ...DEFAULT_AGENCY, ...((await dataStore.getSetting('agency')) || {}) },
       documents: { ...DEFAULT_DOCUMENTS, ...((await dataStore.getSetting('documents')) || {}) },
+      review: await reviewInfo(),
       vouchers: (trip.vouchers || []).map((v) => ({ id: v.id, name: v.name, mime: v.mime, size: v.size })),
       payment: plan && plan.balance > 0.5 ? { total: plan.total, paid: plan.paid, balance: plan.balance, next: next ? { label: next.label, amount: Math.round((next.amount - (next.paid || 0)) * 100) / 100, due: next.due } : null, url: quote.pay_token ? `/pagar/${quote.pay_token}` : null } : null,
       today: nowCancun().slice(0, 10)

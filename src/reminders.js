@@ -197,6 +197,7 @@ function createReminders(dataStore, assignment, env = {}, { now = () => nowCancu
     // 5) TP-308/309: encuesta postviaje (al día siguiente del regreso) y créditos de referidos.
     if (postventa) {
       try { const r = await postventa.runSurveys({ workStart: cfg.workStart, workEnd: cfg.workEnd }); result.surveys = r.surveys; } catch (error) { console.error('Encuesta postviaje falló:', error.message); }
+      try { const r = await postventa.runReviewReminders({ workStart: cfg.workStart, workEnd: cfg.workEnd }); result.reviewReminders = r.reminders; } catch (error) { console.error('Recordatorio de reseña falló:', error.message); }
     }
     // 6) TP-310: campañas de recompra (una vez al día).
     if (recompra) {

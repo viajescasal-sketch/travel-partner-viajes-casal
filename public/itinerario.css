@@ -59,3 +59,5 @@ body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
 .card.ok{border-color:#a8dcc6}.empty{text-align:center;padding:30px 10px}
 @media print{.tabs{display:none}}
 .chips[hidden]{display:none}
+
+.review .btn{margin-top:10px}.qr-link{display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:14px;text-decoration:none}.qr-link img{background:#fff;padding:6px;border-radius:12px;border:1px solid var(--line)}

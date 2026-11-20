@@ -17,7 +17,8 @@ const hooks = require('./hooks');
 
 const DEFAULTS = {
   surveyEnabled: true, delayDays: 1, emailClient: true, tripadvisorUrl: '', goodRating: 4,
-  referralEnabled: true, referrerAmount: 500, welcomeAmount: 300
+  referralEnabled: true, referrerAmount: 500, welcomeAmount: 300,
+  reviewReminderEnabled: true, reviewReminderDays: 5, reviewEmail: true
 };
 const TOKEN_RE = /^[a-f0-9]{40}$/;
 const CODE_RE = /^VC-[A-Z0-9]{5,7}$/;
@@ -38,7 +39,8 @@ function cleanSettings(saved) {
     surveyEnabled: c.surveyEnabled !== false, delayDays: intIn(c.delayDays, 0, 30, 1), emailClient: c.emailClient !== false,
     tripadvisorUrl: httpsUrl(c.tripadvisorUrl), goodRating: intIn(c.goodRating, 3, 5, 4),
     referralEnabled: c.referralEnabled !== false, referrerAmount: intIn(c.referrerAmount, 0, 100000, 500), welcomeAmount: intIn(c.welcomeAmount, 0, 100000, 300),
-    startedAt: c.startedAt || null
+    reviewReminderEnabled: c.reviewReminderEnabled !== false, reviewReminderDays: intIn(c.reviewReminderDays, 2, 30, 5), reviewEmail: c.reviewEmail !== false,
+    startedAt: c.startedAt || null, reviewStartedAt: c.reviewStartedAt || null
   };
 }
 
@@ -62,6 +64,26 @@ function surveyStats(trips) {
   const nps = answered.map((t) => t.survey.answers.nps).filter((x) => x != null);
   const npsScore = nps.length ? Math.round(((nps.filter((x) => x >= 9).length - nps.filter((x) => x <= 6).length) / nps.length) * 100) : null;
   return { sent: sent.length, answered: answered.length, rate: sent.length ? Math.round((answered.length / sent.length) * 100) : 0, overall: avg('overall'), hotel: avg('hotel'), transfer: avg('transfer'), partner: avg('partner'), nps: npsScore, npsCount: nps.length, low: answered.filter((t) => t.survey.answers.overall <= 3).length, reviewClicks: answered.filter((t) => t.survey.review_click_at).length };
+}
+
+// Recordatorio de reseña de Google (día 5): mensaje de WhatsApp y correo personalizados con el viaje del cliente.
+// Siempre se pide la opinión sincera (buena o mejorable) y sin ofrecer nada a cambio, como pide Google.
+function reviewWhatsAppText({ client, trip, hotel, sellerName, agencyName, url }) {
+  const first = firstName(client.name);
+  const stay = hotel ? ` y de tu estancia en ${String(hotel).slice(0, 60)}` : '';
+  return `¡Hola${first ? ` ${first}` : ''}! 🌴 Soy ${sellerName || 'tu Travel Partner'} de ${agencyName}. Ya pasaron unos días desde que regresaste de ${trip.destination}${stay} y me quedé con la curiosidad: ¿cómo te fue? 💙\n\n¿Me regalas 30 segundos para contar tu experiencia en Google? Tu opinión sincera nos ayuda a mejorar y a otros viajeros a decidir:\n\n${url}\n\nGracias por dejarme acompañarte en este viaje 🙌`.slice(0, 1500);
+}
+function reviewEmail({ client, trip, hotel, sellerName, agencyName, url }) {
+  const first = firstName(client.name);
+  const subject = `${first ? `${first}, ¿` : '¿'}cómo fue tu viaje a ${trip.destination}? Cuéntanos tu experiencia`.slice(0, 180);
+  const stay = hotel ? ` y tu estancia en ${String(hotel).slice(0, 60)}` : '';
+  const text = `¡Hola ${first || ''}!\n\nYa pasaron unos días desde tu regreso de ${trip.destination}${stay}. Si tienes 30 segundos, nos ayudaría mucho que contaras tu experiencia en Google: tu opinión sincera nos ayuda a mejorar y a otros viajeros a decidir.\n\n${url}\n\nGracias por viajar con ${agencyName}.\n${sellerName ? `— ${sellerName}, tu Travel Partner` : ''}`;
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;color:#203342;max-width:560px">
+<p style="font-size:16px">¡Hola ${escapeHtml(first)}! 🌴</p>
+<p style="font-size:15px">Ya pasaron unos días desde tu regreso de <b>${escapeHtml(trip.destination)}</b>${escapeHtml(stay)}. Si tienes 30 segundos, nos ayudaría mucho que contaras tu experiencia en Google: tu opinión sincera nos ayuda a mejorar y a otros viajeros a decidir.</p>
+<p style="margin:22px 0"><a href="${escapeHtml(url)}" style="background:#ff7959;color:#fff;padding:13px 20px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:16px">⭐ Dejar mi reseña en Google</a></p>
+<p style="font-size:14px;color:#6c7b87">Gracias por viajar con ${escapeHtml(agencyName)}.${sellerName ? `<br>— ${escapeHtml(sellerName)}, tu Travel Partner` : ''}</p></div>`;
+  return { subject, text, html };
 }
 
 function createPostventa(dataStore, { assignment = null, mailer = null, env = {}, publicDirectory, now = () => nowCancun() } = {}) {
@@ -219,6 +241,54 @@ function createPostventa(dataStore, { assignment = null, mailer = null, env = {}
     return result;
   }
 
+  // Lo llama el motor de recordatorios (horario laboral): a los N días del regreso, si el cliente no ha dejado reseña,
+  // crea el seguimiento de WhatsApp con el mensaje listo para copiar y manda el correo (una sola vez por viaje).
+  async function runReviewReminders({ workStart = '09:00', workEnd = '20:00' } = {}) {
+    const result = { reminders: 0, emails: 0 };
+    let cfg = await settings();
+    const current = now();
+    if (!cfg.reviewStartedAt) { cfg = { ...cfg, reviewStartedAt: current }; await dataStore.setSetting('postventa', cfg); }
+    if (!cfg.reviewReminderEnabled) return result;
+    const hhmm = current.slice(11, 16);
+    if (hhmm < workStart || hhmm >= workEnd) return result;
+    const url = httpsUrl((await documents()).reviewsUrl);
+    if (!url) return result;
+    const today = current.slice(0, 10);
+    // Solo viajes cuyo recordatorio cae desde que se activó la función (los anteriores no se mandan de golpe).
+    const since = addDays(cfg.reviewStartedAt.slice(0, 10), -cfg.reviewReminderDays);
+    const trips = (await dataStore.listRecords('trips')).filter((t) => !t.survey?.review_reminder_at && !t.survey?.review_click_at && t.end_date >= since && addDays(t.end_date, cfg.reviewReminderDays) <= today && t.status !== 'Cerrado');
+    const followups = await dataStore.listRecords('followups');
+    for (const trip of trips) {
+      const client = await dataStore.getRecord('clients', trip.client_id);
+      if (!client) continue;
+      const reviewed = dataStore.listClientEvents ? (await dataStore.listClientEvents(client.id)).some((e) => e.type === 'review' && e.meta?.platform === 'Google') : false;
+      const seller = await sellerFor(trip.client_id, [trip.owner_id]);
+      const quote = trip.quote_id ? await dataStore.getRecord('quotes', trip.quote_id) : null;
+      const lead = (await dataStore.listRecords('leads')).filter((l) => l.client_id === client.id).sort((a, b) => b.id - a.id)[0] || null;
+      const agencyName = (await agency()).name;
+      const low = trip.survey?.answers && trip.survey.answers.overall <= 3;
+      let emailed = false;
+      if (!reviewed) {
+        const data = { client, trip, hotel: quote?.hotel, sellerName: seller?.name, agencyName, url };
+        if (cfg.reviewEmail && !low && mailer?.configured && client.email) {
+          try { await mailer.send({ to: client.email, ...reviewEmail(data) }); emailed = true; } catch (error) { console.error('Recordatorio de reseña: no se pudo enviar el correo:', error.message); }
+        }
+        const title = `Pedir reseña de Google · ${client.name} · ${trip.destination}`.slice(0, 160);
+        if (!followups.some((f) => !f.done && f.client_id === client.id && f.title === title)) {
+          const lowNote = low ? `⚠ Calificó ${trip.survey.answers.overall}★ en la encuesta: llámale primero y ajusta el mensaje. No se le mandó correo.\n\n` : '';
+          const f = await dataStore.insertRecord('followups', sanitize('followups', { client_id: client.id, lead_id: lead?.id || null, type: 'WhatsApp', title, details: `${lowNote}Regresó el ${trip.end_date}.${emailed ? ' Ya se le mandó el correo con la liga de reseña.' : ''} Mensaje listo para copiar y pegar en WhatsApp:\n\n${reviewWhatsAppText(data)}`.slice(0, 2000), due_at: `${today} ${hhmm < workStart ? workStart : hhmm}` }), seller?.id ?? null);
+          followups.push(f);
+          result.reminders += 1;
+          if (seller) await notify(seller, { kind: 'survey', link: `client:${client.id}`, title: `⭐ Pide la reseña de Google a ${client.name} (${trip.destination})`, body: 'El mensaje de WhatsApp está listo en su seguimiento de hoy' });
+        }
+      }
+      await dataStore.updateRecord('trips', trip.id, { survey: { ...(trip.survey || {}), review_reminder_at: current, review_email_at: emailed ? current : null } });
+      await dataStore.logActivity(null, 'crm_trips_update', null, { entity: 'trips', entityId: trip.id, summary: `${client.name} · ${trip.destination}`, note: reviewed ? 'Recordatorio de reseña omitido: ya dejó su reseña' : `Recordatorio de reseña de Google${emailed ? ' (correo enviado)' : ''}` });
+      if (emailed) result.emails += 1;
+    }
+    return result;
+  }
+
   async function recordAnswers(trip, answers) {
     const client = await dataStore.getRecord('clients', trip.client_id);
     const at = now();
@@ -337,7 +407,8 @@ function createPostventa(dataStore, { assignment = null, mailer = null, env = {}
     if (req.session.user.role !== 'admin') throw fail(403, 'Solo el administrador');
     const b = req.body || {};
     if (b.tripadvisorUrl && !httpsUrl(b.tripadvisorUrl)) throw new ValidationError('La liga de TripAdvisor debe empezar con https://');
-    const saved = cleanSettings({ ...(await settings()), ...b, startedAt: (await settings()).startedAt });
+    const cur = await settings();
+    const saved = cleanSettings({ ...cur, ...b, startedAt: cur.startedAt, reviewStartedAt: cur.reviewStartedAt });
     await dataStore.setSetting('postventa', saved);
     await dataStore.logActivity(req.session.user.id, 'crm_settings_update', req, { note: `Postviaje y referidos: encuesta ${saved.surveyEnabled ? `activa (${saved.delayDays} día${saved.delayDays === 1 ? '' : 's'} después)` : 'pausada'} · referidos ${saved.referralEnabled ? `${money(saved.referrerAmount)} / ${money(saved.welcomeAmount)}` : 'pausados'}` });
     res.json({ ok: true, ...saved });
@@ -414,7 +485,7 @@ function createPostventa(dataStore, { assignment = null, mailer = null, env = {}
     res.json({ ok: true, record: updated });
   }));
 
-  return { publicRouter, apiRouter, runSurveys, rewardIfSold, attachReferral, ensureCode, settings };
+  return { publicRouter, apiRouter, runSurveys, runReviewReminders, rewardIfSold, attachReferral, ensureCode, settings };
 }
 
-module.exports = { createPostventa, cleanSettings, cleanAnswers, surveyStats, DEFAULTS };
+module.exports = { createPostventa, cleanSettings, cleanAnswers, surveyStats, reviewWhatsAppText, DEFAULTS };
