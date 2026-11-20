@@ -73,16 +73,69 @@ function reviewWhatsAppText({ client, trip, hotel, sellerName, agencyName, url }
   const stay = hotel ? ` y de tu estancia en ${String(hotel).slice(0, 60)}` : '';
   return `¡Hola${first ? ` ${first}` : ''}! 🌴 Soy ${sellerName || 'tu Travel Partner'} de ${agencyName}. Ya pasaron unos días desde que regresaste de ${trip.destination}${stay} y me quedé con la curiosidad: ¿cómo te fue? 💙\n\n¿Me regalas 30 segundos para contar tu experiencia en Google? Tu opinión sincera nos ayuda a mejorar y a otros viajeros a decidir:\n\n${url}\n\nGracias por dejarme acompañarte en este viaje 🙌`.slice(0, 1500);
 }
-function reviewEmail({ client, trip, hotel, sellerName, agencyName, url }) {
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+function dateRange(start, end) {
+  const [y1, m1, d1] = String(start || '').split('-').map(Number);
+  const [y2, m2, d2] = String(end || '').split('-').map(Number);
+  if (!y1 || !y2) return '';
+  if (y1 === y2 && m1 === m2) return d1 === d2 ? `${d1} de ${MONTHS[m1 - 1]} de ${y1}` : `${d1} al ${d2} de ${MONTHS[m1 - 1]} de ${y1}`;
+  return `${d1} de ${MONTHS[m1 - 1]}${y1 === y2 ? '' : ` de ${y1}`} al ${d2} de ${MONTHS[m2 - 1]} de ${y2}`;
+}
+// Correo de reseña (tabla de 600 px, compatible con Gmail, Outlook y Apple Mail). assets: { logo, banner } con URL pública.
+function reviewEmail({ client, trip, hotel, sellerName, sellerPhone, agencyName, url, assets = {}, links = {} }) {
   const first = firstName(client.name);
+  const dates = dateRange(trip.start_date, trip.end_date);
+  const stay = hotel ? String(hotel).slice(0, 80) : '';
+  const wa = String(sellerPhone || '').replace(/\D/g, '');
+  const waUrl = wa.length >= 10 ? `https://wa.me/${wa.length === 10 ? `52${wa}` : wa}` : '';
   const subject = `${first ? `${first}, ¿` : '¿'}cómo fue tu viaje a ${trip.destination}? Cuéntanos tu experiencia`.slice(0, 180);
-  const stay = hotel ? ` y tu estancia en ${String(hotel).slice(0, 60)}` : '';
-  const text = `¡Hola ${first || ''}!\n\nYa pasaron unos días desde tu regreso de ${trip.destination}${stay}. Si tienes 30 segundos, nos ayudaría mucho que contaras tu experiencia en Google: tu opinión sincera nos ayuda a mejorar y a otros viajeros a decidir.\n\n${url}\n\nGracias por viajar con ${agencyName}.\n${sellerName ? `— ${sellerName}, tu Travel Partner` : ''}`;
-  const html = `<div style="font-family:Arial,Helvetica,sans-serif;color:#203342;max-width:560px">
-<p style="font-size:16px">¡Hola ${escapeHtml(first)}! 🌴</p>
-<p style="font-size:15px">Ya pasaron unos días desde tu regreso de <b>${escapeHtml(trip.destination)}</b>${escapeHtml(stay)}. Si tienes 30 segundos, nos ayudaría mucho que contaras tu experiencia en Google: tu opinión sincera nos ayuda a mejorar y a otros viajeros a decidir.</p>
-<p style="margin:22px 0"><a href="${escapeHtml(url)}" style="background:#ff7959;color:#fff;padding:13px 20px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:16px">⭐ Dejar mi reseña en Google</a></p>
-<p style="font-size:14px;color:#6c7b87">Gracias por viajar con ${escapeHtml(agencyName)}.${sellerName ? `<br>— ${escapeHtml(sellerName)}, tu Travel Partner` : ''}</p></div>`;
+  const text = [`¡Hola ${first || ''}!`, '', `Ya pasaron unos días desde tu regreso de ${trip.destination}${stay ? ` y tu estancia en ${stay}` : ''}. Si tienes 30 segundos, nos ayudaría mucho que contaras tu experiencia en Google: tu opinión sincera nos ayuda a mejorar y a otros viajeros a decidir.`, '', url, '', `Gracias por viajar con ${agencyName}.`, sellerName ? `— ${sellerName}, tu Travel Partner` : '', waUrl ? `WhatsApp: ${waUrl}` : ''].filter((l, i, a) => l !== '' || a[i - 1] !== '').join('\n');
+  const e = escapeHtml;
+  const NAVY = '#073b66'; const TEAL = '#00b8c8'; const CORAL = '#ff7959';
+  const social = [['Instagram', links.instagram], ['Facebook', links.facebook], ['TikTok', links.tiktok], ['Sitio web', links.website]].filter(([, u]) => u)
+    .map(([label, u]) => `<a href="${e(u)}" style="color:${NAVY};text-decoration:none;font-weight:bold">${label}</a>`).join('<span style="color:#b6c4cd">&nbsp;&nbsp;·&nbsp;&nbsp;</span>');
+  const row = (label, value) => (value ? `<tr><td style="padding:3px 0;font-size:13px;color:#6c7b87;width:92px;vertical-align:top">${label}</td><td style="padding:3px 0;font-size:15px;color:#203342;font-weight:bold">${e(value)}</td></tr>` : '');
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${e(subject)}</title></head>
+<body style="margin:0;padding:0;background:#eaf0f4;font-family:Arial,Helvetica,sans-serif;color:#203342">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">Tu opinión sincera ayuda a otros viajeros a decidir. Toma menos de 30 segundos.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eaf0f4"><tr><td align="center" style="padding:28px 12px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 6px 24px rgba(7,59,102,.10)">
+  <tr><td style="background:${NAVY};padding:18px 28px">
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+      ${assets.logo ? `<td style="padding-right:14px"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;background:#ffffff;border-radius:26px"><img src="${e(assets.logo)}" width="40" height="40" alt="" style="display:block;border:0"></td></tr></table></td>` : ''}
+      <td><div style="font-size:16px;letter-spacing:3px;font-weight:bold;color:#ffffff">${e(String(agencyName).toUpperCase())}</div><div style="font-size:12px;color:#bfe9ee;margin-top:3px">Tu viaje, nuestra prioridad</div></td>
+    </tr></table>
+  </td></tr>
+  ${assets.banner ? `<tr><td style="font-size:0;line-height:0"><img src="${e(assets.banner)}" width="600" alt="Playa del Caribe mexicano al atardecer" style="display:block;width:100%;height:auto;border:0"></td></tr>` : ''}
+  <tr><td style="padding:34px 36px 8px">
+    <div style="font-size:12px;letter-spacing:2px;font-weight:bold;color:${TEAL}">TU OPINIÓN IMPORTA</div>
+    <h1 style="margin:10px 0 14px;font-size:27px;line-height:1.2;color:${NAVY}">${first ? `${e(first)}, ¿` : '¿'}cómo fue tu viaje a ${e(trip.destination)}?</h1>
+    <p style="margin:0 0 20px;font-size:16px;line-height:1.6;color:#33495a">Ya pasaron unos días desde tu regreso y quiero saber cómo te fue. Si tienes 30 segundos, cuéntanos tu experiencia en Google: tu opinión sincera nos ayuda a mejorar y a que otros viajeros decidan con confianza.</p>
+  </td></tr>
+  <tr><td style="padding:0 36px 6px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f9fb;border-left:4px solid ${TEAL};border-radius:10px"><tr><td style="padding:14px 18px">
+      <div style="font-size:11px;letter-spacing:2px;font-weight:bold;color:#6c7b87;margin-bottom:6px">TU VIAJE</div>
+      <table role="presentation" cellpadding="0" cellspacing="0">${row('Destino', trip.destination)}${row('Fechas', dates)}${row('Hospedaje', stay)}</table>
+    </td></tr></table>
+  </td></tr>
+  <tr><td align="center" style="padding:28px 36px 8px">
+    <div style="font-size:26px;letter-spacing:6px;color:#f6b93b;line-height:1">★★★★★</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px auto 10px"><tr><td align="center" style="background:${CORAL};border-radius:12px"><a href="${e(url)}" style="display:inline-block;padding:16px 38px;font-size:17px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:12px">Dejar mi reseña en Google</a></td></tr></table>
+    <div style="font-size:13px;color:#6c7b87">Toma menos de 30 segundos y se abre directo en Google.</div>
+  </td></tr>
+  <tr><td style="padding:26px 36px 30px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e2eaef"><tr><td style="padding-top:20px">
+      <div style="font-size:15px;color:#33495a;line-height:1.5">Gracias por dejarme acompañarte en este viaje.</div>
+      ${sellerName ? `<div style="margin-top:10px;font-size:16px;font-weight:bold;color:${NAVY}">${e(sellerName)}</div><div style="font-size:13px;color:#6c7b87">Tu Travel Partner · ${e(agencyName)}</div>` : ''}
+      ${waUrl ? `<div style="margin-top:12px"><a href="${e(waUrl)}" style="font-size:14px;font-weight:bold;color:#1a9d55;text-decoration:none">Escríbeme por WhatsApp</a></div>` : ''}
+    </td></tr></table>
+  </td></tr>
+  <tr><td align="center" style="background:#f4f7f9;padding:20px 28px;border-top:1px solid #e2eaef">
+    ${social ? `<div style="font-size:13px;margin-bottom:10px">${social}</div>` : ''}
+    <div style="font-size:12px;line-height:1.5;color:#8a98a3">Recibes este correo porque viajaste con ${e(agencyName)}. Si ya compartiste tu reseña, gracias de corazón y puedes ignorarlo.</div>
+  </td></tr>
+</table>
+</td></tr></table></body></html>`;
   return { subject, text, html };
 }
 
@@ -251,8 +304,12 @@ function createPostventa(dataStore, { assignment = null, mailer = null, env = {}
     if (!cfg.reviewReminderEnabled) return result;
     const hhmm = current.slice(11, 16);
     if (hhmm < workStart || hhmm >= workEnd) return result;
-    const url = httpsUrl((await documents()).reviewsUrl);
+    const docsCfg = await documents();
+    const url = httpsUrl(docsCfg.reviewsUrl);
     if (!url) return result;
+    const assets = { logo: `${appUrl()}/brand/logo-mark-transparent.png`, banner: `${appUrl()}/brand/email-banner.jpg` };
+    const links = { instagram: httpsUrl(docsCfg.instagram), facebook: httpsUrl(docsCfg.facebook), tiktok: httpsUrl(docsCfg.tiktok), website: httpsUrl(docsCfg.website) };
+    const ag = await agency();
     const today = current.slice(0, 10);
     // Solo viajes cuyo recordatorio cae desde que se activó la función (los anteriores no se mandan de golpe).
     const since = addDays(cfg.reviewStartedAt.slice(0, 10), -cfg.reviewReminderDays);
@@ -269,9 +326,9 @@ function createPostventa(dataStore, { assignment = null, mailer = null, env = {}
       const low = trip.survey?.answers && trip.survey.answers.overall <= 3;
       let emailed = false;
       if (!reviewed) {
-        const data = { client, trip, hotel: quote?.hotel, sellerName: seller?.name, agencyName, url };
+        const data = { client, trip, hotel: quote?.hotel, sellerName: seller?.name, sellerPhone: seller?.phone || docsCfg.supportWhatsapp || ag.whatsapp, agencyName, url, assets, links };
         if (cfg.reviewEmail && mailer?.configured && client.email) {
-          try { await mailer.send({ to: client.email, ...reviewEmail(data) }); emailed = true; } catch (error) { console.error('Recordatorio de reseña: no se pudo enviar el correo:', error.message); }
+          try { await mailer.send({ to: client.email, ...(seller?.email ? { replyTo: seller.email } : {}), ...reviewEmail(data) }); emailed = true; } catch (error) { console.error('Recordatorio de reseña: no se pudo enviar el correo:', error.message); }
         }
         const title = `Pedir reseña de Google · ${client.name} · ${trip.destination}`.slice(0, 160);
         if (!followups.some((f) => !f.done && f.client_id === client.id && f.title === title)) {
