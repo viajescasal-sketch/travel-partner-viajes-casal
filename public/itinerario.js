@@ -124,14 +124,19 @@
     add('contacto', 'Contacto', `<div class="card">${s ? `<div class="contact">${photo ? `<img src="${esc(photo)}" alt="${esc(s.name)}">` : `<span class="av">${esc(s.name.slice(0, 1))}</span>`}<div><b>${esc(s.name)}</b><div class="muted">Tu Travel Partner · antes, durante y después de tu viaje</div></div></div>` : ''}${sellerWa ? `<a class="btn wa" href="${esc(sellerWa)}" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>` : ''}
       ${phones.map(([k, v]) => `<div class="phone"><span>${esc(k)}</span><a href="${esc(tel(v))}">${esc(v)}</a></div>`).join('')}</div>`);
 
+    // Reseña de Google: botón con estrella y QR (ambos abren la ventana para calificar).
+    if (p.review) add('resena', 'Tu opinión', `<div class="card review"><b>⭐ ¿Qué tal estuvo tu viaje?</b><p class="muted">Tu opinión sincera nos ayuda a mejorar y a que otros viajeros decidan con confianza. Toma 30 segundos.</p>
+      <a class="btn coral" href="${esc(p.review.url)}" target="_blank" rel="noopener">⭐ Dejar mi reseña en Google</a>
+      <a class="qr-link" href="${esc(p.review.url)}" target="_blank" rel="noopener" aria-label="Abrir reseña en Google"><img src="${esc(p.review.qr)}" alt="Código QR para dejar tu reseña en Google" width="140" height="140"><small class="muted">O escanea el código con otro celular</small></a></div>`);
+
     // Cuatro vistas con menú fijo: Día a día · Reservas · Pagos · Ayuda
     const by = Object.fromEntries(sections.map((x) => [x.id, x]));
     const grp = (ids) => ids.map((id) => by[id]).filter(Boolean).map((x) => `<section id="${x.id}"><h2>${esc(x.label)}</h2>${x.html}</section>`).join('');
     const views = {
-      dias: { label: 'Día a día', icon: '🗓️', html: grp(['dias']) },
+      dias: { label: 'Día a día', icon: '🗓️', html: grp(['dias']) + (today > trip.end_date ? grp(['resena']) : '') },
       reservas: { label: 'Reservas', icon: '🎫', html: grp(['vuelos', 'hotel', 'traslados', 'actividades', 'seguro', 'reservas', 'viajeros', 'documentos']) || '<p class="muted empty">Aquí verás tus vuelos, hotel y claves de confirmación en cuanto estén listos.</p>' },
       pagos: { label: 'Pagos', icon: '💳', badge: owes, html: `<section><h2>Mis pagos</h2>${payHtml || '<p class="muted empty">Tu Travel Partner te compartirá aquí tu plan de pagos.</p>'}</section>` },
-      ayuda: { label: 'Ayuda', icon: '💬', html: grp(['preparar', 'contacto']) },
+      ayuda: { label: 'Ayuda', icon: '💬', html: grp(['preparar', 'contacto', 'resena']) },
     };
     const names = Object.keys(views);
     $('#app').innerHTML = names.map((k) => `<div class="view" id="v-${k}" hidden>${views[k].html}</div>`).join('');

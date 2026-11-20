@@ -114,7 +114,11 @@
       ${field('Pedir reseña pública desde', `<select name="goodRating">${options([[5, '5 estrellas'], [4, '4 estrellas o más'], [3, '3 estrellas o más']], s.goodRating)}</select>`)}
       <label class="full kb-check"><input type="checkbox" name="emailClient" ${s.emailClient ? 'checked' : ''}> Enviar también la encuesta por correo al cliente (si tiene correo)</label>
       ${field('Liga de TripAdvisor (opcional)', `<input name="tripadvisorUrl" maxlength="300" value="${H(s.tripadvisorUrl)}" placeholder="https://www.tripadvisor.com.mx/…">`, true)}
-      <p class="full muted-note">La liga de Google se toma de Configuración › Plantilla PDF (Reseñas de Google). Calificaciones de 3 estrellas o menos avisan al vendedor y al administrador.</p>
+      <p class="full section-label">⭐ Recordatorio de reseña de Google</p>
+      <label class="full kb-check"><input type="checkbox" name="reviewReminderEnabled" ${s.reviewReminderEnabled ? 'checked' : ''}> Crear el seguimiento de WhatsApp con el mensaje de reseña listo para copiar</label>
+      ${field('¿Cuándo?', `<select name="reviewReminderDays">${options([[3, '3 días después del regreso'], [5, '5 días después del regreso'], [7, '7 días después'], [10, '10 días después']], s.reviewReminderDays)}</select>`)}
+      <label class="full kb-check"><input type="checkbox" name="reviewEmail" ${s.reviewEmail ? 'checked' : ''}> Enviar también un correo con la liga directa de reseña (si tiene correo y no calificó 3★ o menos)</label>
+      <p class="full muted-note">Se envía una sola vez por viaje y no se manda si el cliente ya hizo clic en la reseña desde la encuesta. La liga de Google se toma de Configuración › Plantilla PDF (Reseñas de Google). Calificaciones de 3 estrellas o menos avisan al vendedor y al administrador.</p>
       <p class="full section-label">🎁 Programa de referidos</p>
       <label class="full kb-check"><input type="checkbox" name="referralEnabled" ${s.referralEnabled ? 'checked' : ''}> Programa de referidos activo</label>
       ${field('Crédito para quien refiere (MXN)', `<input name="referrerAmount" type="number" min="0" step="50" value="${H(s.referrerAmount)}">`)}
@@ -126,7 +130,7 @@
       e.preventDefault();
       const v = formValues(form);
       try {
-        cfg = await send('PUT', '/api/postventa/settings', { surveyEnabled: Boolean(v.surveyEnabled), delayDays: Number(v.delayDays), goodRating: Number(v.goodRating), emailClient: Boolean(v.emailClient), tripadvisorUrl: v.tripadvisorUrl, referralEnabled: Boolean(v.referralEnabled), referrerAmount: Number(v.referrerAmount), welcomeAmount: Number(v.welcomeAmount) });
+        cfg = await send('PUT', '/api/postventa/settings', { surveyEnabled: Boolean(v.surveyEnabled), delayDays: Number(v.delayDays), goodRating: Number(v.goodRating), emailClient: Boolean(v.emailClient), reviewReminderEnabled: Boolean(v.reviewReminderEnabled), reviewReminderDays: Number(v.reviewReminderDays), reviewEmail: Boolean(v.reviewEmail), tripadvisorUrl: v.tripadvisorUrl, referralEnabled: Boolean(v.referralEnabled), referrerAmount: Number(v.referrerAmount), welcomeAmount: Number(v.welcomeAmount) });
         toast('Postviaje y referidos guardados');
       } catch (error) { toast(error.message, 6000); }
     };

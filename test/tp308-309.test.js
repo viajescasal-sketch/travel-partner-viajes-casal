@@ -169,3 +169,41 @@ test('TP-309: código y liga de referido, lead referido por formulario o mensaje
   const r2 = (await partner('GET', `/api/clients/${ana.client_id}/referral`)).body;
   assert.equal(r2.referred.length, 2);
 });
+
+test('Reseña de Google: a los 5 días se crea el WhatsApp personalizado y el correo (una vez), omite a quien ya hizo clic, y el itinerario trae el QR', async (context) => {
+  const { baseUrl, store, postventa, partner, sent } = await setup(context);
+  const today = nowCancun().slice(0, 10);
+  const mk = async (name, email, phone, destination, endOffset) => {
+    const lead = (await partner('POST', '/api/leads', { client: { name, phone, email }, destination, travelers: 2 })).body.record;
+    const trip = (await partner('POST', '/api/trips', { client_id: lead.client_id, destination, start_date: addDays(today, endOffset - 5), end_date: addDays(today, endOffset) })).body.record;
+    return { lead, trip };
+  };
+  await postventa.runReviewReminders({ workStart: '00:00', workEnd: '23:59' }); // activa la función
+  const ana = await mk('Ana López', 'ana@example.test', '998 123 4567', 'Cancún', -5);
+  const luis = await mk('Luis Pérez', 'luis@example.test', '998 222 3333', 'Tulum', -5);
+  const reciente = await mk('Rosa Díaz', 'rosa@example.test', '998 444 5555', 'Cozumel', -2);
+  // Luis ya dejó su reseña desde la encuesta.
+  await store.updateRecord('trips', luis.trip.id, { survey: { token: 'x'.repeat(40), sent_at: 'x', answers: { overall: 5 }, review_click_at: 'x' } });
+
+  const run = await postventa.runReviewReminders({ workStart: '00:00', workEnd: '23:59' });
+  assert.deepEqual([run.reminders, run.emails], [1, 1], 'solo Ana: Luis ya hizo clic y Rosa aún no cumple 5 días');
+  const mail = sent.find((m) => m.to === 'ana@example.test');
+  assert.match(mail.subject, /cómo fue tu viaje a Cancún/);
+  assert.match(mail.html, /https:\/\/g\.page\/r\/CdrMmhT2jbS5EBM\/review/);
+  const crm = (await partner('GET', '/api/crm')).body;
+  const f = crm.followups.find((x) => /Pedir reseña de Google · Ana López/.test(x.title));
+  assert.ok(f && f.type === 'WhatsApp');
+  assert.match(f.details, /regresaste de Cancún/);
+  assert.match(f.details, /g\.page\/r\/CdrMmhT2jbS5EBM\/review/);
+  assert.ok(!crm.followups.some((x) => /Pedir reseña de Google · (Luis|Rosa)/.test(x.title)));
+  assert.equal((await postventa.runReviewReminders({ workStart: '00:00', workEnd: '23:59' })).reminders, 0, 'no se repite');
+
+  // Itinerario digital: liga directa y QR.
+  const t = await partner('POST', `/api/trips/${ana.trip.id}/share`, { enabled: true });
+  const trip = await store.getRecord('trips', ana.trip.id);
+  {
+    const p = await fetch(`${baseUrl}/api/public/trip/${trip.share_token}`).then((r) => r.json());
+    assert.match(p.review.url, /g\.page/);
+    assert.match(p.review.qr, /^data:image\/png;base64,/);
+  }
+});

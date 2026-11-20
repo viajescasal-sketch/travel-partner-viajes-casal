@@ -743,7 +743,7 @@
   <footer class="footer"><div><div class="thanks">¡Gracias por viajar con nosotros!</div><small>Estamos contigo antes, durante y después de tu viaje.</small></div>
     <div class="social"><div class="social-links">${social('fb', documents.facebook, 'icon-facebook.png', 'Facebook')}${social('ig', documents.instagram, 'icon-instagram.png', 'Instagram')}${social('tt', documents.tiktok, 'icon-tiktok.png', 'TikTok')}${social('yt', documents.youtube, 'icon-youtube.png', 'YouTube')}</div>
       <small>${website ? `<a class="website-link" href="${esc(website)}" target="_blank" rel="noopener">${esc(hostOf(website))}</a>` : ''}</small></div>
-    <div class="review">${reviews ? `<a class="review-link" href="${esc(reviews)}" target="_blank" rel="noopener"><img class="review-icon" src="${icon('icon-review.png')}" alt="Reseñas"><span>Déjanos tu reseña</span><div class="stars">★★★★★</div></a>` : ''}</div>
+    <div class="review">${reviews ? `<a class="review-link" href="${esc(reviews)}" target="_blank" rel="noopener"><img class="review-icon" src="${icon('icon-review.png')}" alt="Reseñas"><span>Déjanos tu reseña</span><div class="stars">★★★★★</div></a><a class="review-qr" href="${esc(reviews)}" target="_blank" rel="noopener" aria-label="Código QR de reseña"><img src="/api/qr?data=${encodeURIComponent(reviews)}" alt="QR de reseña de Google" width="56" height="56"></a>` : ''}</div>
   </footer>
 </section>`;
   }

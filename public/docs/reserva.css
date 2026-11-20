@@ -67,3 +67,6 @@
 .blogBtn{background:var(--navy);border-radius:2mm}
 .footer{background:var(--navy)}
 .thanks{font-family:Georgia,serif;font-style:italic;font-size:15pt}
+.review{display:flex;align-items:center;justify-content:flex-end;gap:2.5mm}
+.review-qr{display:block;background:#fff;padding:1mm;border-radius:1.5mm;line-height:0}
+.review-qr img{width:14mm;height:14mm;display:block}
