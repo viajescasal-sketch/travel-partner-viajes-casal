@@ -96,14 +96,14 @@ function reviewEmail({ client, trip, hotel, sellerName, sellerPhone, agencyName,
     .map(([label, u]) => `<a href="${e(u)}" style="color:${NAVY};text-decoration:none;font-weight:bold">${label}</a>`).join('<span style="color:#b6c4cd">&nbsp;&nbsp;·&nbsp;&nbsp;</span>');
   const row = (label, value) => (value ? `<tr><td style="padding:3px 0;font-size:13px;color:#6c7b87;width:92px;vertical-align:top">${label}</td><td style="padding:3px 0;font-size:15px;color:#203342;font-weight:bold">${e(value)}</td></tr>` : '');
   const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${e(subject)}</title></head>
-<body style="margin:0;padding:0;background:#eaf0f4;font-family:Arial,Helvetica,sans-serif;color:#203342">
+<body bgcolor="#eaf0f4" style="margin:0;padding:0;background-color:#eaf0f4;font-family:Arial,Helvetica,sans-serif;color:#203342">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">Tu opinión sincera ayuda a otros viajeros a decidir. Toma menos de 30 segundos.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eaf0f4"><tr><td align="center" style="padding:28px 12px">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 6px 24px rgba(7,59,102,.10)">
-  <tr><td style="background:${NAVY};padding:18px 28px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#eaf0f4" style="background-color:#eaf0f4"><tr><td align="center" style="padding:28px 12px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="width:100%;max-width:600px;background-color:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 6px 24px rgba(7,59,102,.10)">
+  <tr><td bgcolor="${NAVY}" style="background-color:${NAVY};padding:20px 28px">
     <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-      ${assets.logo ? `<td style="padding-right:14px"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;background:#ffffff;border-radius:26px"><img src="${e(assets.logo)}" width="40" height="40" alt="" style="display:block;border:0"></td></tr></table></td>` : ''}
-      <td><div style="font-size:16px;letter-spacing:3px;font-weight:bold;color:#ffffff">${e(String(agencyName).toUpperCase())}</div><div style="font-size:12px;color:#bfe9ee;margin-top:3px">Tu viaje, nuestra prioridad</div></td>
+      ${assets.logo ? `<td style="padding-right:14px"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td width="52" height="52" align="center" valign="middle" bgcolor="#ffffff" style="width:52px;height:52px;background-color:#ffffff;border-radius:26px"><img src="${e(assets.logo)}" width="40" height="40" alt="" style="display:block;border:0"></td></tr></table></td>` : ''}
+      <td><div style="font-family:Arial,Helvetica,sans-serif;font-size:20px;letter-spacing:3px;font-weight:bold;color:#ffffff;line-height:1.2">${e(String(agencyName).toUpperCase())}</div><div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#ffffff;margin-top:5px;line-height:1.3">Tu viaje, nuestra prioridad</div></td>
     </tr></table>
   </td></tr>
   ${assets.banner ? `<tr><td style="font-size:0;line-height:0"><img src="${e(assets.banner)}" width="600" alt="Playa del Caribe mexicano al atardecer" style="display:block;width:100%;height:auto;border:0"></td></tr>` : ''}
@@ -113,14 +113,14 @@ function reviewEmail({ client, trip, hotel, sellerName, sellerPhone, agencyName,
     <p style="margin:0 0 20px;font-size:16px;line-height:1.6;color:#33495a">Ya pasaron unos días desde tu regreso y quiero saber cómo te fue. Si tienes 30 segundos, cuéntanos tu experiencia en Google: tu opinión sincera nos ayuda a mejorar y a que otros viajeros decidan con confianza.</p>
   </td></tr>
   <tr><td style="padding:0 36px 6px">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f9fb;border-left:4px solid ${TEAL};border-radius:10px"><tr><td style="padding:14px 18px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f2f9fb" style="background-color:#f2f9fb;border-left:4px solid ${TEAL};border-radius:10px"><tr><td style="padding:14px 18px">
       <div style="font-size:11px;letter-spacing:2px;font-weight:bold;color:#6c7b87;margin-bottom:6px">TU VIAJE</div>
       <table role="presentation" cellpadding="0" cellspacing="0">${row('Destino', trip.destination)}${row('Fechas', dates)}${row('Hospedaje', stay)}</table>
     </td></tr></table>
   </td></tr>
   <tr><td align="center" style="padding:28px 36px 8px">
     <div style="font-size:26px;letter-spacing:6px;color:#f6b93b;line-height:1">★★★★★</div>
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px auto 10px"><tr><td align="center" style="background:${CORAL};border-radius:12px"><a href="${e(url)}" style="display:inline-block;padding:16px 38px;font-size:17px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:12px">Dejar mi reseña en Google</a></td></tr></table>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px auto 10px"><tr><td align="center" bgcolor="${CORAL}" style="background-color:${CORAL};border-radius:12px;padding:16px 38px;border:1px solid ${CORAL}"><a href="${e(url)}" target="_blank" style="font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold;color:#ffffff;text-decoration:none;display:block"><font color="#ffffff">Dejar mi reseña en Google</font></a></td></tr></table>
     <div style="font-size:13px;color:#6c7b87">Toma menos de 30 segundos y se abre directo en Google.</div>
   </td></tr>
   <tr><td style="padding:26px 36px 30px">
@@ -130,7 +130,7 @@ function reviewEmail({ client, trip, hotel, sellerName, sellerPhone, agencyName,
       ${waUrl ? `<div style="margin-top:12px"><a href="${e(waUrl)}" style="font-size:14px;font-weight:bold;color:#1a9d55;text-decoration:none">Escríbeme por WhatsApp</a></div>` : ''}
     </td></tr></table>
   </td></tr>
-  <tr><td align="center" style="background:#f4f7f9;padding:20px 28px;border-top:1px solid #e2eaef">
+  <tr><td align="center" bgcolor="#f4f7f9" style="background-color:#f4f7f9;padding:20px 28px;border-top:1px solid #e2eaef">
     ${social ? `<div style="font-size:13px;margin-bottom:10px">${social}</div>` : ''}
     <div style="font-size:12px;line-height:1.5;color:#8a98a3">Recibes este correo porque viajaste con ${e(agencyName)}. Si ya compartiste tu reseña, gracias de corazón y puedes ignorarlo.</div>
   </td></tr>
@@ -244,7 +244,7 @@ function createPostventa(dataStore, { assignment = null, mailer = null, env = {}
     const html = `<div style="font-family:Arial,Helvetica,sans-serif;color:#203342;max-width:560px">
 <p style="font-size:16px">¡Hola ${escapeHtml(first)}! 🌴</p>
 <p style="font-size:15px">Esperamos que hayas disfrutado <b>${escapeHtml(trip.destination)}</b>. Nos ayudaría mucho saber cómo te fue: son 4 preguntas y toma menos de un minuto.</p>
-<p style="margin:22px 0"><a href="${escapeHtml(url)}" style="background:#ff7959;color:#fff;padding:13px 20px;border-radius:10px;text-decoration:none;font-weight:bold;font-size:16px">⭐ Calificar mi viaje</a></p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0"><tr><td bgcolor="#ff7959" style="background-color:#ff7959;border-radius:10px;padding:13px 20px"><a href="${escapeHtml(url)}" style="color:#ffffff;text-decoration:none;font-weight:bold;font-size:16px"><font color="#ffffff">⭐ Calificar mi viaje</font></a></td></tr></table>
 <p style="font-size:14px;color:#6c7b87">Gracias por viajar con ${escapeHtml(agencyName)}.${sellerName ? `<br>— ${escapeHtml(sellerName)}, tu Travel Partner` : ''}</p></div>`;
     return { subject: subject.slice(0, 180), text, html };
   }
